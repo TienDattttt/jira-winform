@@ -7,6 +7,7 @@ namespace JiraClone.WinForms.Controls;
 public class AttachmentListControl : UserControl
 {
     private readonly FlowLayoutPanel _itemsPanel;
+    private readonly Label _emptyState = JiraControlFactory.CreateLabel("No attachments yet.", true);
     private List<Attachment> _attachments = [];
 
     public AttachmentListControl()
@@ -24,9 +25,15 @@ public class AttachmentListControl : UserControl
             WrapContents = false,
             BackColor = JiraTheme.BgPage,
             Padding = new Padding(0, 0, 8, 0),
+            Visible = false,
         };
 
+        _emptyState.Dock = DockStyle.Fill;
+        _emptyState.TextAlign = ContentAlignment.MiddleCenter;
+        _emptyState.ForeColor = JiraTheme.TextSecondary;
+
         Controls.Add(_itemsPanel);
+        Controls.Add(_emptyState);
     }
 
     public Func<Attachment, Task>? DownloadRequested { get; set; }
@@ -45,6 +52,9 @@ public class AttachmentListControl : UserControl
 
         _itemsPanel.ResumeLayout();
         UpdateCardWidths();
+        var hasItems = _attachments.Count > 0;
+        _itemsPanel.Visible = hasItems;
+        _emptyState.Visible = !hasItems;
     }
 
     private void UpdateCardWidths()

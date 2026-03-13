@@ -17,14 +17,17 @@ public class IssueServiceTests
         // Arrange
         var issueRepository = new Mock<IIssueRepository>();
         var userRepository = new Mock<IUserRepository>();
+        var projectRepository = new Mock<IProjectRepository>();
         var commentRepository = new Mock<ICommentRepository>();
         var attachmentRepository = new Mock<IAttachmentRepository>();
         var authorization = new Mock<IAuthorizationService>();
         var activityLogRepository = new Mock<IActivityLogRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
         issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Selected, default)).ReturnsAsync(1m);
+        issueRepository.Setup(x => x.GetProjectIssuesAsync(1, default)).ReturnsAsync(Array.Empty<Issue>());
         issueRepository.Setup(x => x.AddAsync(It.IsAny<Issue>(), default)).Callback<Issue, CancellationToken>((issue, _) => issue.Id = 42).Returns(Task.CompletedTask);
-        var service = CreateService(issueRepository, userRepository, commentRepository, attachmentRepository, authorization, activityLogRepository, unitOfWork);
+        projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
+        var service = CreateService(issueRepository, userRepository, projectRepository, commentRepository, attachmentRepository, authorization, activityLogRepository, unitOfWork);
         var model = CreateModel(status: IssueStatus.Selected);
 
         // Act
@@ -32,8 +35,31 @@ public class IssueServiceTests
 
         // Assert
         Assert.Equal(42, result.Id);
+        Assert.Equal("PROJ-1", result.IssueKey);
         issueRepository.Verify(x => x.AddAsync(It.IsAny<Issue>(), default), Times.Once);
         unitOfWork.Verify(x => x.SaveChangesAsync(default), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ExistingProjectIssues_UsesNextProjectSequence()
+    {
+        // Arrange
+        var issueRepository = new Mock<IIssueRepository>();
+        var projectRepository = new Mock<IProjectRepository>();
+        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Backlog, default)).ReturnsAsync(1m);
+        issueRepository.Setup(x => x.GetProjectIssuesAsync(1, default)).ReturnsAsync(
+        [
+            new Issue { Id = 1, ProjectId = 1, IssueKey = "PROJ-1", Title = "One", ReporterId = 3, CreatedById = 9 },
+            new Issue { Id = 2, ProjectId = 1, IssueKey = "PROJ-7", Title = "Seven", ReporterId = 3, CreatedById = 9 }
+        ]);
+        projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
+        var service = CreateService(issueRepository: issueRepository, projectRepository: projectRepository);
+
+        // Act
+        var issue = await service.CreateAsync(CreateModel());
+
+        // Assert
+        Assert.Equal("PROJ-8", issue.IssueKey);
     }
 
     [Fact]
@@ -129,15 +155,27 @@ public class IssueServiceTests
     private static IssueService CreateService(
         Mock<IIssueRepository>? issueRepository = null,
         Mock<IUserRepository>? userRepository = null,
+        Mock<IProjectRepository>? projectRepository = null,
         Mock<ICommentRepository>? commentRepository = null,
         Mock<IAttachmentRepository>? attachmentRepository = null,
         Mock<IAuthorizationService>? authorization = null,
         Mock<IActivityLogRepository>? activityLogRepository = null,
         Mock<IUnitOfWork>? unitOfWork = null)
     {
+        projectRepository ??= new Mock<IProjectRepository>();
+        projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
+
+        if (issueRepository is null)
+        {
+            issueRepository = new Mock<IIssueRepository>();
+            issueRepository.Setup(x => x.GetProjectIssuesAsync(1, default)).ReturnsAsync(Array.Empty<Issue>());
+            issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, It.IsAny<IssueStatus>(), default)).ReturnsAsync(1m);
+        }
+
         return new IssueService(
-            (issueRepository ?? new Mock<IIssueRepository>()).Object,
+            issueRepository.Object,
             (userRepository ?? new Mock<IUserRepository>()).Object,
+            projectRepository.Object,
             (commentRepository ?? new Mock<ICommentRepository>()).Object,
             (attachmentRepository ?? new Mock<IAttachmentRepository>()).Object,
             (authorization ?? new Mock<IAuthorizationService>()).Object,

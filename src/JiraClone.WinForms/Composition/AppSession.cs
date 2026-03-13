@@ -25,6 +25,7 @@ public sealed class AppSession : IDisposable
     private readonly IDbContextFactory<JiraCloneDbContext> _dbContextFactory;
     private readonly IPasswordHasher _passwordHasher;
     private readonly FileShareAttachmentService _attachmentStorage;
+    private readonly SemaphoreSlim _operationGate = new(1, 1);
 
     public AppSession(IDbContextFactory<JiraCloneDbContext> dbContextFactory, string attachmentRootPath)
     {
@@ -32,8 +33,15 @@ public sealed class AppSession : IDisposable
         _passwordHasher = new Sha256PasswordHasher();
         _attachmentStorage = new FileShareAttachmentService(attachmentRootPath);
 
-        using var migrationContext = _dbContextFactory.CreateDbContext();
-        migrationContext.Database.Migrate();
+        try
+        {
+            using var migrationContext = _dbContextFactory.CreateDbContext();
+            migrationContext.Database.Migrate();
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException("Database migration failed during startup. Verify the connection string and apply pending migrations.", exception);
+        }
 
         CurrentUserContext = new CurrentUserContext();
         Authorization = new AuthorizationService(CurrentUserContext);
@@ -73,7 +81,7 @@ public sealed class AppSession : IDisposable
         new(new ProjectRepository(dbContext));
 
     internal ProjectCommandService CreateProjectCommandService(JiraCloneDbContext dbContext) =>
-        new(new ProjectRepository(dbContext), new UserRepository(dbContext), Authorization, new UnitOfWork(dbContext));
+        new(new ProjectRepository(dbContext), new UserRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext));
 
     internal BoardQueryService CreateBoardQueryService(JiraCloneDbContext dbContext) =>
         new(new IssueRepository(dbContext));
@@ -82,12 +90,13 @@ public sealed class AppSession : IDisposable
         new(new UserRepository(dbContext));
 
     internal UserCommandService CreateUserCommandService(JiraCloneDbContext dbContext) =>
-        new(new UserRepository(dbContext), new ProjectRepository(dbContext), _passwordHasher, Authorization, new UnitOfWork(dbContext));
+        new(new UserRepository(dbContext), new ProjectRepository(dbContext), _passwordHasher, Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext));
 
     internal IssueService CreateIssueService(JiraCloneDbContext dbContext) =>
         new(
             new IssueRepository(dbContext),
             new UserRepository(dbContext),
+            new ProjectRepository(dbContext),
             new CommentRepository(dbContext),
             new AttachmentRepository(dbContext),
             Authorization,
@@ -98,7 +107,7 @@ public sealed class AppSession : IDisposable
         new(new CommentRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), new UnitOfWork(dbContext));
 
     internal SprintService CreateSprintService(JiraCloneDbContext dbContext) =>
-        new(new SprintRepository(dbContext), new IssueRepository(dbContext), Authorization, new UnitOfWork(dbContext));
+        new(new SprintRepository(dbContext), new IssueRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext));
 
     internal ActivityLogService CreateActivityLogService(JiraCloneDbContext dbContext) =>
         new(new ActivityLogRepository(dbContext));
@@ -106,12 +115,35 @@ public sealed class AppSession : IDisposable
     internal AttachmentFacade CreateAttachmentFacade(JiraCloneDbContext dbContext) =>
         new(_attachmentStorage, new AttachmentRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), new UnitOfWork(dbContext));
 
-    public Task RunSerializedAsync(Func<Task> operation, CancellationToken cancellationToken = default) => operation();
+    public async Task RunSerializedAsync(Func<Task> operation, CancellationToken cancellationToken = default)
+    {
+        await _operationGate.WaitAsync(cancellationToken);
+        try
+        {
+            await operation();
+        }
+        finally
+        {
+            _operationGate.Release();
+        }
+    }
 
-    public Task<T> RunSerializedAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default) => operation();
+    public async Task<T> RunSerializedAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
+    {
+        await _operationGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await operation();
+        }
+        finally
+        {
+            _operationGate.Release();
+        }
+    }
 
     public void Dispose()
     {
+        _operationGate.Dispose();
     }
 
     public sealed class AuthenticationOperations
@@ -413,3 +445,6 @@ public sealed class AppSession : IDisposable
         }
     }
 }
+
+
+

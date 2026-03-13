@@ -39,7 +39,7 @@ public class FileShareAttachmentService : IAttachmentService
             UploadedById = uploadedById,
             StoredFileName = storedFileName,
             OriginalFileName = Path.GetFileName(sourceFilePath),
-            ContentType = "application/octet-stream",
+            ContentType = ResolveContentType(extension),
             FileExtension = extension,
             FileSizeBytes = info.Length,
             StoragePath = destinationPath,
@@ -60,4 +60,21 @@ public class FileShareAttachmentService : IAttachmentService
 
     public Task<string> ResolvePathAsync(Attachment attachment, CancellationToken cancellationToken = default) =>
         Task.FromResult(attachment.StoragePath);
+
+    private static string ResolveContentType(string extension) =>
+        extension.ToLowerInvariant() switch
+        {
+            ".txt" => "text/plain",
+            ".json" => "application/json",
+            ".pdf" => "application/pdf",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xls" => "application/vnd.ms-excel",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".csv" => "text/csv",
+            _ => "application/octet-stream"
+        };
 }

@@ -1,6 +1,7 @@
 using JiraClone.Application.Abstractions;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
+using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
 
 namespace JiraClone.Application.Sprints;
 
@@ -9,13 +10,23 @@ public class SprintService
     private readonly ISprintRepository _sprints;
     private readonly IIssueRepository _issues;
     private readonly IAuthorizationService _authorization;
+    private readonly IActivityLogRepository _activityLogs;
+    private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
 
-    public SprintService(ISprintRepository sprints, IIssueRepository issues, IAuthorizationService authorization, IUnitOfWork unitOfWork)
+    public SprintService(
+        ISprintRepository sprints,
+        IIssueRepository issues,
+        IAuthorizationService authorization,
+        IActivityLogRepository activityLogs,
+        ICurrentUserContext currentUserContext,
+        IUnitOfWork unitOfWork)
     {
         _sprints = sprints;
         _issues = issues;
         _authorization = authorization;
+        _activityLogs = activityLogs;
+        _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
     }
 
@@ -55,6 +66,7 @@ public class SprintService
             return false;
         }
 
+        var actorUserId = GetActorUserId();
         foreach (var issueId in issueIds.Distinct())
         {
             var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
@@ -65,6 +77,18 @@ public class SprintService
 
             issue.SprintId = sprintId;
             issue.UpdatedAtUtc = DateTime.UtcNow;
+
+            if (actorUserId.HasValue)
+            {
+                await _activityLogs.AddAsync(new ActivityLogEntity
+                {
+                    ProjectId = sprint.ProjectId,
+                    IssueId = issue.Id,
+                    UserId = actorUserId.Value,
+                    ActionType = ActivityActionType.SprintAssigned,
+                    NewValue = sprint.Name
+                }, cancellationToken);
+            }
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -86,9 +110,24 @@ public class SprintService
             throw new InvalidOperationException("Another sprint is already active for this project.");
         }
 
+        var previousState = sprint.State;
         sprint.State = SprintState.Active;
         sprint.StartDate ??= DateOnly.FromDateTime(DateTime.Today);
         sprint.UpdatedAtUtc = DateTime.UtcNow;
+
+        var actorUserId = GetActorUserId();
+        if (actorUserId.HasValue)
+        {
+            await _activityLogs.AddAsync(new ActivityLogEntity
+            {
+                ProjectId = sprint.ProjectId,
+                UserId = actorUserId.Value,
+                ActionType = ActivityActionType.Updated,
+                FieldName = nameof(Sprint.State),
+                OldValue = previousState.ToString(),
+                NewValue = sprint.State.ToString()
+            }, cancellationToken);
+        }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
@@ -118,6 +157,7 @@ public class SprintService
             }
         }
 
+        var actorUserId = GetActorUserId();
         var incompleteIssues = await _issues.GetIncompleteBySprintIdAsync(sprintId, cancellationToken);
         foreach (var issue in incompleteIssues)
         {
@@ -131,6 +171,19 @@ public class SprintService
             {
                 issue.UpdatedAtUtc = DateTime.UtcNow;
             }
+
+            if (actorUserId.HasValue)
+            {
+                await _activityLogs.AddAsync(new ActivityLogEntity
+                {
+                    ProjectId = sprint.ProjectId,
+                    IssueId = issue.Id,
+                    UserId = actorUserId.Value,
+                    ActionType = ActivityActionType.SprintAssigned,
+                    OldValue = sprint.Name,
+                    NewValue = nextSprint?.Name ?? "Backlog"
+                }, cancellationToken);
+            }
         }
 
         sprint.State = SprintState.Closed;
@@ -138,7 +191,21 @@ public class SprintService
         sprint.ClosedAtUtc = DateTime.UtcNow;
         sprint.UpdatedAtUtc = DateTime.UtcNow;
 
+        if (actorUserId.HasValue)
+        {
+            await _activityLogs.AddAsync(new ActivityLogEntity
+            {
+                ProjectId = sprint.ProjectId,
+                UserId = actorUserId.Value,
+                ActionType = ActivityActionType.SprintClosed,
+                OldValue = sprint.Name,
+                NewValue = nextSprint?.Name ?? "Backlog"
+            }, cancellationToken);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    private int? GetActorUserId() => _currentUserContext.CurrentUser?.Id;
 }

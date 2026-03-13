@@ -14,15 +14,32 @@ internal static class Program
         ApplicationConfiguration.Initialize();
 
         var connectionString =
+            Environment.GetEnvironmentVariable("JIRACLONE_CONNECTION_STRING") ??
             "Server=(localdb)\\MSSQLLocalDB;Database=JiraCloneWinForms;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True";
-        var attachmentRootPath = Path.Combine(AppContext.BaseDirectory, "attachments");
+        var attachmentRootPath =
+            Environment.GetEnvironmentVariable("JIRACLONE_ATTACHMENTS_PATH") ??
+            Path.Combine(AppContext.BaseDirectory, "attachments");
 
-        var services = new ServiceCollection();
-        services.AddDbContextFactory<JiraCloneDbContext>(options =>
-            options.UseSqlServer(connectionString).EnableSensitiveDataLogging());
+        try
+        {
+            var services = new ServiceCollection();
+            services.AddDbContextFactory<JiraCloneDbContext>(options =>
+                options.UseSqlServer(connectionString).EnableSensitiveDataLogging());
 
-        using var serviceProvider = services.BuildServiceProvider();
-        using var session = new AppSession(serviceProvider.GetRequiredService<IDbContextFactory<JiraCloneDbContext>>(), attachmentRootPath);
-        System.Windows.Forms.Application.Run(new LoginForm(session));
+            using var serviceProvider = services.BuildServiceProvider();
+            using var session = new AppSession(
+                serviceProvider.GetRequiredService<IDbContextFactory<JiraCloneDbContext>>(),
+                attachmentRootPath);
+
+            System.Windows.Forms.Application.Run(new LoginForm(session));
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                $"Unable to start Jira Clone.\n\n{exception.Message}",
+                "Startup Error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 }

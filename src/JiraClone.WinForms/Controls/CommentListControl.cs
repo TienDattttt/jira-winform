@@ -32,6 +32,8 @@ public class CommentListControl : UserControl
         _listView.Columns.Add("Author", 140);
         _listView.Columns.Add("Comment", 360);
         _listView.Columns.Add("Updated", 180);
+        _listView.SelectedIndexChanged += (_, _) => UpdateActionState();
+        _listView.Resize += (_, _) => ApplyResponsiveColumns();
 
         _editButton = JiraControlFactory.CreateSecondaryButton("Edit Comment");
         _deleteButton = JiraControlFactory.CreateSecondaryButton("Delete Comment");
@@ -65,6 +67,8 @@ public class CommentListControl : UserControl
 
         Controls.Add(_listView);
         Controls.Add(actions);
+
+        UpdateActionState();
     }
 
     public Func<Comment, Task>? EditRequested { get; set; }
@@ -76,6 +80,7 @@ public class CommentListControl : UserControl
     public void Bind(IReadOnlyList<Comment> comments)
     {
         _comments = comments.ToList();
+        _listView.BeginUpdate();
         _listView.Items.Clear();
         foreach (var comment in _comments)
         {
@@ -88,6 +93,32 @@ public class CommentListControl : UserControl
             item.SubItems.Add(updatedText);
             _listView.Items.Add(item);
         }
+
+        _listView.EndUpdate();
+        ApplyResponsiveColumns();
+        UpdateActionState();
+    }
+
+    private void ApplyResponsiveColumns()
+    {
+        if (_listView.ClientSize.Width <= 0)
+        {
+            return;
+        }
+
+        var authorWidth = 140;
+        var updatedWidth = 180;
+        var commentWidth = Math.Max(180, _listView.ClientSize.Width - authorWidth - updatedWidth - 8);
+        _listView.Columns[0].Width = authorWidth;
+        _listView.Columns[1].Width = commentWidth;
+        _listView.Columns[2].Width = updatedWidth;
+    }
+
+    private void UpdateActionState()
+    {
+        var hasSelection = SelectedComment is not null;
+        _editButton.Enabled = hasSelection;
+        _deleteButton.Enabled = hasSelection;
     }
 
     private static void ConfigureButton(Button button, int width)

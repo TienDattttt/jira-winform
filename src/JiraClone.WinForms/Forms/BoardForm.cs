@@ -11,6 +11,7 @@ namespace JiraClone.WinForms.Forms;
 public class BoardForm : UserControl
 {
     private readonly AppSession _session;
+    private readonly bool _activeSprintOnly;
     private readonly Label _sprintTitleLabel = JiraControlFactory.CreateLabel("No active sprint");
     private readonly Label _sprintDateLabel = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly Button _startSprintButton = JiraControlFactory.CreatePrimaryButton("Start Sprint");
@@ -18,7 +19,7 @@ public class BoardForm : UserControl
     private readonly ComboBox _priorityFilter = CreateFilterCombo(130);
     private readonly ComboBox _typeFilter = CreateFilterCombo(130);
     private readonly TextBox _searchFilter = JiraControlFactory.CreateTextBox();
-    private readonly Button _clearFiltersButton = JiraControlFactory.CreateSecondaryButton("Clear");
+    private readonly Button _clearFiltersButton = JiraControlFactory.CreateSecondaryButton("Clear filters");
     private readonly FlowLayoutPanel _boardColumnsPanel = new()
     {
         Dock = DockStyle.Top,
@@ -43,9 +44,10 @@ public class BoardForm : UserControl
     private IReadOnlyList<BoardColumnDto> _loadedColumns = Array.Empty<BoardColumnDto>();
     private bool _isLoadingBoard;
 
-    public BoardForm(AppSession session)
+    public BoardForm(AppSession session, bool activeSprintOnly = true)
     {
         _session = session;
+        _activeSprintOnly = activeSprintOnly;
         BackColor = JiraTheme.BgPage;
         Font = JiraTheme.FontBody;
         DoubleBuffered = true;
@@ -56,13 +58,13 @@ public class BoardForm : UserControl
         _sprintDateLabel.AutoSize = true;
 
         _startSprintButton.AutoSize = false;
-        _startSprintButton.Size = new Size(136, 40);
+        _startSprintButton.Size = new Size(144, 38);
         _startSprintButton.Click += async (_, _) => await StartSprintAsync();
 
-        _searchFilter.Width = 240;
+        _searchFilter.Width = 260;
         _searchFilter.PlaceholderText = "Search issues";
         _clearFiltersButton.AutoSize = false;
-        _clearFiltersButton.Size = new Size(88, 36);
+        _clearFiltersButton.Size = new Size(124, 38);
         _assigneeFilter.Margin = new Padding(0, 0, 12, 0);
         _priorityFilter.Margin = new Padding(0, 0, 12, 0);
         _typeFilter.Margin = new Padding(0, 0, 12, 0);
@@ -90,9 +92,9 @@ public class BoardForm : UserControl
         var topBar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 74,
+            Height = 80,
             BackColor = JiraTheme.BgSurface,
-            Padding = new Padding(16, 12, 16, 12),
+            Padding = new Padding(16, 10, 16, 10),
         };
 
         topBar.Paint += (_, e) =>
@@ -104,11 +106,11 @@ public class BoardForm : UserControl
         var right = new Panel
         {
             Dock = DockStyle.Right,
-            Width = 160,
+            Width = 176,
             BackColor = JiraTheme.BgSurface,
         };
         right.Controls.Add(_startSprintButton);
-        _startSprintButton.Location = new Point(8, 8);
+        _startSprintButton.Location = new Point(16, 11);
 
         var left = new Panel
         {
@@ -127,13 +129,26 @@ public class BoardForm : UserControl
 
     private Control BuildFilterBar()
     {
-        var filterBar = new FlowLayoutPanel
+        var host = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 56,
+            Height = 72,
             BackColor = JiraTheme.BgPage,
             Padding = new Padding(16, 10, 16, 10),
+        };
+
+        var filterBar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(12, 6, 12, 6),
             WrapContents = false,
+            Margin = new Padding(0),
+        };
+        filterBar.Paint += (_, e) =>
+        {
+            using var pen = new Pen(JiraTheme.Border);
+            e.Graphics.DrawRectangle(pen, 0, 0, filterBar.Width - 1, filterBar.Height - 1);
         };
 
         filterBar.Controls.Add(_assigneeFilter);
@@ -141,8 +156,8 @@ public class BoardForm : UserControl
         filterBar.Controls.Add(_typeFilter);
         filterBar.Controls.Add(_searchFilter);
         filterBar.Controls.Add(_clearFiltersButton);
-
-        return filterBar;
+        host.Controls.Add(filterBar);
+        return host;
     }
 
     private static ComboBox CreateFilterCombo(int width) => new()
@@ -155,6 +170,20 @@ public class BoardForm : UserControl
         Font = JiraTheme.FontBody,
         IntegralHeight = false
     };
+
+    public Task RefreshBoardAsync() => LoadBoardAsync();
+
+    public void SetShellSearch(string searchText)
+    {
+        var value = searchText ?? string.Empty;
+        if (string.Equals(_searchFilter.Text, value, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _searchFilter.Text = value;
+        ApplyFilters();
+    }
 
     private async Task LoadBoardAsync()
     {
@@ -179,7 +208,9 @@ public class BoardForm : UserControl
                 }
 
                 activeSprint = await _session.Sprints.GetActiveByProjectAsync(project.Id);
-                columns = await _session.Board.GetBoardAsync(project.Id, activeSprint?.Id);
+                columns = _activeSprintOnly
+                    ? await _session.Board.GetBoardAsync(project.Id, activeSprint?.Id)
+                    : await _session.Board.GetBoardAsync(project.Id);
             });
 
             if (project is null)
@@ -209,16 +240,18 @@ public class BoardForm : UserControl
     {
         if (_activeSprint is null)
         {
-            _sprintTitleLabel.Text = "No active sprint";
-            _sprintDateLabel.Text = "Start a planned sprint to focus the board";
-            _startSprintButton.Enabled = true;
+            _sprintTitleLabel.Text = _activeSprintOnly ? "No active sprint" : "Backlog";
+            _sprintDateLabel.Text = _activeSprintOnly ? "Start a planned sprint to focus the board" : "Showing all project issues";
+            _startSprintButton.Enabled = _activeSprintOnly;
+            _startSprintButton.Visible = _activeSprintOnly;
             _startSprintButton.Text = "Start Sprint";
             return;
         }
 
-        _sprintTitleLabel.Text = _activeSprint.Name;
-        _sprintDateLabel.Text = FormatSprintDateRange(_activeSprint);
+        _sprintTitleLabel.Text = _activeSprintOnly ? _activeSprint.Name : "Backlog";
+        _sprintDateLabel.Text = _activeSprintOnly ? FormatSprintDateRange(_activeSprint) : $"Active sprint: {_activeSprint.Name}";
         _startSprintButton.Enabled = false;
+        _startSprintButton.Visible = _activeSprintOnly;
         _startSprintButton.Text = "Running";
     }
 
@@ -317,11 +350,12 @@ public class BoardForm : UserControl
         {
             var control = new BoardColumnControl(column)
             {
-                Margin = new Padding(0, 0, 12, 0),
+                Margin = new Padding(0, 0, 16, 0),
                 Height = Math.Max(200, _boardScrollPanel.ClientSize.Height - 8),
             };
             control.IssueSelected += async (_, issueId) => await OpenIssueDetailsAsync(issueId);
-            control.CreateIssueRequested += async (_, _) => await CreateIssueAsync();
+            control.CreateIssueRequested += async (_, status) => await CreateIssueAsync(status);
+            control.IssueMoveRequested += async (_, args) => await MoveIssueAsync(args);
             _boardColumnsPanel.Controls.Add(control);
             totalWidth += control.Width + control.Margin.Horizontal;
         }
@@ -373,21 +407,61 @@ public class BoardForm : UserControl
         }
     }
 
-    private async Task CreateIssueAsync()
+    private async Task CreateIssueAsync(IssueStatus? defaultStatus = null)
     {
-        using var dialog = new IssueEditorForm(_session, _projectId, null);
-        if (dialog.ShowDialog(this) == DialogResult.OK)
+        try
         {
-            await LoadBoardAsync();
+            using var dialog = new IssueEditorForm(_session, _projectId, null, defaultStatus);
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                await LoadBoardAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
         }
     }
 
     private async Task OpenIssueDetailsAsync(int issueId)
     {
-        using var dialog = new IssueDetailsForm(_session, issueId, _projectId);
-        if (dialog.ShowDialog(this) == DialogResult.OK)
+        try
         {
-            await LoadBoardAsync();
+            using var dialog = new IssueDetailsForm(_session, issueId, _projectId);
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                await LoadBoardAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+
+    private async Task MoveIssueAsync(IssueMoveRequestedEventArgs args)
+    {
+        try
+        {
+            var currentUserId = _session.CurrentUserContext.CurrentUser?.Id ?? 1;
+            var targetColumn = _loadedColumns.FirstOrDefault(x => x.Status == args.TargetStatus);
+            var boardPosition = targetColumn?.Issues.OrderBy(x => x.BoardPosition).FirstOrDefault() is { } first
+                ? first.BoardPosition - 1m
+                : 1m;
+
+            if (await _session.Issues.MoveAsync(args.IssueId, args.TargetStatus, boardPosition, currentUserId))
+            {
+                await LoadBoardAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
         }
     }
 }
+
+
+
+
+

@@ -10,12 +10,35 @@ namespace JiraClone.WinForms.Forms;
 public class UserManagementForm : UserControl
 {
     private readonly AppSession _session;
-    private readonly ListView _listView = new() { Dock = DockStyle.Fill, FullRowSelect = true, MultiSelect = false, View = View.Details, BorderStyle = BorderStyle.None, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody };
+    private readonly ListView _listView = new()
+    {
+        Dock = DockStyle.Fill,
+        FullRowSelect = true,
+        MultiSelect = false,
+        View = View.Details,
+        BorderStyle = BorderStyle.None,
+        BackColor = JiraTheme.BgSurface,
+        ForeColor = JiraTheme.TextPrimary,
+        Font = JiraTheme.FontBody,
+        HideSelection = false,
+    };
+    private readonly TextBox _searchBox = JiraControlFactory.CreateTextBox();
+    private readonly ComboBox _statusFilter = new()
+    {
+        Width = 150,
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        FlatStyle = FlatStyle.Flat,
+        BackColor = JiraTheme.BgSurface,
+        ForeColor = JiraTheme.TextPrimary,
+        Font = JiraTheme.FontBody,
+    };
     private readonly Button _createButton = JiraControlFactory.CreatePrimaryButton("Create");
     private readonly Button _editButton = JiraControlFactory.CreateSecondaryButton("Edit");
     private readonly Button _deactivateButton = JiraControlFactory.CreateSecondaryButton("Deactivate");
     private readonly Button _activateButton = JiraControlFactory.CreateSecondaryButton("Activate");
     private readonly Button _resetPasswordButton = JiraControlFactory.CreateSecondaryButton("Reset Password");
+    private readonly Label _countBadge = CreateBadgeLabel();
+    private readonly Label _emptyState = JiraControlFactory.CreateLabel("No users match the current filters.", true);
     private List<User> _users = [];
     private int _projectId;
     private bool _isLoading;
@@ -27,11 +50,21 @@ public class UserManagementForm : UserControl
         Font = JiraTheme.FontBody;
         DoubleBuffered = true;
 
-        _listView.Columns.Add("Display Name", 180);
-        _listView.Columns.Add("User Name", 140);
-        _listView.Columns.Add("Email", 220);
-        _listView.Columns.Add("Status", 80);
-        _listView.Columns.Add("Roles", 220);
+        JiraTheme.StyleListView(_listView);
+        _listView.Columns.Add("Display Name", 220);
+        _listView.Columns.Add("User Name", 160);
+        _listView.Columns.Add("Email", 260);
+        _listView.Columns.Add("Status", 100);
+        _listView.Columns.Add("Roles", 280);
+        _listView.SelectedIndexChanged += (_, _) => UpdateActionState();
+        _listView.DoubleClick += async (_, _) => await EditAsync();
+
+        _statusFilter.Items.AddRange(["All users", "Active only", "Inactive only"]);
+        _statusFilter.SelectedIndex = 0;
+        _statusFilter.SelectedIndexChanged += (_, _) => BindUsers();
+        _searchBox.Width = 240;
+        _searchBox.PlaceholderText = "Search users";
+        _searchBox.TextChanged += (_, _) => BindUsers();
 
         _createButton.Click += async (_, _) => await CreateAsync();
         _editButton.Click += async (_, _) => await EditAsync();
@@ -44,27 +77,120 @@ public class UserManagementForm : UserControl
         ConfigureActionButton(_activateButton, 98);
         ConfigureActionButton(_resetPasswordButton, 132);
 
-        var header = new Panel { Dock = DockStyle.Top, Height = 84, BackColor = JiraTheme.BgPage, Padding = new Padding(16, 16, 16, 8) };
-        var title = JiraControlFactory.CreateLabel("Users");
-        title.Font = JiraTheme.FontH2;
-        var caption = JiraControlFactory.CreateLabel("Manage users, roles, and access.", true);
-        caption.Location = new Point(0, 36);
-        header.Controls.Add(title);
-        header.Controls.Add(caption);
+        _emptyState.Dock = DockStyle.Fill;
+        _emptyState.TextAlign = ContentAlignment.MiddleCenter;
+        _emptyState.Visible = false;
 
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 62, Padding = new Padding(12, 8, 12, 10), BackColor = JiraTheme.BgPage };
-        actions.Controls.AddRange([_createButton, _editButton, _deactivateButton, _activateButton, _resetPasswordButton]);
-
-        var host = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 0, 16, 16), BackColor = JiraTheme.BgPage };
-        host.Controls.Add(_listView);
-
-        Controls.Add(host);
-        Controls.Add(actions);
-        Controls.Add(header);
+        Controls.Add(BuildSurface());
+        Controls.Add(BuildToolbar());
+        Controls.Add(BuildHeader());
         Load += async (_, _) => await LoadUsersAsync();
+        UpdateActionState();
     }
 
-    private User? SelectedUser => _listView.SelectedIndices.Count == 0 ? null : _users[_listView.SelectedIndices[0]];
+    private User? SelectedUser => _listView.SelectedItems.Count == 0 ? null : _listView.SelectedItems[0].Tag as User;
+
+    private Control BuildHeader()
+    {
+        var header = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 88,
+            BackColor = JiraTheme.BgPage,
+            Padding = new Padding(20, 18, 20, 8),
+        };
+
+        var title = JiraControlFactory.CreateLabel("Users");
+        title.Font = JiraTheme.FontH1;
+        title.Location = new Point(0, 0);
+
+        var caption = JiraControlFactory.CreateLabel("Manage user access, lifecycle, and project membership in one place.", true);
+        caption.Location = new Point(0, 42);
+
+        header.Controls.Add(title);
+        header.Controls.Add(caption);
+        header.Controls.Add(_countBadge);
+        _countBadge.Location = new Point(110, 10);
+        return header;
+    }
+
+    private Control BuildToolbar()
+    {
+        var toolbar = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 72,
+            BackColor = JiraTheme.BgPage,
+            Padding = new Padding(20, 8, 20, 12),
+        };
+
+        var filters = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Left,
+            Width = 430,
+            WrapContents = false,
+            BackColor = JiraTheme.BgPage,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+        };
+        filters.Controls.Add(_searchBox);
+        filters.Controls.Add(_statusFilter);
+
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            Width = 580,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            BackColor = JiraTheme.BgPage,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+        };
+        actions.Controls.AddRange([_resetPasswordButton, _activateButton, _deactivateButton, _editButton, _createButton]);
+
+        toolbar.Controls.Add(actions);
+        toolbar.Controls.Add(filters);
+        return toolbar;
+    }
+
+    private Control BuildSurface()
+    {
+        var host = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(20, 0, 20, 20),
+            BackColor = JiraTheme.BgPage,
+        };
+
+        var surface = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = JiraTheme.BgSurface,
+        };
+        surface.Paint += (_, e) =>
+        {
+            using var pen = new Pen(JiraTheme.Border);
+            e.Graphics.DrawRectangle(pen, 0, 0, surface.Width - 1, surface.Height - 1);
+        };
+
+        surface.Controls.Add(_emptyState);
+        surface.Controls.Add(_listView);
+        host.Controls.Add(surface);
+        return host;
+    }
+
+    public Task RefreshUsersAsync() => LoadUsersAsync();
+
+    public void SetShellSearch(string value)
+    {
+        var target = value ?? string.Empty;
+        if (string.Equals(_searchBox.Text, target, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _searchBox.Text = target;
+    }
 
     private async Task LoadUsersAsync()
     {
@@ -87,7 +213,7 @@ public class UserManagementForm : UserControl
                     return;
                 }
 
-                users = (await _session.UserCommands.GetAllAsync()).ToList();
+                users = (await _session.UserCommands.GetAllAsync()).OrderBy(x => x.DisplayName).ToList();
             });
 
             if (project is null)
@@ -97,23 +223,7 @@ public class UserManagementForm : UserControl
 
             _projectId = project.Id;
             _users = users;
-            _listView.Items.Clear();
-            foreach (var user in _users)
-            {
-                var item = new ListViewItem(user.DisplayName);
-                item.SubItems.Add(user.UserName);
-                item.SubItems.Add(user.Email);
-                item.SubItems.Add(user.IsActive ? "Active" : "Inactive");
-                item.SubItems.Add(string.Join(", ", user.UserRoles.Select(x => x.Role.Name)));
-                _listView.Items.Add(item);
-            }
-
-            var isAdmin = _session.Authorization.IsInRole(RoleCatalog.Admin);
-            _createButton.Enabled = isAdmin;
-            _editButton.Enabled = isAdmin;
-            _deactivateButton.Enabled = isAdmin;
-            _activateButton.Enabled = isAdmin;
-            _resetPasswordButton.Enabled = isAdmin;
+            BindUsers();
         }
         catch (Exception exception)
         {
@@ -123,6 +233,44 @@ public class UserManagementForm : UserControl
         {
             _isLoading = false;
         }
+    }
+
+    private void BindUsers()
+    {
+        var search = _searchBox.Text.Trim();
+        var statusMode = _statusFilter.SelectedItem as string ?? "All users";
+        var filtered = _users
+            .Where(user => statusMode switch
+            {
+                "Active only" => user.IsActive,
+                "Inactive only" => !user.IsActive,
+                _ => true,
+            })
+            .Where(user =>
+                string.IsNullOrWhiteSpace(search) ||
+                user.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                user.UserName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                user.Email.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                user.UserRoles.Any(x => x.Role.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        _listView.BeginUpdate();
+        _listView.Items.Clear();
+        foreach (var user in filtered)
+        {
+            var item = new ListViewItem(user.DisplayName) { Tag = user };
+            item.SubItems.Add(user.UserName);
+            item.SubItems.Add(user.Email);
+            item.SubItems.Add(user.IsActive ? "Active" : "Inactive");
+            item.SubItems.Add(string.Join(", ", user.UserRoles.Select(x => x.Role.Name)));
+            _listView.Items.Add(item);
+        }
+        _listView.EndUpdate();
+
+        _countBadge.Text = filtered.Count == 1 ? "1 user" : $"{filtered.Count} users";
+        _emptyState.Visible = filtered.Count == 0;
+        _listView.Visible = filtered.Count > 0;
+        UpdateActionState();
     }
 
     private async Task CreateAsync()
@@ -173,41 +321,75 @@ public class UserManagementForm : UserControl
 
     private async Task DeactivateAsync()
     {
-        if (SelectedUser is null)
+        try
         {
-            return;
-        }
+            if (SelectedUser is null)
+            {
+                ErrorDialogService.Show("Select a user first.");
+                return;
+            }
 
-        await _session.UserCommands.DeactivateAsync(SelectedUser.Id);
-        await LoadUsersAsync();
+            await _session.UserCommands.DeactivateAsync(SelectedUser.Id);
+            await LoadUsersAsync();
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
     }
 
     private async Task ActivateAsync()
     {
-        if (SelectedUser is null)
+        try
         {
-            return;
-        }
+            if (SelectedUser is null)
+            {
+                ErrorDialogService.Show("Select a user first.");
+                return;
+            }
 
-        await _session.UserCommands.ActivateAsync(SelectedUser.Id);
-        await LoadUsersAsync();
+            await _session.UserCommands.ActivateAsync(SelectedUser.Id);
+            await LoadUsersAsync();
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
     }
 
     private async Task ResetPasswordAsync()
     {
-        if (SelectedUser is null)
+        try
         {
-            return;
-        }
+            if (SelectedUser is null)
+            {
+                ErrorDialogService.Show("Select a user first.");
+                return;
+            }
 
-        var password = Microsoft.VisualBasic.Interaction.InputBox("Enter the new password", "Reset Password", "ChangeMe123!");
-        if (string.IsNullOrWhiteSpace(password))
+            var password = Microsoft.VisualBasic.Interaction.InputBox("Enter the new password", "Reset Password", "ChangeMe123!");
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                return;
+            }
+
+            await _session.UserCommands.ResetPasswordAsync(SelectedUser.Id, password);
+            MessageBox.Show(this, "Password has been reset.", "User Management", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception exception)
         {
-            return;
+            ErrorDialogService.Show(exception);
         }
+    }
 
-        await _session.UserCommands.ResetPasswordAsync(SelectedUser.Id, password);
-        MessageBox.Show(this, "Password has been reset.", "User Management", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    private static Label CreateBadgeLabel()
+    {
+        var label = JiraControlFactory.CreateLabel("0 users", true);
+        label.AutoSize = true;
+        label.BackColor = JiraTheme.Blue100;
+        label.ForeColor = JiraTheme.PrimaryActive;
+        label.Padding = new Padding(10, 6, 10, 6);
+        return label;
     }
 
     private static void ConfigureActionButton(Button button, int width)
@@ -216,6 +398,19 @@ public class UserManagementForm : UserControl
         button.Width = width;
         button.Height = 40;
         button.MinimumSize = new Size(width, 36);
+    }
+
+    private void UpdateActionState()
+    {
+        var isAdmin = _session.Authorization.IsInRole(RoleCatalog.Admin);
+        var selectedUser = SelectedUser;
+        var hasProject = _projectId > 0;
+
+        _createButton.Enabled = isAdmin && hasProject;
+        _editButton.Enabled = isAdmin && selectedUser is not null;
+        _deactivateButton.Enabled = isAdmin && selectedUser?.IsActive == true;
+        _activateButton.Enabled = isAdmin && selectedUser?.IsActive == false;
+        _resetPasswordButton.Enabled = isAdmin && selectedUser is not null;
     }
 
     private sealed class UserEditorDialog : Form
@@ -232,9 +427,9 @@ public class UserManagementForm : UserControl
         {
             Text = user is null ? "Create User" : "Edit User";
             AutoScaleMode = AutoScaleMode.Font;
-            Width = 520;
-            Height = 430;
-            MinimumSize = new Size(520, 430);
+            Width = 560;
+            Height = 470;
+            MinimumSize = new Size(560, 470);
             StartPosition = FormStartPosition.CenterParent;
             BackColor = JiraTheme.BgSurface;
             Font = JiraTheme.FontBody;
@@ -265,11 +460,11 @@ public class UserManagementForm : UserControl
             save.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };
             cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 50, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = JiraTheme.BgSurface };
+            var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 58, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = JiraTheme.BgSurface };
             buttons.Controls.Add(save);
             buttons.Controls.Add(cancel);
 
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(16), BackColor = JiraTheme.BgSurface, AutoScroll = true };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(16), BackColor = JiraTheme.BgSurface, AutoScroll = true, RowCount = 7 };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             AddRow(layout, 0, "User Name", _userName);
@@ -299,3 +494,4 @@ public class UserManagementForm : UserControl
         }
     }
 }
+

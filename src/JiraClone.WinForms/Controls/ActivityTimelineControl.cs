@@ -14,7 +14,10 @@ public class ActivityTimelineControl : UserControl
         Font = JiraTheme.FontSmall,
         HorizontalScrollbar = true,
         IntegralHeight = false,
+        Visible = false,
     };
+
+    private readonly Label _emptyState = JiraControlFactory.CreateLabel("No activity yet.", true);
 
     public ActivityTimelineControl()
     {
@@ -22,7 +25,13 @@ public class ActivityTimelineControl : UserControl
         BackColor = JiraTheme.BgSurface;
         Font = JiraTheme.FontBody;
         Padding = new Padding(JiraTheme.Padding);
+
+        _emptyState.Dock = DockStyle.Fill;
+        _emptyState.TextAlign = ContentAlignment.MiddleCenter;
+        _emptyState.ForeColor = JiraTheme.TextSecondary;
+
         Controls.Add(_listBox);
+        Controls.Add(_emptyState);
     }
 
     public void Bind(IReadOnlyList<ActivityLog> activityLogs)
@@ -33,5 +42,9 @@ public class ActivityTimelineControl : UserControl
             var value = string.IsNullOrWhiteSpace(log.NewValue) ? log.OldValue : log.NewValue;
             _listBox.Items.Add($"{log.OccurredAtUtc:g}  {log.ActionType}  {value}");
         }
+
+        var hasItems = _listBox.Items.Count > 0;
+        _listBox.Visible = hasItems;
+        _emptyState.Visible = !hasItems;
     }
 }

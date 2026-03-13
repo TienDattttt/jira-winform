@@ -1,3 +1,4 @@
+using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
 namespace JiraClone.WinForms.Controls;
@@ -14,6 +15,7 @@ public class AttachmentPicker : UserControl
     private readonly TextBox _pathTextBox = JiraControlFactory.CreateTextBox();
     private readonly Button _browseButton = JiraControlFactory.CreateSecondaryButton("Browse");
     private readonly Button _uploadButton = JiraControlFactory.CreatePrimaryButton("Upload");
+    private bool _isUploading;
 
     public AttachmentPicker()
     {
@@ -65,12 +67,18 @@ public class AttachmentPicker : UserControl
         _uploadButton.Click += async (_, _) => await UploadAsync();
 
         Controls.Add(inner);
+        UpdateActionState();
     }
 
     public Func<string, Task>? UploadRequested { get; set; }
 
     private void BrowseFile()
     {
+        if (_isUploading)
+        {
+            return;
+        }
+
         using var dialog = new OpenFileDialog
         {
             CheckFileExists = true,
@@ -81,12 +89,13 @@ public class AttachmentPicker : UserControl
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
             _pathTextBox.Text = dialog.FileName;
+            UpdateActionState();
         }
     }
 
     private async Task UploadAsync()
     {
-        if (UploadRequested is null)
+        if (UploadRequested is null || _isUploading)
         {
             return;
         }
@@ -111,7 +120,30 @@ public class AttachmentPicker : UserControl
             return;
         }
 
-        await UploadRequested(path);
-        _pathTextBox.Clear();
+        try
+        {
+            _isUploading = true;
+            UpdateActionState();
+            UseWaitCursor = true;
+            await UploadRequested(path);
+            _pathTextBox.Clear();
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+            _isUploading = false;
+            UpdateActionState();
+        }
+    }
+
+    private void UpdateActionState()
+    {
+        var hasPath = !string.IsNullOrWhiteSpace(_pathTextBox.Text);
+        _browseButton.Enabled = !_isUploading;
+        _uploadButton.Enabled = !_isUploading && hasPath;
     }
 }

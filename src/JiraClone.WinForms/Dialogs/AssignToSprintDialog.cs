@@ -13,6 +13,7 @@ public class AssignToSprintDialog : Form
         BackColor = JiraTheme.BgSurface,
         ForeColor = JiraTheme.TextPrimary,
         Font = JiraTheme.FontBody,
+        IntegralHeight = false,
     };
 
     public AssignToSprintDialog(Sprint sprint, IReadOnlyList<Issue> issues)
@@ -22,24 +23,28 @@ public class AssignToSprintDialog : Form
 
         Text = $"Assign Issues To {sprint.Name}";
         AutoScaleMode = AutoScaleMode.Font;
-        Width = 640;
-        Height = 500;
-        MinimumSize = new Size(640, 500);
         StartPosition = FormStartPosition.CenterParent;
+        Size = new Size(760, 560);
+        MinimumSize = new Size(760, 560);
         BackColor = JiraTheme.BgSurface;
         Font = JiraTheme.FontBody;
         DoubleBuffered = true;
 
-        var summaryLabel = JiraControlFactory.CreateLabel($"Select issues to assign to sprint '{sprint.Name}'.", true);
+        var title = JiraControlFactory.CreateLabel($"Assign issues to {sprint.Name}");
+        title.Font = JiraTheme.FontH2;
+        title.Dock = DockStyle.Top;
+        title.Height = 40;
+
+        var summaryLabel = JiraControlFactory.CreateLabel($"Select one or more issues for sprint '{sprint.Name}'.", true);
         summaryLabel.Dock = DockStyle.Top;
-        summaryLabel.Height = 36;
+        summaryLabel.Height = 28;
 
         var assignButton = JiraControlFactory.CreatePrimaryButton("Assign");
         var cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
         assignButton.AutoSize = false;
-        assignButton.Size = new Size(92, 36);
+        assignButton.Size = new Size(104, 40);
         cancelButton.AutoSize = false;
-        cancelButton.Size = new Size(92, 36);
+        cancelButton.Size = new Size(104, 40);
         assignButton.Click += (_, _) =>
         {
             SelectedIssueIds = _issuesList.CheckedItems.Cast<Issue>().Select(x => x.Id).ToArray();
@@ -52,25 +57,35 @@ public class AssignToSprintDialog : Form
             Close();
         };
 
-        var buttons = new FlowLayoutPanel
+        var footer = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
-            Height = 52,
+            Height = 68,
             FlowDirection = FlowDirection.RightToLeft,
-            Padding = new Padding(12),
-            BackColor = JiraTheme.BgSurface
+            WrapContents = false,
+            Padding = new Padding(20, 12, 20, 12),
+            BackColor = JiraTheme.BgSurface,
         };
-        buttons.Controls.Add(assignButton);
-        buttons.Controls.Add(cancelButton);
+        footer.Controls.Add(assignButton);
+        footer.Controls.Add(cancelButton);
+
+        var listHost = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(0, 12, 0, 0),
+        };
+        listHost.Controls.Add(_issuesList);
 
         var body = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(16),
-            BackColor = JiraTheme.BgSurface
+            Padding = new Padding(20),
+            BackColor = JiraTheme.BgSurface,
         };
-        body.Controls.Add(_issuesList);
+        body.Controls.Add(listHost);
         body.Controls.Add(summaryLabel);
+        body.Controls.Add(title);
 
         _issuesList.DisplayMember = nameof(Issue.Title);
         foreach (var issue in issues.OrderBy(x => x.Status).ThenBy(x => x.Title))
@@ -83,7 +98,7 @@ public class AssignToSprintDialog : Form
         }
 
         Controls.Add(body);
-        Controls.Add(buttons);
+        Controls.Add(footer);
     }
 
     public Sprint Sprint { get; }

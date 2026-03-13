@@ -63,6 +63,28 @@ public class SprintServiceTests
     }
 
     [Fact]
+    public async Task AssignIssuesAsync_ValidIssues_WritesSprintAssignedActivity()
+    {
+        // Arrange
+        var sprint = new Sprint { Id = 2, ProjectId = 1, Name = "Sprint 1", State = SprintState.Planned };
+        var issue = new Issue { Id = 5, ProjectId = 1, SprintId = null, ReporterId = 3, CreatedById = 9, Title = "Open work" };
+        var sprintRepository = new Mock<ISprintRepository>();
+        sprintRepository.Setup(x => x.GetByIdAsync(2, default)).ReturnsAsync(sprint);
+        var issueRepository = new Mock<IIssueRepository>();
+        issueRepository.Setup(x => x.GetByIdAsync(5, default)).ReturnsAsync(issue);
+        var activityLogs = new Mock<IActivityLogRepository>();
+        var service = CreateService(sprintRepository, issueRepository, activityLogRepository: activityLogs);
+
+        // Act
+        var assigned = await service.AssignIssuesAsync(2, [5]);
+
+        // Assert
+        Assert.True(assigned);
+        Assert.Equal(2, issue.SprintId);
+        activityLogs.Verify(x => x.AddAsync(It.Is<ActivityLog>(log => log.ActionType == ActivityActionType.SprintAssigned && log.IssueId == 5), default), Times.Once);
+    }
+
+    [Fact]
     public async Task CloseSprintAsync_ActiveSprint_ClosesAndSetsEndDate()
     {
         // Arrange
@@ -71,7 +93,8 @@ public class SprintServiceTests
         sprintRepository.Setup(x => x.GetByIdAsync(2, default)).ReturnsAsync(sprint);
         var issueRepository = new Mock<IIssueRepository>();
         issueRepository.Setup(x => x.GetIncompleteBySprintIdAsync(2, default)).ReturnsAsync(Array.Empty<Issue>());
-        var service = CreateService(sprintRepository, issueRepository);
+        var activityLogs = new Mock<IActivityLogRepository>();
+        var service = CreateService(sprintRepository, issueRepository, activityLogRepository: activityLogs);
 
         // Act
         var closed = await service.CloseSprintAsync(2, null);
@@ -80,6 +103,7 @@ public class SprintServiceTests
         Assert.True(closed);
         Assert.Equal(SprintState.Closed, sprint.State);
         Assert.NotNull(sprint.EndDate);
+        activityLogs.Verify(x => x.AddAsync(It.Is<ActivityLog>(log => log.ActionType == ActivityActionType.SprintClosed), default), Times.Once);
     }
 
     [Fact]
@@ -107,12 +131,19 @@ public class SprintServiceTests
         Mock<ISprintRepository>? sprintRepository = null,
         Mock<IIssueRepository>? issueRepository = null,
         Mock<IAuthorizationService>? authorization = null,
+        Mock<IActivityLogRepository>? activityLogRepository = null,
+        Mock<ICurrentUserContext>? currentUserContext = null,
         Mock<IUnitOfWork>? unitOfWork = null)
     {
+        currentUserContext ??= new Mock<ICurrentUserContext>();
+        currentUserContext.Setup(x => x.CurrentUser).Returns(new User { Id = 99, UserName = "admin", DisplayName = "Admin User", Email = "admin@example.com" });
+
         return new SprintService(
             (sprintRepository ?? new Mock<ISprintRepository>()).Object,
             (issueRepository ?? new Mock<IIssueRepository>()).Object,
             (authorization ?? new Mock<IAuthorizationService>()).Object,
+            (activityLogRepository ?? new Mock<IActivityLogRepository>()).Object,
+            currentUserContext.Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
     }
 }

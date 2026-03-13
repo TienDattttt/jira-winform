@@ -21,8 +21,11 @@ public class SprintSelectorControl : ComboBox
 
     public void Bind(IReadOnlyList<Sprint> sprints)
     {
-        DataSource = sprints.ToList();
+        DataSource = null;
         DisplayMember = nameof(Sprint.Name);
         ValueMember = nameof(Sprint.Id);
+        DataSource = sprints.ToList();
+        SelectedIndex = sprints.Count == 0 ? -1 : SelectedIndex;
     }
 }
+

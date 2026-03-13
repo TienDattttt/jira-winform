@@ -1,4 +1,5 @@
 using JiraClone.Domain.Entities;
+using JiraClone.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -10,6 +11,7 @@ public class SprintConfiguration : IEntityTypeConfiguration<Sprint>
     {
         builder.ToTable("Sprints");
         builder.HasIndex(x => new { x.ProjectId, x.State });
+        builder.HasIndex(x => x.ProjectId).IsUnique().HasFilter($"[{nameof(Sprint.State)}] = {(int)SprintState.Active}");
         builder.HasIndex(x => new { x.ProjectId, x.StartDate });
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Goal).HasMaxLength(1000);

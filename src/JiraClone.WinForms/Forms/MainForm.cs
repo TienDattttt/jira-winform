@@ -1,6 +1,10 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using JiraClone.Application.Models;
+using JiraClone.Domain.Entities;
+using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
+using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
 namespace JiraClone.WinForms.Forms;
@@ -21,6 +25,7 @@ public class MainForm : Form
     private readonly InitialsAvatar _navbarAvatar;
     private readonly Label _sidebarUserLabel;
     private readonly Button _logoutButton;
+    private readonly Button _createIssueButton;
 
     private string _projectName = "Project";
     private SidebarNavItem? _activeNavItem;
@@ -39,9 +44,10 @@ public class MainForm : Form
         BackColor = JiraTheme.BgPage;
         Font = JiraTheme.FontBody;
 
-        _searchBox.Width = 240;
-        _searchBox.MinimumSize = new Size(220, 36);
+        _searchBox.Width = 300;
+        _searchBox.MinimumSize = new Size(220, 38);
         _searchBox.PlaceholderText = "Search project";
+        _searchBox.TextChanged += (_, _) => ApplyShellSearch();
 
         var initials = BuildInitials(_displayName);
         _sidebarAvatar = new InitialsAvatar(initials, 32) { BackCircleColor = JiraTheme.Blue600 };
@@ -57,6 +63,10 @@ public class MainForm : Form
         _logoutButton.Height = 40;
         _logoutButton.MinimumSize = new Size(124, 36);
         _logoutButton.Click += (_, _) => Logout();
+        _createIssueButton = JiraControlFactory.CreatePrimaryButton("Create");
+        _createIssueButton.AutoSize = false;
+        _createIssueButton.Size = new Size(108, 38);
+        _createIssueButton.Click += async (_, _) => await CreateIssueAsync();
 
         BuildLayout();
         WireNavigation();
@@ -176,7 +186,7 @@ public class MainForm : Form
         {
             Dock = DockStyle.Fill,
             BackColor = JiraTheme.BgSurface,
-            Padding = new Padding(20, 12, 20, 12),
+            Padding = new Padding(20, 10, 20, 10),
         };
 
         navbar.Paint += (_, e) =>
@@ -185,18 +195,20 @@ public class MainForm : Form
             e.Graphics.DrawLine(pen, 0, navbar.Height - 1, navbar.Width, navbar.Height - 1);
         };
 
-        var rightPanel = new Panel { Dock = DockStyle.Right, Width = 336, BackColor = JiraTheme.BgSurface };
+        var rightPanel = new Panel { Dock = DockStyle.Right, Width = 560, BackColor = JiraTheme.BgSurface };
         rightPanel.Controls.Add(_navbarAvatar);
         rightPanel.Controls.Add(_searchBox);
+        rightPanel.Controls.Add(_createIssueButton);
         rightPanel.Resize += (_, _) =>
         {
-            _navbarAvatar.Location = new Point(rightPanel.Width - _navbarAvatar.Width, 0);
+            _navbarAvatar.Location = new Point(rightPanel.Width - _navbarAvatar.Width, 1);
             _searchBox.Location = new Point(rightPanel.Width - _navbarAvatar.Width - _searchBox.Width - 16, 0);
+            _createIssueButton.Location = new Point(_searchBox.Left - _createIssueButton.Width - 12, 0);
         };
 
         var leftPanel = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
         leftPanel.Controls.Add(_breadcrumbLabel);
-        _breadcrumbLabel.Location = new Point(0, 6);
+        _breadcrumbLabel.Location = new Point(0, 10);
 
         navbar.Controls.Add(rightPanel);
         navbar.Controls.Add(leftPanel);
@@ -205,10 +217,10 @@ public class MainForm : Form
 
     private void WireNavigation()
     {
-        _boardItem.Click += (_, _) => NavigateTo(_boardItem, () => new BoardForm(_session));
-        _backlogItem.Click += (_, _) => NavigateTo(_backlogItem, () => new BoardForm(_session));
+        _boardItem.Click += (_, _) => NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
+        _backlogItem.Click += (_, _) => NavigateTo(_backlogItem, () => new BoardForm(_session, activeSprintOnly: false));
         _sprintsItem.Click += (_, _) => NavigateTo(_sprintsItem, () => new SprintManagementForm(_session));
-        _issuesItem.Click += (_, _) => NavigateTo(_issuesItem, () => new IssueLauncherView(_session));
+        _issuesItem.Click += (_, _) => NavigateTo(_issuesItem, () => new IssueNavigatorView(_session));
         _settingsItem.Click += (_, _) => NavigateTo(_settingsItem, () => new ProjectSettingsForm(_session));
     }
 
@@ -228,17 +240,93 @@ public class MainForm : Form
         _activeContent.Dock = DockStyle.Fill;
         _contentPanel.Controls.Add(_activeContent);
         _breadcrumbLabel.Text = $"Projects > {_projectName} > {navItem.TextLabel}";
+        ApplyShellSearch();
     }
 
     private async Task LoadProjectContextAsync()
     {
-        var project = await _session.Projects.GetActiveProjectAsync();
-        if (project is not null)
+        try
         {
-            _projectName = project.Name;
-        }
+            var project = await _session.Projects.GetActiveProjectAsync();
+            if (project is not null)
+            {
+                _projectName = project.Name;
+                _searchBox.PlaceholderText = $"Search in {_projectName}";
+            }
 
-        NavigateTo(_boardItem, () => new BoardForm(_session));
+            NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+
+    private async Task CreateIssueAsync()
+    {
+        try
+        {
+            var project = await _session.Projects.GetActiveProjectAsync();
+            if (project is null)
+            {
+                ErrorDialogService.Show("No active project found.");
+                return;
+            }
+
+            using var dialog = new IssueEditorForm(_session, project.Id, null);
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                await RefreshActiveContentAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+
+    private async Task RefreshActiveContentAsync()
+    {
+        switch (_activeContent)
+        {
+            case BoardForm boardForm:
+                await boardForm.RefreshBoardAsync();
+                break;
+            case IssueNavigatorView issueNavigator:
+                await issueNavigator.RefreshIssuesAsync();
+                break;
+            case SprintManagementForm sprintManagementForm:
+                await sprintManagementForm.RefreshSprintsAsync();
+                break;
+            case UserManagementForm userManagementForm:
+                await userManagementForm.RefreshUsersAsync();
+                break;
+            case ProjectSettingsForm projectSettingsForm:
+                await projectSettingsForm.RefreshProjectAsync();
+                break;
+        }
+    }
+
+    private void ApplyShellSearch()
+    {
+        switch (_activeContent)
+        {
+            case BoardForm boardForm:
+                boardForm.SetShellSearch(_searchBox.Text);
+                break;
+            case IssueNavigatorView issueNavigator:
+                issueNavigator.SetShellSearch(_searchBox.Text);
+                break;
+            case SprintManagementForm sprintManagementForm:
+                sprintManagementForm.SetShellSearch(_searchBox.Text);
+                break;
+            case UserManagementForm userManagementForm:
+                userManagementForm.SetShellSearch(_searchBox.Text);
+                break;
+            case ProjectSettingsForm projectSettingsForm:
+                projectSettingsForm.SetShellSearch(_searchBox.Text);
+                break;
+        }
     }
 
     private void Logout()
@@ -390,58 +478,418 @@ public class MainForm : Form
         }
     }
 
-    private sealed class IssueLauncherView : UserControl
+    private sealed class IssueNavigatorView : UserControl
     {
         private readonly AppSession _session;
-        private readonly Label _hint = JiraControlFactory.CreateLabel("Create a new issue for the active project.", true);
-        private readonly Button _createButton = JiraControlFactory.CreatePrimaryButton("New Issue");
+        private readonly Label _titleLabel = JiraControlFactory.CreateLabel("Issues");
+        private readonly Label _subtitleLabel = JiraControlFactory.CreateLabel("Browse every issue in the active project.", true);
+        private readonly Label _countBadge = JiraControlFactory.CreateLabel("0 issues", true);
+        private readonly ComboBox _statusFilter = CreateFilterCombo(150);
+        private readonly ComboBox _priorityFilter = CreateFilterCombo(140);
+        private readonly ComboBox _typeFilter = CreateFilterCombo(130);
+        private readonly Button _clearFiltersButton = JiraControlFactory.CreateSecondaryButton("Clear filters");
+        private readonly DataGridView _grid = new();
+        private readonly Label _emptyState = JiraControlFactory.CreateLabel("No issues match the current filters.", true);
+        private readonly Button _openButton = JiraControlFactory.CreateSecondaryButton("Open issue");
 
-        public IssueLauncherView(AppSession session)
+        private int _projectId;
+        private IReadOnlyList<IssueSummaryDto> _issues = Array.Empty<IssueSummaryDto>();
+        private string _shellSearch = string.Empty;
+
+        public IssueNavigatorView(AppSession session)
         {
             _session = session;
             BackColor = JiraTheme.BgPage;
-            var card = new DoubleBufferedPanel { Size = new Size(420, 180), BackColor = JiraTheme.BgSurface, Anchor = AnchorStyles.None };
-            card.Paint += (_, e) =>
+            Font = JiraTheme.FontBody;
+            DoubleBuffered = true;
+
+            _titleLabel.Font = JiraTheme.FontH1;
+            _subtitleLabel.Font = JiraTheme.FontCaption;
+            _countBadge.AutoSize = true;
+            _countBadge.BackColor = JiraTheme.Blue100;
+            _countBadge.ForeColor = JiraTheme.PrimaryActive;
+            _countBadge.Padding = new Padding(10, 6, 10, 6);
+            _countBadge.Margin = new Padding(12, 0, 0, 0);
+
+            _statusFilter.SelectedIndexChanged += (_, _) => BindIssues();
+            _priorityFilter.SelectedIndexChanged += (_, _) => BindIssues();
+            _typeFilter.SelectedIndexChanged += (_, _) => BindIssues();
+            _clearFiltersButton.AutoSize = false;
+            _clearFiltersButton.Size = new Size(118, 36);
+            _clearFiltersButton.Click += (_, _) => ClearFilters();
+
+            _openButton.AutoSize = false;
+            _openButton.Size = new Size(116, 36);
+            _openButton.Enabled = false;
+            _openButton.Click += async (_, _) => await OpenSelectedIssueAsync();
+
+            ConfigureGrid();
+
+            Controls.Add(BuildLayout());
+            Load += async (_, _) => await RefreshIssuesAsync();
+        }
+
+        public async Task RefreshIssuesAsync()
+        {
+            try
             {
-                using var pen = new Pen(JiraTheme.Border);
-                e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
+                Project? project = null;
+                IReadOnlyList<BoardColumnDto> columns = Array.Empty<BoardColumnDto>();
+
+                await _session.RunSerializedAsync(async () =>
+                {
+                    project = await _session.Projects.GetActiveProjectAsync();
+                    if (project is null)
+                    {
+                        return;
+                    }
+
+                    columns = await _session.Board.GetBoardAsync(project.Id);
+                });
+
+                if (project is null)
+                {
+                    _projectId = 0;
+                    _issues = Array.Empty<IssueSummaryDto>();
+                    BindIssues();
+                    return;
+                }
+
+                _projectId = project.Id;
+                _issues = columns
+                    .SelectMany(x => x.Issues)
+                    .GroupBy(x => x.Id)
+                    .Select(x => x.First())
+                    .OrderByDescending(x => x.Id)
+                    .ToList();
+                _subtitleLabel.Text = $"Browse every issue in {project.Name}.";
+                ResetFilter(_statusFilter, "All statuses", Enum.GetNames<IssueStatus>());
+                ResetFilter(_priorityFilter, "All priorities", Enum.GetNames<IssuePriority>());
+                ResetFilter(_typeFilter, "All types", Enum.GetNames<IssueType>());
+                BindIssues();
+            }
+            catch (Exception exception)
+            {
+                ErrorDialogService.Show(exception);
+            }
+        }
+
+        public void SetShellSearch(string value)
+        {
+            _shellSearch = value?.Trim() ?? string.Empty;
+            BindIssues();
+        }
+
+        private Control BuildLayout()
+        {
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                BackColor = JiraTheme.BgPage,
+                Padding = new Padding(20, 18, 20, 20),
+            };
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.Controls.Add(BuildHeader(), 0, 0);
+            root.Controls.Add(BuildFilterBar(), 0, 1);
+            root.Controls.Add(BuildSurface(), 0, 2);
+            return root;
+        }
+
+        private Control BuildHeader()
+        {
+            var header = new Panel { Dock = DockStyle.Top, Height = 78, BackColor = JiraTheme.BgPage };
+
+            var right = new Panel { Dock = DockStyle.Right, Width = 140, BackColor = JiraTheme.BgPage };
+            right.Controls.Add(_openButton);
+            _openButton.Location = new Point(12, 18);
+
+            var meta = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = JiraTheme.BgPage,
+                Padding = new Padding(0),
+                Margin = new Padding(0),
+            };
+            _titleLabel.Margin = new Padding(0, 0, 0, 0);
+            _countBadge.Margin = new Padding(12, 6, 0, 0);
+            meta.Controls.Add(_titleLabel);
+            meta.Controls.Add(_countBadge);
+
+            var left = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgPage };
+            left.Controls.Add(_subtitleLabel);
+            left.Controls.Add(meta);
+            meta.Location = new Point(0, 0);
+            _subtitleLabel.Location = new Point(0, 42);
+
+            header.Controls.Add(right);
+            header.Controls.Add(left);
+            return header;
+        }
+
+        private Control BuildFilterBar()
+        {
+            var host = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 60,
+                BackColor = JiraTheme.BgPage,
+                Padding = new Padding(0, 0, 0, 12),
             };
 
-            var title = JiraControlFactory.CreateLabel("Issues");
-            title.Font = JiraTheme.FontH1;
-            title.Location = new Point(24, 24);
-
-            _hint.Location = new Point(24, 70);
-            _createButton.AutoSize = false;
-            _createButton.Size = new Size(140, 40);
-            _createButton.Location = new Point(24, 108);
-            _createButton.Click += async (_, _) => await OpenIssueEditorAsync();
-
-            card.Controls.Add(title);
-            card.Controls.Add(_hint);
-            card.Controls.Add(_createButton);
-
-            Controls.Add(card);
-            Resize += (_, _) => CenterCard(card);
-            Load += (_, _) => CenterCard(card);
+            var filterBar = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = JiraTheme.BgSurface,
+                Padding = new Padding(12, 8, 12, 8),
+                WrapContents = false,
+                Margin = new Padding(0),
+            };
+            filterBar.Paint += (_, e) =>
+            {
+                using var pen = new Pen(JiraTheme.Border);
+                e.Graphics.DrawRectangle(pen, 0, 0, filterBar.Width - 1, filterBar.Height - 1);
+            };
+            filterBar.Controls.Add(_statusFilter);
+            filterBar.Controls.Add(_priorityFilter);
+            filterBar.Controls.Add(_typeFilter);
+            filterBar.Controls.Add(_clearFiltersButton);
+            host.Controls.Add(filterBar);
+            return host;
         }
 
-        private async Task OpenIssueEditorAsync()
+        private Control BuildSurface()
         {
-            var project = await _session.Projects.GetActiveProjectAsync();
-            if (project is null)
+            var surface = new DoubleBufferedPanel
             {
-                MessageBox.Show(this, "No active project found.", "Issues", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                Dock = DockStyle.Fill,
+                BackColor = JiraTheme.BgSurface,
+                Padding = new Padding(0),
+            };
+            surface.Paint += (_, e) =>
+            {
+                using var pen = new Pen(JiraTheme.Border);
+                e.Graphics.DrawRectangle(pen, 0, 0, surface.Width - 1, surface.Height - 1);
+            };
+
+            _emptyState.Dock = DockStyle.Fill;
+            _emptyState.TextAlign = ContentAlignment.MiddleCenter;
+            _emptyState.Visible = false;
+
+            surface.Controls.Add(_emptyState);
+            surface.Controls.Add(_grid);
+            return surface;
+        }
+
+        private void ConfigureGrid()
+        {
+            _grid.Dock = DockStyle.Fill;
+            _grid.ReadOnly = true;
+            _grid.MultiSelect = false;
+            _grid.AllowUserToAddRows = false;
+            _grid.AllowUserToDeleteRows = false;
+            _grid.AllowUserToResizeRows = false;
+            _grid.RowHeadersVisible = false;
+            _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            _grid.AutoGenerateColumns = false;
+            _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
+            _grid.RowTemplate.Height = 36;
+            JiraTheme.StyleDataGridView(_grid);
+            _grid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+            _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+            _grid.ColumnHeadersHeight = 42;
+            _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            _grid.SelectionChanged += (_, _) => _openButton.Enabled = _grid.CurrentRow?.DataBoundItem is IssueSummaryRow;
+            _grid.CellDoubleClick += async (_, eventArgs) =>
+            {
+                if (eventArgs.RowIndex >= 0)
+                {
+                    await OpenSelectedIssueAsync();
+                }
+            };
+
+            _grid.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = nameof(IssueSummaryRow.Key),
+                HeaderText = "Key",
+                Width = 110,
+                MinimumWidth = 100,
+            });
+            _grid.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = nameof(IssueSummaryRow.Summary),
+                HeaderText = "Summary",
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+                MinimumWidth = 260,
+            });
+            _grid.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = nameof(IssueSummaryRow.Status),
+                HeaderText = "Status",
+                Width = 130,
+                MinimumWidth = 120,
+            });
+            _grid.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = nameof(IssueSummaryRow.Priority),
+                HeaderText = "Priority",
+                Width = 120,
+                MinimumWidth = 110,
+            });
+            _grid.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = nameof(IssueSummaryRow.Type),
+                HeaderText = "Type",
+                Width = 110,
+                MinimumWidth = 100,
+            });
+            _grid.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = nameof(IssueSummaryRow.Assignees),
+                HeaderText = "Assignees",
+                Width = 220,
+                MinimumWidth = 180,
+            });
+        }
+
+        private void BindIssues()
+        {
+            var status = _statusFilter.SelectedItem as string;
+            var priority = _priorityFilter.SelectedItem as string;
+            var type = _typeFilter.SelectedItem as string;
+            var filtered = _issues
+                .Where(issue =>
+                    (string.IsNullOrWhiteSpace(_shellSearch) ||
+                     issue.IssueKey.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase) ||
+                     issue.Title.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase) ||
+                     issue.ReporterName.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase) ||
+                     issue.AssigneeNames.Any(x => x.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase))) &&
+                    (string.IsNullOrWhiteSpace(status) || status.StartsWith("All ") || string.Equals(issue.Status.ToString(), status, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(priority) || priority.StartsWith("All ") || string.Equals(issue.Priority.ToString(), priority, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(type) || type.StartsWith("All ") || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)))
+                .Select(issue => new IssueSummaryRow(
+                    issue.Id,
+                    issue.IssueKey,
+                    issue.Title,
+                    FormatStatus(issue.Status),
+                    FormatPriority(issue.Priority),
+                    FormatType(issue.Type),
+                    issue.AssigneeNames.Count == 0 ? "Unassigned" : string.Join(", ", issue.AssigneeNames)))
+                .ToList();
+
+            _grid.DataSource = filtered;
+            _emptyState.Visible = filtered.Count == 0;
+            _grid.Visible = filtered.Count > 0;
+            _countBadge.Text = filtered.Count == 1 ? "1 issue" : $"{filtered.Count} issues";
+            _openButton.Enabled = filtered.Count > 0 && _grid.CurrentRow?.DataBoundItem is IssueSummaryRow;
+        }
+
+        private void ClearFilters()
+        {
+            if (_statusFilter.Items.Count > 0)
+            {
+                _statusFilter.SelectedIndex = 0;
             }
 
-            using var dialog = new IssueEditorForm(_session, project.Id, null);
-            dialog.ShowDialog(this);
+            if (_priorityFilter.Items.Count > 0)
+            {
+                _priorityFilter.SelectedIndex = 0;
+            }
+
+            if (_typeFilter.Items.Count > 0)
+            {
+                _typeFilter.SelectedIndex = 0;
+            }
+
+            BindIssues();
         }
 
-        private void CenterCard(Control card)
+        private static ComboBox CreateFilterCombo(int width) => new()
         {
-            card.Location = new Point(Math.Max(24, (ClientSize.Width - card.Width) / 2), Math.Max(24, (ClientSize.Height - card.Height) / 2));
+            Width = width,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = JiraTheme.BgSurface,
+            ForeColor = JiraTheme.TextPrimary,
+            Font = JiraTheme.FontBody,
+            IntegralHeight = false,
+            Margin = new Padding(0, 0, 12, 0),
+        };
+
+        private static string FormatStatus(IssueStatus status) => status switch
+        {
+            IssueStatus.InProgress => "In progress",
+            _ => status.ToString()
+        };
+
+        private static string FormatPriority(IssuePriority priority) => priority switch
+        {
+            IssuePriority.Highest => "Highest",
+            _ => priority.ToString()
+        };
+
+        private static string FormatType(IssueType type) => type switch
+        {
+            IssueType.Task => "Task",
+            IssueType.Bug => "Bug",
+            IssueType.Story => "Story",
+            _ => type.ToString()
+        };
+
+        private static void ResetFilter(ComboBox comboBox, string allLabel, IEnumerable<string> values)
+        {
+            var selected = comboBox.SelectedItem as string;
+            comboBox.Items.Clear();
+            comboBox.Items.Add(allLabel);
+            foreach (var value in values)
+            {
+                comboBox.Items.Add(value);
+            }
+
+            comboBox.SelectedItem = selected is not null && comboBox.Items.Contains(selected) ? selected : allLabel;
         }
+        private async Task OpenSelectedIssueAsync()
+        {
+            try
+            {
+                if (_grid.CurrentRow?.DataBoundItem is not IssueSummaryRow issue || _projectId == 0)
+                {
+                    return;
+                }
+
+                using var dialog = new IssueDetailsForm(_session, issue.Id, _projectId);
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    await RefreshIssuesAsync();
+                }
+            }
+            catch (Exception exception)
+            {
+                ErrorDialogService.Show(exception);
+            }
+        }
+
+        private sealed record IssueSummaryRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

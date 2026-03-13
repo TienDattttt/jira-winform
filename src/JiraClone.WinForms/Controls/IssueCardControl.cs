@@ -1,6 +1,7 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
+using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Theme;
 
 namespace JiraClone.WinForms.Controls;
@@ -16,8 +17,8 @@ public class IssueCardControl : UserControl
         DoubleBuffered = true;
         Cursor = Cursors.Hand;
         BackColor = Color.Transparent;
-        Width = 280;
-        MinimumSize = new Size(280, JiraTheme.CardMinHeight);
+        Width = 296;
+        MinimumSize = new Size(296, JiraTheme.CardMinHeight);
         Margin = new Padding(0, 0, 0, JiraTheme.Sm);
         Padding = new Padding(JiraTheme.Md);
 
@@ -29,10 +30,11 @@ public class IssueCardControl : UserControl
     public IssueSummaryDto Issue { get; }
 
     public event EventHandler<int>? IssueSelected;
+    public event EventHandler<IssueMoveRequestedEventArgs>? IssueMoveRequested;
 
     public override Size GetPreferredSize(Size proposedSize)
     {
-        var width = Math.Max(280, proposedSize.Width > 0 ? proposedSize.Width : Width);
+        var width = Math.Max(296, proposedSize.Width > 0 ? proposedSize.Width : Width);
         var textAreaWidth = width - Padding.Horizontal - 12;
         var measured = TextRenderer.MeasureText(
             Issue.Title,
@@ -48,6 +50,7 @@ public class IssueCardControl : UserControl
     {
         base.OnCreateControl();
         Height = GetPreferredSize(new Size(Width, 0)).Height;
+        ConfigureContextMenu();
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -73,7 +76,7 @@ public class IssueCardControl : UserControl
         e.Graphics.FillPath(fillBrush, cardPath);
         e.Graphics.DrawPath(borderPen, cardPath);
 
-        var titleBounds = new Rectangle(Padding.Left, Padding.Top, Width - Padding.Horizontal - 12, Height - Padding.Vertical - 40);
+        var titleBounds = new Rectangle(Padding.Left, Padding.Top + 2, Width - Padding.Horizontal - 12, Height - Padding.Vertical - 42);
         var titleHeight = TextRenderer.MeasureText(
             Issue.Title,
             JiraTheme.FontBody,
@@ -91,7 +94,7 @@ public class IssueCardControl : UserControl
         using var typeIcon = JiraIcons.GetIssueTypeIcon(Issue.Type, 16);
         e.Graphics.DrawImage(typeIcon, Padding.Left, bottomY + 2, 16, 16);
 
-        var issueKeyBounds = new Rectangle(Padding.Left + 22, bottomY, 92, 20);
+        var issueKeyBounds = new Rectangle(Padding.Left + 22, bottomY, 104, 20);
         TextRenderer.DrawText(
             e.Graphics,
             Issue.IssueKey,
@@ -119,6 +122,18 @@ public class IssueCardControl : UserControl
     {
         _hovered = hovered;
         Invalidate();
+    }
+
+    private void ConfigureContextMenu()
+    {
+        var menu = new ContextMenuStrip();
+        foreach (var status in Enum.GetValues<IssueStatus>().Where(x => x != Issue.Status))
+        {
+            menu.Items.Add($"Move to {FormatStatus(status)}", null, (_, _) =>
+                IssueMoveRequested?.Invoke(this, new IssueMoveRequestedEventArgs(Issue.Id, status)));
+        }
+
+        ContextMenuStrip = menu;
     }
 
     private void HookClicks(Control control)
@@ -162,4 +177,13 @@ public class IssueCardControl : UserControl
         path.CloseFigure();
         return path;
     }
+
+    private static string FormatStatus(IssueStatus status) => status switch
+    {
+        IssueStatus.InProgress => "In Progress",
+        _ => status.ToString()
+    };
 }
+
+public sealed record IssueMoveRequestedEventArgs(int IssueId, IssueStatus TargetStatus);
+

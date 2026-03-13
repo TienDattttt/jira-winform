@@ -2,6 +2,7 @@ using JiraClone.Application.Abstractions;
 using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
+using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
 
 namespace JiraClone.Application.Users;
 
@@ -11,6 +12,8 @@ public class UserCommandService
     private readonly IProjectRepository _projects;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAuthorizationService _authorization;
+    private readonly IActivityLogRepository _activityLogs;
+    private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
 
     public UserCommandService(
@@ -18,12 +21,16 @@ public class UserCommandService
         IProjectRepository projects,
         IPasswordHasher passwordHasher,
         IAuthorizationService authorization,
+        IActivityLogRepository activityLogs,
+        ICurrentUserContext currentUserContext,
         IUnitOfWork unitOfWork)
     {
         _users = users;
         _projects = projects;
         _passwordHasher = passwordHasher;
         _authorization = authorization;
+        _activityLogs = activityLogs;
+        _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
     }
 
@@ -82,6 +89,7 @@ public class UserCommandService
                 ProjectRole = projectRole,
                 JoinedAtUtc = DateTime.UtcNow
             });
+            await AddUserActivityAsync(project.Id, ActivityActionType.Created, nameof(User.UserName), null, user.UserName, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
@@ -104,6 +112,7 @@ public class UserCommandService
             return null;
         }
 
+        var oldDisplayName = user.DisplayName;
         user.DisplayName = displayName.Trim();
         user.Email = email.Trim();
         user.IsActive = isActive;
@@ -130,6 +139,7 @@ public class UserCommandService
             }
         }
 
+        await AddUserActivityAsync(GetAuditProjectId(user), ActivityActionType.Updated, nameof(User.DisplayName), oldDisplayName, user.DisplayName, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return user;
     }
@@ -147,6 +157,7 @@ public class UserCommandService
         user.PasswordHash = hash;
         user.PasswordSalt = salt;
         user.UpdatedAtUtc = DateTime.UtcNow;
+        await AddUserActivityAsync(GetAuditProjectId(user), ActivityActionType.Updated, nameof(User.PasswordHash), "***", "***", cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -168,7 +179,29 @@ public class UserCommandService
 
         user.IsActive = isActive;
         user.UpdatedAtUtc = DateTime.UtcNow;
+        await AddUserActivityAsync(GetAuditProjectId(user), ActivityActionType.Updated, nameof(User.IsActive), (!isActive).ToString(), isActive.ToString(), cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return user;
     }
+
+    private async Task AddUserActivityAsync(int? projectId, ActivityActionType actionType, string? fieldName, string? oldValue, string? newValue, CancellationToken cancellationToken)
+    {
+        var actorUserId = _currentUserContext.CurrentUser?.Id;
+        if (!projectId.HasValue || !actorUserId.HasValue)
+        {
+            return;
+        }
+
+        await _activityLogs.AddAsync(new ActivityLogEntity
+        {
+            ProjectId = projectId.Value,
+            UserId = actorUserId.Value,
+            ActionType = actionType,
+            FieldName = fieldName,
+            OldValue = oldValue,
+            NewValue = newValue
+        }, cancellationToken);
+    }
+
+    private static int? GetAuditProjectId(User user) => user.ProjectMemberships.FirstOrDefault()?.ProjectId;
 }

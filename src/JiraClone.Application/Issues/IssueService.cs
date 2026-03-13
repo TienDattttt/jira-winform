@@ -12,6 +12,7 @@ public class IssueService
 {
     private readonly IIssueRepository _issues;
     private readonly IUserRepository _users;
+    private readonly IProjectRepository _projects;
     private readonly ICommentRepository _comments;
     private readonly IAttachmentRepository _attachments;
     private readonly IAuthorizationService _authorization;
@@ -21,6 +22,7 @@ public class IssueService
     public IssueService(
         IIssueRepository issues,
         IUserRepository users,
+        IProjectRepository projects,
         ICommentRepository comments,
         IAttachmentRepository attachments,
         IAuthorizationService authorization,
@@ -29,6 +31,7 @@ public class IssueService
     {
         _issues = issues;
         _users = users;
+        _projects = projects;
         _comments = comments;
         _attachments = attachments;
         _authorization = authorization;
@@ -40,10 +43,17 @@ public class IssueService
     {
         _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
         ValidateModel(model);
+
+        var project = await _projects.GetByIdAsync(model.ProjectId, cancellationToken);
+        if (project is null)
+        {
+            throw new ValidationException($"Project with id {model.ProjectId} was not found.");
+        }
+
         var issue = new Issue
         {
             ProjectId = model.ProjectId,
-            IssueKey = $"JIRA-{DateTime.UtcNow.Ticks % 1000000}",
+            IssueKey = await GenerateIssueKeyAsync(project, cancellationToken),
             Title = model.Title.Trim(),
             DescriptionText = model.DescriptionText,
             DescriptionHtml = model.DescriptionText,
@@ -203,6 +213,32 @@ public class IssueService
         {
             throw new ValidationException("Story points cannot be negative.");
         }
+    }
+
+    private async Task<string> GenerateIssueKeyAsync(Project project, CancellationToken cancellationToken)
+    {
+        var prefix = $"{project.Key.Trim().ToUpperInvariant()}-";
+        var projectIssues = await _issues.GetProjectIssuesAsync(project.Id, cancellationToken);
+        var maxSequence = projectIssues
+            .Select(x => TryParseIssueSequence(x.IssueKey, prefix))
+            .Where(x => x.HasValue)
+            .Select(x => x!.Value)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return $"{prefix}{maxSequence + 1}";
+    }
+
+    private static int? TryParseIssueSequence(string issueKey, string prefix)
+    {
+        if (!issueKey.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return int.TryParse(issueKey[prefix.Length..], out var sequence)
+            ? sequence
+            : null;
     }
 
     private async Task<ICollection<IssueAssignee>> BuildAssigneesAsync(IEnumerable<int> assigneeIds, Issue issue, CancellationToken cancellationToken)

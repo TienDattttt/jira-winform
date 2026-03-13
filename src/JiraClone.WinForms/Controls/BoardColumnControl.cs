@@ -10,14 +10,15 @@ public class BoardColumnControl : UserControl
     private readonly HeaderPanel _headerPanel;
     private readonly Panel _scrollHost;
     private readonly FlowLayoutPanel _issuesPanel;
+    private readonly Label _emptyState;
     private readonly LinkLabel _createIssueLink;
     private BoardColumnDto _column;
 
     public BoardColumnControl(BoardColumnDto column)
     {
         _column = column;
-        Width = 280;
-        MinimumSize = new Size(280, 220);
+        Width = 296;
+        MinimumSize = new Size(296, 220);
         BackColor = JiraTheme.BoardColumnBg;
         Margin = new Padding(0);
         Padding = new Padding(0);
@@ -41,6 +42,11 @@ public class BoardColumnControl : UserControl
             Margin = new Padding(0),
             Padding = new Padding(0),
         };
+        _emptyState = JiraControlFactory.CreateLabel("No issues in this column.", true);
+        _emptyState.Dock = DockStyle.Top;
+        _emptyState.Height = 40;
+        _emptyState.TextAlign = ContentAlignment.MiddleCenter;
+        _emptyState.ForeColor = JiraTheme.TextSecondary;
         _createIssueLink = new LinkLabel
         {
             Dock = DockStyle.Bottom,
@@ -52,12 +58,13 @@ public class BoardColumnControl : UserControl
             Font = JiraTheme.FontSmall,
             TextAlign = ContentAlignment.MiddleLeft,
             BackColor = JiraTheme.BoardColumnBg,
-            Padding = new Padding(12, 0, 0, 0),
+            Padding = new Padding(14, 0, 0, 0),
             AutoEllipsis = true,
         };
 
         _createIssueLink.Click += (_, _) => CreateIssueRequested?.Invoke(this, _column.Status);
         _scrollHost.Controls.Add(_issuesPanel);
+        _scrollHost.Controls.Add(_emptyState);
 
         Controls.Add(_scrollHost);
         Controls.Add(_createIssueLink);
@@ -69,6 +76,7 @@ public class BoardColumnControl : UserControl
 
     public event EventHandler<int>? IssueSelected;
     public event EventHandler<JiraClone.Domain.Enums.IssueStatus>? CreateIssueRequested;
+    public event EventHandler<IssueMoveRequestedEventArgs>? IssueMoveRequested;
 
     public void Bind(BoardColumnDto column)
     {
@@ -82,10 +90,12 @@ public class BoardColumnControl : UserControl
             var card = new IssueCardControl(issue);
             card.Width = Math.Max(248, Width - SystemInformation.VerticalScrollBarWidth - 12);
             card.IssueSelected += (_, issueId) => IssueSelected?.Invoke(this, issueId);
+            card.IssueMoveRequested += (_, args) => IssueMoveRequested?.Invoke(this, args);
             card.Height = card.GetPreferredSize(new Size(card.Width, 0)).Height;
             _issuesPanel.Controls.Add(card);
         }
 
+        _emptyState.Visible = column.Issues.Count == 0;
         UpdateScrollMetrics();
         _headerPanel.Invalidate();
     }
@@ -101,6 +111,11 @@ public class BoardColumnControl : UserControl
         }
 
         var totalHeight = _issuesPanel.Controls.Cast<Control>().Sum(x => x.Height + x.Margin.Vertical);
+        if (_emptyState.Visible)
+        {
+            totalHeight += _emptyState.Height;
+        }
+
         _scrollHost.AutoScrollMinSize = new Size(_issuesPanel.Width, totalHeight + JiraTheme.Md);
     }
 
@@ -109,7 +124,7 @@ public class BoardColumnControl : UserControl
         public HeaderPanel()
         {
             Dock = DockStyle.Top;
-            Height = 42;
+            Height = 46;
             BackColor = JiraTheme.BoardColumnBg;
             DoubleBuffered = true;
         }
@@ -126,7 +141,7 @@ public class BoardColumnControl : UserControl
             using var borderPen = new Pen(JiraTheme.Border);
             e.Graphics.DrawLine(borderPen, 0, Height - 1, Width, Height - 1);
 
-            var titleBounds = new Rectangle(8, 0, Width - 80, Height);
+            var titleBounds = new Rectangle(12, 0, Width - 92, Height);
             TextRenderer.DrawText(
                 e.Graphics,
                 Title.ToUpperInvariant(),
@@ -137,7 +152,7 @@ public class BoardColumnControl : UserControl
 
             var countText = Count.ToString();
             var textSize = TextRenderer.MeasureText(countText, JiraTheme.FontCaption);
-            var badgeBounds = new Rectangle(Width - textSize.Width - 26, 10, textSize.Width + 18, 20);
+            var badgeBounds = new Rectangle(Width - textSize.Width - 30, 12, textSize.Width + 18, 20);
 
             using var badgePath = CreateRoundedPath(badgeBounds, 10);
             using var badgeBrush = new SolidBrush(JiraTheme.Neutral0);
@@ -165,3 +180,4 @@ public class BoardColumnControl : UserControl
         }
     }
 }
+

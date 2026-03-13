@@ -62,7 +62,7 @@ public static class JiraTheme
     public static Font FontColumnHeader => new("Segoe UI", 10f, FontStyle.Bold);
 
     public const int SidebarWidth = 240;
-    public const int NavbarHeight = 56;
+    public const int NavbarHeight = 64;
     public const int CardMinHeight = 80;
     public const int CardWidth = 272;
     public const int BorderRadius = 4;
@@ -121,3 +121,4 @@ public static class JiraTheme
 
     private static Color FromHex(string hex) => ColorTranslator.FromHtml(hex);
 }
+

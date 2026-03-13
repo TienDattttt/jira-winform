@@ -14,6 +14,7 @@ public class LoginForm : Form
     private readonly Label _errorLabel;
     private readonly Button _loginButton;
     private readonly Button _showPasswordButton;
+    private readonly Button _closeButton;
 
     private Point _dragOrigin;
     private Point _formOrigin;
@@ -35,7 +36,7 @@ public class LoginForm : Form
 
         _cardPanel = new ShadowPanel
         {
-            Size = new Size(460, 540),
+            Size = new Size(480, 580),
             BackColor = Color.Transparent,
             Anchor = AnchorStyles.None,
         };
@@ -55,7 +56,7 @@ public class LoginForm : Form
         {
             Text = "Show",
             Dock = DockStyle.Right,
-            Width = 84,
+            Width = 96,
             FlatStyle = FlatStyle.Flat,
             BackColor = JiraTheme.BgSurface,
             ForeColor = JiraTheme.Primary,
@@ -80,15 +81,23 @@ public class LoginForm : Form
         _loginButton = JiraControlFactory.CreatePrimaryButton("Log in");
         _loginButton.AutoSize = false;
         _loginButton.Dock = DockStyle.Fill;
-        _loginButton.MinimumSize = new Size(0, 40);
+        _loginButton.MinimumSize = new Size(0, 44);
+        _loginButton.Height = 44;
         _loginButton.Click += async (_, _) => await LoginAsync();
+
+        _closeButton = JiraControlFactory.CreateSecondaryButton("X");
+        _closeButton.AutoSize = false;
+        _closeButton.Size = new Size(36, 32);
+        _closeButton.FlatAppearance.BorderSize = 0;
+        _closeButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        _closeButton.Click += (_, _) => Close();
 
         AcceptButton = _loginButton;
 
         BuildLayout();
         WireDragging(_cardPanel);
 
-        Resize += (_, _) => CenterCard();
+        Resize += (_, _) => { CenterCard(); PositionChrome(); };
         Shown += (_, _) =>
         {
             CenterCard();
@@ -106,12 +115,14 @@ public class LoginForm : Form
     private void BuildLayout()
     {
         Controls.Add(_cardPanel);
+        Controls.Add(_closeButton);
+        _closeButton.Location = new Point(ClientSize.Width - _closeButton.Width - 16, 16);
 
         var content = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = JiraTheme.BgSurface,
-            Padding = new Padding(36, 28, 36, 32),
+            Padding = new Padding(40, 28, 40, 40),
         };
 
         var layout = new TableLayoutPanel
@@ -121,15 +132,15 @@ public class LoginForm : Form
             RowCount = 10,
             BackColor = JiraTheme.BgSurface,
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var logoHost = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
@@ -152,7 +163,7 @@ public class LoginForm : Form
         subtitle.TextAlign = ContentAlignment.TopCenter;
         subtitle.Dock = DockStyle.Fill;
 
-        var emailLabel = JiraControlFactory.CreateLabel("Email");
+        var emailLabel = JiraControlFactory.CreateLabel("Username");
         emailLabel.Dock = DockStyle.Fill;
         emailLabel.TextAlign = ContentAlignment.BottomLeft;
 
@@ -203,6 +214,11 @@ public class LoginForm : Form
         return host;
     }
 
+
+    private void PositionChrome()
+    {
+        _closeButton.Location = new Point(ClientSize.Width - _closeButton.Width - 16, 16);
+    }
     private void CenterCard()
     {
         _cardPanel.Location = new Point(
@@ -394,3 +410,6 @@ public class LoginForm : Form
         }
     }
 }
+
+
+
