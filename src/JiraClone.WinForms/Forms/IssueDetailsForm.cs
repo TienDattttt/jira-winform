@@ -1,0 +1,651 @@
+using System.Diagnostics;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
+using JiraClone.Application.Models;
+using JiraClone.Domain.Entities;
+using JiraClone.Domain.Enums;
+using JiraClone.WinForms.Composition;
+using JiraClone.WinForms.Controls;
+using JiraClone.WinForms.Services;
+using JiraClone.WinForms.Theme;
+
+namespace JiraClone.WinForms.Forms;
+
+public class IssueDetailsForm : Form
+{
+    private const string DescriptionPlaceholder = "Add a description...";
+    private readonly AppSession _session;
+    private readonly int _issueId;
+    private readonly int _projectId;
+    private readonly SplitContainer _split = new() { Dock = DockStyle.Fill, SplitterDistance = 585 };
+    private readonly Label _breadcrumb = JiraControlFactory.CreateLabel(string.Empty, true);
+    private readonly Panel _typeHost = new() { Width = 120, Height = 24, BackColor = Color.Transparent };
+    private readonly Label _title = JiraControlFactory.CreateLabel(string.Empty);
+    private readonly TextBox _titleEditor = JiraControlFactory.CreateTextBox();
+    private readonly RichTextBox _description = new() { Dock = DockStyle.Top, Height = 140, BorderStyle = BorderStyle.FixedSingle, Font = JiraTheme.FontBody };
+    private readonly AttachmentPicker _attachmentPicker = new() { Dock = DockStyle.Top, Height = 42 };
+    private readonly AttachmentListControl _attachments = new() { Dock = DockStyle.Fill };
+    private readonly Button _commentsTab = MakeTab("Comments", true);
+    private readonly Button _historyTab = MakeTab("History", false);
+    private readonly Panel _tabIndicator = new() { Height = 2, Width = 100, BackColor = JiraTheme.Primary };
+    private readonly TextBox _commentInput = JiraControlFactory.CreateTextBox();
+    private readonly Button _saveComment = JiraControlFactory.CreatePrimaryButton("Save");
+    private readonly CommentListControl _comments = new() { Dock = DockStyle.Fill };
+    private readonly ActivityTimelineControl _history = new() { Dock = DockStyle.Fill, Visible = false };
+    private readonly ComboBox _status = new() { DrawMode = DrawMode.OwnerDrawFixed, DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
+    private readonly ComboBox _priority = new() { DrawMode = DrawMode.OwnerDrawFixed, DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
+    private readonly SprintSelectorControl _sprint = new() { Width = 180 };
+    private readonly NumericUpDown _storyPoints = new() { Width = 180, Minimum = 0, Maximum = 100, BorderStyle = BorderStyle.FixedSingle };
+    private readonly TimeTrackingBar _time = new() { Dock = DockStyle.Top, Height = 52 };
+    private readonly Button _logTime = JiraControlFactory.CreateSecondaryButton("Log Time");
+    private readonly AvatarValueControl _assignee = new() { Width = 220, Cursor = Cursors.Hand };
+    private readonly AvatarValueControl _reporter = new() { Width = 220 };
+    private readonly Button _delete = JiraControlFactory.CreateSecondaryButton("Delete");
+    private IssueDetailsDto? _details;
+    private IReadOnlyList<User> _users = Array.Empty<User>();
+    private bool _loading;
+    private bool _showingPlaceholder;
+
+    public IssueDetailsForm(AppSession session, int issueId, int projectId)
+    {
+        _session = session;
+        _issueId = issueId;
+        _projectId = projectId;
+        Text = "Issue Details";
+        StartPosition = FormStartPosition.CenterParent;
+        AutoScaleMode = AutoScaleMode.Font;
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MinimumSize = new Size(900, 600);
+        Size = new Size(1180, 760);
+        BackColor = JiraTheme.BgPage;
+        DoubleBuffered = true;
+        _split.Panel1MinSize = 520;
+        _split.Panel2MinSize = 280;
+
+        _split.Panel1.BackColor = JiraTheme.BgSurface;
+        _split.Panel2.BackColor = JiraTheme.BgSurface;
+        Controls.Add(_split);
+
+        _title.Font = JiraTheme.FontH1;
+        _title.AutoSize = false;
+        _title.Height = 42;
+        _title.Click += (_, _) => BeginTitleEdit();
+        _titleEditor.Font = JiraTheme.FontH1;
+        _titleEditor.Visible = false;
+        _titleEditor.KeyDown += async (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await CommitTitleAsync(); }
+            else if (e.KeyCode == Keys.Escape) CancelTitleEdit();
+        };
+        _titleEditor.Leave += async (_, _) => await CommitTitleAsync();
+
+        _description.Enter += (_, _) => ClearPlaceholder();
+        _description.Leave += async (_, _) => await SaveIssueAsync();
+
+        _commentInput.Multiline = true;
+        _commentInput.Height = 72;
+        _saveComment.AutoSize = false;
+        _saveComment.Size = new Size(90, 36);
+        _saveComment.Click += async (_, _) => await AddCommentAsync();
+
+        _status.DataSource = Enum.GetValues<IssueStatus>();
+        _status.DrawItem += DrawStatus;
+        _status.SelectedIndexChanged += async (_, _) => await SaveIssueAsync();
+        _priority.DataSource = Enum.GetValues<IssuePriority>();
+        _priority.DrawItem += DrawPriority;
+        _priority.SelectedIndexChanged += async (_, _) => await SaveIssueAsync();
+        _sprint.SelectedIndexChanged += async (_, _) => await SaveIssueAsync();
+        _storyPoints.ValueChanged += async (_, _) => { if (_storyPoints.Focused) await SaveIssueAsync(); };
+        _assignee.Click += (_, _) => ShowAssigneeMenu();
+        _logTime.AutoSize = false;
+        _logTime.Size = new Size(100, 36);
+        _logTime.Click += async (_, _) => await LogTimeAsync();
+        _delete.AutoSize = false;
+        _delete.Size = new Size(88, 34);
+        _delete.Click += async (_, _) => await DeleteIssueAsync();
+
+        _comments.EditRequested = EditCommentAsync;
+        _comments.DeleteRequested = DeleteCommentAsync;
+        _attachments.DownloadRequested = DownloadAttachmentAsync;
+        _attachments.DeleteRequested = DeleteAttachmentAsync;
+        _attachmentPicker.UploadRequested = UploadAttachmentAsync;
+        ContextMenuStrip = new ContextMenuStrip();
+        ContextMenuStrip.Items.Add("Delete issue", null, async (_, _) => await DeleteIssueAsync());
+
+        _split.Panel1.Controls.Add(BuildLeft());
+        _split.Panel2.Controls.Add(BuildRight());
+        Shown += async (_, _) => await LoadDetailsAsync();
+    }
+
+    private Control BuildLeft()
+    {
+        var panel = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(24), AutoScroll = true };
+        var crumbs = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 30, WrapContents = false, BackColor = JiraTheme.BgSurface };
+        crumbs.Controls.Add(_breadcrumb);
+        crumbs.Controls.Add(_typeHost);
+        var titleHost = new Panel { Dock = DockStyle.Top, Height = 50, BackColor = JiraTheme.BgSurface };
+        _title.Dock = DockStyle.Fill;
+        _titleEditor.Dock = DockStyle.Fill;
+        titleHost.Controls.Add(_titleEditor);
+        titleHost.Controls.Add(_title);
+
+        panel.Controls.Add(BuildActivity());
+        panel.Controls.Add(JiraControlFactory.CreateSeparator());
+        panel.Controls.Add(BuildAttachments());
+        panel.Controls.Add(JiraControlFactory.CreateSeparator());
+        panel.Controls.Add(_description);
+        panel.Controls.Add(TopLabel("Description"));
+        panel.Controls.Add(titleHost);
+        panel.Controls.Add(crumbs);
+        return panel;
+    }
+
+    private Control BuildAttachments()
+    {
+        var host = new Panel { Dock = DockStyle.Top, Height = 230, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 8) };
+        host.Controls.Add(_attachments);
+        host.Controls.Add(_attachmentPicker);
+        host.Controls.Add(TopLabel("Attachments"));
+        return host;
+    }
+
+    private Control BuildActivity()
+    {
+        var host = new Panel { Dock = DockStyle.Top, Height = 320, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 0) };
+        var tabs = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = JiraTheme.BgSurface };
+        _commentsTab.Location = new Point(0, 0);
+        _historyTab.Location = new Point(104, 0);
+        _commentsTab.Click += (_, _) => ActivateTab(true);
+        _historyTab.Click += (_, _) => ActivateTab(false);
+        _tabIndicator.Location = new Point(0, 32);
+        tabs.Controls.Add(_tabIndicator);
+        tabs.Controls.Add(_historyTab);
+        tabs.Controls.Add(_commentsTab);
+
+        var composer = new Panel { Dock = DockStyle.Top, Height = 100, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 8) };
+        _commentInput.Dock = DockStyle.Fill;
+        _saveComment.Dock = DockStyle.Right;
+        composer.Controls.Add(_saveComment);
+        composer.Controls.Add(_commentInput);
+
+        var content = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
+        content.Controls.Add(_comments);
+        content.Controls.Add(_history);
+
+        host.Controls.Add(content);
+        host.Controls.Add(composer);
+        host.Controls.Add(tabs);
+        host.Controls.Add(TopLabel("Activity"));
+        return host;
+    }
+
+    private Control BuildRight()
+    {
+        var panel = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(20, 24, 20, 24), AutoScroll = true };
+        var toolbar = new Panel { Dock = DockStyle.Top, Height = 38, BackColor = JiraTheme.BgSurface };
+        _delete.Dock = DockStyle.Right;
+        toolbar.Controls.Add(_delete);
+
+        var statusHost = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = JiraTheme.BgSurface };
+        _status.Dock = DockStyle.Left;
+        statusHost.Controls.Add(_status);
+
+        var fields = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, AutoSize = true, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 8) };
+        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        AddField(fields, 0, "Assignee", _assignee);
+        AddField(fields, 1, "Reporter", _reporter);
+        AddField(fields, 2, "Priority", _priority);
+        AddField(fields, 3, "Sprint", _sprint);
+        AddField(fields, 4, "Story points", _storyPoints);
+
+        var timeBlock = new Panel { Dock = DockStyle.Top, Height = 110, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 0) };
+        _logTime.Dock = DockStyle.Top;
+        _time.Dock = DockStyle.Top;
+        timeBlock.Controls.Add(_logTime);
+        timeBlock.Controls.Add(_time);
+
+        panel.Controls.Add(timeBlock);
+        panel.Controls.Add(JiraControlFactory.CreateSeparator());
+        panel.Controls.Add(TopLabel("Time Tracking"));
+        panel.Controls.Add(JiraControlFactory.CreateSeparator());
+        panel.Controls.Add(fields);
+        panel.Controls.Add(statusHost);
+        panel.Controls.Add(TopLabel("Status"));
+        panel.Controls.Add(toolbar);
+        return panel;
+    }
+
+    private async Task LoadDetailsAsync()
+    {
+        try
+        {
+            _loading = true;
+            _users = await _session.Users.GetProjectUsersAsync(_projectId);
+            _sprint.Bind(await _session.Sprints.GetByProjectAsync(_projectId));
+            _details = await _session.Issues.GetDetailsAsync(_issueId);
+            if (_details is null) { ErrorDialogService.Show("Issue not found."); Close(); return; }
+            BindIssue(_details);
+            _comments.Bind(_details.Comments);
+            _attachments.Bind(_details.Attachments);
+            _history.Bind(_details.ActivityLogs);
+            ActivateTab(true);
+        }
+        catch (Exception ex) { ErrorDialogService.Show(ex); }
+        finally { _loading = false; }
+    }
+
+    private void BindIssue(IssueDetailsDto details)
+    {
+        var issue = details.Issue;
+        _breadcrumb.Text = issue.IssueKey;
+        _title.Text = issue.Title;
+        _titleEditor.Text = issue.Title;
+        _typeHost.Controls.Clear();
+        var badge = JiraBadge.ForType(issue.Type);
+        badge.Location = new Point(8, 0);
+        _typeHost.Controls.Add(badge);
+
+        if (string.IsNullOrWhiteSpace(issue.DescriptionText)) ShowPlaceholder();
+        else { _showingPlaceholder = false; _description.ForeColor = JiraTheme.TextPrimary; _description.Text = issue.DescriptionText; }
+
+        _status.SelectedItem = issue.Status;
+        _priority.SelectedItem = issue.Priority;
+        if (issue.SprintId.HasValue) _sprint.SelectedValue = issue.SprintId.Value; else _sprint.SelectedIndex = -1;
+        _storyPoints.Value = Math.Max(_storyPoints.Minimum, Math.Min(_storyPoints.Maximum, issue.StoryPoints ?? 0));
+
+        var assignee = issue.Assignees.Select(x => x.User).FirstOrDefault();
+        _assignee.SetPerson(assignee?.DisplayName ?? "Unassigned", assignee is null ? "+" : Initials(assignee.DisplayName), true);
+        _reporter.SetPerson(issue.Reporter.DisplayName, Initials(issue.Reporter.DisplayName), false);
+        _time.EstimatedHours = issue.EstimateHours ?? 0;
+        _time.LoggedHours = issue.TimeSpentHours ?? 0;
+        _time.RemainingHours = issue.TimeRemainingHours ?? Math.Max(0, _time.EstimatedHours - _time.LoggedHours);
+        _time.Invalidate();
+    }
+
+    private void BeginTitleEdit()
+    {
+        _titleEditor.Text = _title.Text;
+        _title.Visible = false;
+        _titleEditor.Visible = true;
+        _titleEditor.Focus();
+        _titleEditor.SelectAll();
+    }
+
+    private async Task CommitTitleAsync()
+    {
+        if (!_titleEditor.Visible) return;
+        _title.Visible = true;
+        _titleEditor.Visible = false;
+        if (_details is null) return;
+        var value = _titleEditor.Text.Trim();
+        if (string.IsNullOrWhiteSpace(value) || value == _details.Issue.Title) { _titleEditor.Text = _details.Issue.Title; return; }
+        _title.Text = value;
+        await SaveIssueAsync();
+    }
+
+    private void CancelTitleEdit()
+    {
+        if (_details is null) return;
+        _titleEditor.Text = _details.Issue.Title;
+        _titleEditor.Visible = false;
+        _title.Visible = true;
+    }
+
+    private void ShowPlaceholder()
+    {
+        _showingPlaceholder = true;
+        _description.ForeColor = JiraTheme.TextSecondary;
+        _description.Text = DescriptionPlaceholder;
+    }
+
+    private void ClearPlaceholder()
+    {
+        if (!_showingPlaceholder) return;
+        _showingPlaceholder = false;
+        _description.Clear();
+        _description.ForeColor = JiraTheme.TextPrimary;
+    }
+
+    private void ActivateTab(bool comments)
+    {
+        _comments.Visible = comments;
+        _history.Visible = !comments;
+        _commentInput.Visible = comments;
+        _saveComment.Visible = comments;
+        _commentsTab.ForeColor = comments ? JiraTheme.TextPrimary : JiraTheme.TextSecondary;
+        _historyTab.ForeColor = comments ? JiraTheme.TextSecondary : JiraTheme.TextPrimary;
+        _tabIndicator.Left = comments ? _commentsTab.Left : _historyTab.Left;
+        _tabIndicator.Width = comments ? _commentsTab.Width : _historyTab.Width;
+    }
+
+    private async Task SaveIssueAsync()
+    {
+        if (_loading || _details is null) return;
+        try
+        {
+            var currentUserId = _session.CurrentUserContext.CurrentUser?.Id ?? _details.Issue.CreatedById;
+            var assigneeId = _users.FirstOrDefault(x => x.DisplayName == _assignee.PersonName)?.Id;
+            var model = new IssueEditModel
+            {
+                Id = _details.Issue.Id,
+                ProjectId = _details.Issue.ProjectId,
+                Title = _titleEditor.Visible ? _titleEditor.Text.Trim() : _title.Text.Trim(),
+                DescriptionText = _showingPlaceholder ? null : _description.Text.Trim(),
+                Type = _details.Issue.Type,
+                Status = _status.SelectedItem is IssueStatus s ? s : _details.Issue.Status,
+                Priority = _priority.SelectedItem is IssuePriority p ? p : _details.Issue.Priority,
+                ReporterId = _details.Issue.ReporterId,
+                CreatedById = currentUserId,
+                EstimateHours = _details.Issue.EstimateHours,
+                TimeSpentHours = _time.LoggedHours,
+                TimeRemainingHours = _time.RemainingHours,
+                StoryPoints = (int)_storyPoints.Value,
+                SprintId = _sprint.SelectedValue is int sprintId ? sprintId : null,
+                AssigneeIds = assigneeId.HasValue ? [assigneeId.Value] : Array.Empty<int>()
+            };
+            if (await _session.Issues.UpdateAsync(model) is not null) await LoadDetailsAsync();
+        }
+        catch (Exception ex) { ErrorDialogService.Show(ex); }
+    }
+
+    private void ShowAssigneeMenu()
+    {
+        if (_details is null) return;
+        var menu = new ContextMenuStrip();
+        menu.Items.Add("Unassigned", null, async (_, _) => { _assignee.SetPerson("Unassigned", "+", true); await SaveIssueAsync(); });
+        foreach (var user in _users)
+        {
+            menu.Items.Add(user.DisplayName, null, async (_, _) =>
+            {
+                _assignee.SetPerson(user.DisplayName, Initials(user.DisplayName), true);
+                await SaveIssueAsync();
+            });
+        }
+        menu.Show(_assignee, new Point(0, _assignee.Height));
+    }
+
+    private async Task AddCommentAsync()
+    {
+        var body = _commentInput.Text.Trim();
+        if (string.IsNullOrWhiteSpace(body)) return;
+        try
+        {
+            await _session.Comments.AddAsync(_issueId, _session.CurrentUserContext.CurrentUser?.Id ?? 1, _projectId, body);
+            _commentInput.Clear();
+            await LoadDetailsAsync();
+            DialogResult = DialogResult.OK;
+        }
+        catch (Exception ex) { ErrorDialogService.Show(ex); }
+    }
+
+    private async Task EditCommentAsync(Comment comment)
+    {
+        var body = Microsoft.VisualBasic.Interaction.InputBox("Edit comment", "Edit Comment", comment.Body);
+        if (string.IsNullOrWhiteSpace(body)) return;
+        try
+        {
+            await _session.Comments.UpdateAsync(comment.Id, _session.CurrentUserContext.CurrentUser?.Id ?? 1, body);
+            await LoadDetailsAsync();
+            DialogResult = DialogResult.OK;
+        }
+        catch (Exception ex) { ErrorDialogService.Show(ex); }
+    }
+
+    private async Task DeleteCommentAsync(Comment comment)
+    {
+        if (MessageBox.Show(this, "Delete this comment?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        try
+        {
+            await _session.Comments.SoftDeleteAsync(comment.Id, _session.CurrentUserContext.CurrentUser?.Id ?? 1);
+            await LoadDetailsAsync();
+            DialogResult = DialogResult.OK;
+        }
+        catch (Exception ex) { ErrorDialogService.Show(ex); }
+    }
+
+    private async Task UploadAttachmentAsync(string path)
+    {
+        try
+        {
+            await _session.Attachments.AddAsync(_issueId, _projectId, _session.CurrentUserContext.CurrentUser?.Id ?? 1, path);
+            await LoadDetailsAsync();
+            DialogResult = DialogResult.OK;
+        }
+        catch (Exception ex) { ErrorDialogService.Show(ex); }
+    }
+
+    private async Task DownloadAttachmentAsync(Attachment attachment)
+    {
+        try
+        {
+            var source = await _session.Attachments.ResolveDownloadPathAsync(attachment.Id);
+            if (string.IsNullOrWhiteSpace(source) || !File.Exists(source)) { ErrorDialogService.Show("Attachment file was not found."); return; }
+            using var dialog = new SaveFileDialog { FileName = attachment.OriginalFileName, RestoreDirectory = true };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            await using var input = File.OpenRead(source);
+            await using var output = File.Create(dialog.FileName);
+            await input.CopyToAsync(output);
+            Process.Start(new ProcessStartInfo { FileName = dialog.FileName, UseShellExecute = true });
+        }
+        catch (Exception ex) { ErrorDialogService.Show(ex); }
+    }
+
+    private async Task DeleteAttachmentAsync(Attachment attachment)
+    {
+        if (MessageBox.Show(this, $"Delete attachment '{attachment.OriginalFileName}'?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        try
+        {
+            await _session.Attachments.SoftDeleteAsync(attachment.Id, _session.CurrentUserContext.CurrentUser?.Id ?? 1, _projectId);
+            await LoadDetailsAsync();
+            DialogResult = DialogResult.OK;
+        }
+        catch (Exception ex) { ErrorDialogService.Show(ex); }
+    }
+
+    private async Task LogTimeAsync()
+    {
+        if (_details is null) return;
+        using var dialog = new LogTimeDialog();
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            _time.LoggedHours += dialog.Hours;
+            if (_time.EstimatedHours > 0) _time.RemainingHours = Math.Max(0, _time.EstimatedHours - _time.LoggedHours);
+            await SaveIssueAsync();
+            if (!string.IsNullOrWhiteSpace(dialog.Comment))
+            {
+                await _session.Comments.AddAsync(_issueId, _session.CurrentUserContext.CurrentUser?.Id ?? 1, _projectId, $"Logged {dialog.Hours}h: {dialog.Comment.Trim()}");
+            }
+            await LoadDetailsAsync();
+        }
+        catch (Exception ex) { ErrorDialogService.Show(ex); }
+    }
+
+    private async Task DeleteIssueAsync()
+    {
+        if (MessageBox.Show(this, "Delete this issue?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        try
+        {
+            if (!await _session.Issues.DeleteAsync(_issueId)) { ErrorDialogService.Show("Issue could not be deleted."); return; }
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+        catch (Exception ex) { ErrorDialogService.Show(ex); }
+    }
+
+    private void DrawStatus(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0) return;
+        e.DrawBackground();
+        var value = (IssueStatus)_status.Items[e.Index]!;
+        DrawChip(e, value.ToString(), value switch
+        {
+            IssueStatus.Done => JiraTheme.StatusDone,
+            IssueStatus.InProgress => JiraTheme.StatusInProgress,
+            _ => JiraTheme.StatusTodo
+        }, value is IssueStatus.Done or IssueStatus.InProgress ? Color.White : JiraTheme.TextPrimary);
+    }
+
+    private void DrawPriority(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0) return;
+        e.DrawBackground();
+        var value = (IssuePriority)_priority.Items[e.Index]!;
+        var color = value switch
+        {
+            IssuePriority.Low => JiraTheme.Success,
+            IssuePriority.Medium => JiraTheme.Warning,
+            IssuePriority.High or IssuePriority.Highest => JiraTheme.Danger,
+            _ => JiraTheme.Border
+        };
+        DrawChip(e, value.ToString(), color, value == IssuePriority.Medium ? JiraTheme.TextPrimary : Color.White);
+    }
+
+    private static void DrawChip(DrawItemEventArgs e, string text, Color bg, Color fg)
+    {
+        var bounds = new Rectangle(e.Bounds.X + 6, e.Bounds.Y + 5, e.Bounds.Width - 12, e.Bounds.Height - 10);
+        using var path = Round(bounds, 10);
+        using var fill = new SolidBrush(bg);
+        e.Graphics.FillPath(fill, path);
+        TextRenderer.DrawText(e.Graphics, text, JiraTheme.FontCaption, bounds, fg, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        e.DrawFocusRectangle();
+    }
+
+    private static Button MakeTab(string text, bool active)
+    {
+        var button = new Button { Text = text, FlatStyle = FlatStyle.Flat, AutoSize = false, Width = text == "Comments" ? 100 : 90, Height = 32, BackColor = JiraTheme.BgSurface, Font = JiraTheme.FontSmall };
+        button.FlatAppearance.BorderSize = 0;
+        button.ForeColor = active ? JiraTheme.TextPrimary : JiraTheme.TextSecondary;
+        return button;
+    }
+
+    private static Label TopLabel(string text)
+    {
+        var label = JiraControlFactory.CreateLabel(text);
+        label.Dock = DockStyle.Top;
+        label.Font = JiraTheme.FontSmall;
+        return label;
+    }
+
+    private static void AddField(TableLayoutPanel table, int row, string label, Control value)
+    {
+        table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var left = JiraControlFactory.CreateLabel(label, true);
+        left.Anchor = AnchorStyles.Left;
+        value.Anchor = AnchorStyles.Left;
+        value.Margin = new Padding(0, 4, 0, 10);
+        table.Controls.Add(left, 0, row);
+        table.Controls.Add(value, 1, row);
+    }
+
+    private static string Initials(string name)
+    {
+        var chars = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(2).Select(x => char.ToUpperInvariant(x[0])).ToArray();
+        return chars.Length == 0 ? "U" : new string(chars);
+    }
+
+    private static GraphicsPath Round(Rectangle bounds, int radius)
+    {
+        var d = radius * 2;
+        var path = new GraphicsPath();
+        path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
+        path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
+        path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+        path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+
+    private sealed class AvatarValueControl : Control
+    {
+        private string _initials = "U";
+        private string _name = string.Empty;
+        private bool _clickable;
+        public AvatarValueControl()
+        {
+            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            DoubleBuffered = true;
+            Height = 32;
+            BackColor = Color.Transparent;
+        }
+        public string PersonName => _name;
+        public void SetPerson(string name, string initials, bool clickable) { _name = name; _initials = initials; _clickable = clickable; Invalidate(); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SetClip(new Rectangle(0, 0, Width, Height));
+            e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var avatar = new Rectangle(0, 4, 24, 24);
+            using var fill = new SolidBrush(JiraTheme.Primary);
+            e.Graphics.FillEllipse(fill, avatar);
+            TextRenderer.DrawText(e.Graphics, _initials, JiraTheme.FontCaption, avatar, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(e.Graphics, _name, JiraTheme.FontSmall, new Rectangle(32, 0, Width - 32, Height), _clickable ? JiraTheme.Primary : JiraTheme.TextPrimary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+        }
+    }
+
+    private sealed class TimeTrackingBar : Control
+    {
+        public int EstimatedHours { get; set; }
+        public int LoggedHours { get; set; }
+        public int RemainingHours { get; set; }
+        public TimeTrackingBar() { DoubleBuffered = true; BackColor = JiraTheme.BgSurface; }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SetClip(new Rectangle(0, 0, Width, Height));
+            e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var bounds = new Rectangle(0, 8, Width - 1, 14);
+            using var bg = Round(bounds, 7);
+            using var fillBg = new SolidBrush(JiraTheme.BgPage);
+            e.Graphics.FillPath(fillBg, bg);
+            if (EstimatedHours > 0 && LoggedHours > 0)
+            {
+                var width = Math.Min(bounds.Width, (int)Math.Round(bounds.Width * (LoggedHours / (double)EstimatedHours)));
+                using var progress = Round(new Rectangle(bounds.X, bounds.Y, Math.Max(8, width), bounds.Height), 7);
+                using var fill = new SolidBrush(JiraTheme.Primary);
+                e.Graphics.FillPath(fill, progress);
+            }
+            TextRenderer.DrawText(e.Graphics, $"{LoggedHours}h logged / {EstimatedHours}h estimated", JiraTheme.FontCaption, new Rectangle(0, 28, Width, 20), JiraTheme.TextSecondary, TextFormatFlags.Left);
+        }
+    }
+
+    private sealed class LogTimeDialog : Form
+    {
+        private readonly NumericUpDown _hours = new() { Minimum = 1, Maximum = 100, Value = 1, Width = 120 };
+        private readonly TextBox _comment = JiraControlFactory.CreateTextBox();
+        public LogTimeDialog()
+        {
+            Text = "Log Time";
+            StartPosition = FormStartPosition.CenterParent;
+            AutoScaleMode = AutoScaleMode.Font;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            ClientSize = new Size(380, 220);
+            MinimumSize = new Size(380, 220);
+            MaximizeBox = false;
+            MinimizeBox = false;
+            BackColor = JiraTheme.BgSurface;
+            _comment.Multiline = true;
+            _comment.Height = 80;
+            _comment.Dock = DockStyle.Fill;
+            var save = JiraControlFactory.CreatePrimaryButton("Save");
+            var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
+            save.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };
+            cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+            var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 48, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = JiraTheme.BgSurface };
+            buttons.Controls.Add(save);
+            buttons.Controls.Add(cancel);
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(16), BackColor = JiraTheme.BgSurface };
+            layout.Controls.Add(JiraControlFactory.CreateLabel("Hours", true), 0, 0);
+            layout.Controls.Add(_hours, 0, 1);
+            layout.Controls.Add(JiraControlFactory.CreateLabel("Comment", true), 0, 2);
+            layout.Controls.Add(_comment, 0, 3);
+            Controls.Add(layout);
+            Controls.Add(buttons);
+        }
+        public int Hours => (int)_hours.Value;
+        public string Comment => _comment.Text;
+    }
+}

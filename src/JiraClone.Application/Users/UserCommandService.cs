@@ -1,0 +1,174 @@
+using JiraClone.Application.Abstractions;
+using JiraClone.Application.Roles;
+using JiraClone.Domain.Entities;
+using JiraClone.Domain.Enums;
+
+namespace JiraClone.Application.Users;
+
+public class UserCommandService
+{
+    private readonly IUserRepository _users;
+    private readonly IProjectRepository _projects;
+    private readonly IPasswordHasher _passwordHasher;
+    private readonly IAuthorizationService _authorization;
+    private readonly IUnitOfWork _unitOfWork;
+
+    public UserCommandService(
+        IUserRepository users,
+        IProjectRepository projects,
+        IPasswordHasher passwordHasher,
+        IAuthorizationService authorization,
+        IUnitOfWork unitOfWork)
+    {
+        _users = users;
+        _projects = projects;
+        _passwordHasher = passwordHasher;
+        _authorization = authorization;
+        _unitOfWork = unitOfWork;
+    }
+
+    public Task<IReadOnlyList<User>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        _users.GetAllAsync(cancellationToken);
+
+    public Task<IReadOnlyList<Role>> GetRolesAsync(CancellationToken cancellationToken = default) =>
+        _users.GetRolesAsync(cancellationToken);
+
+    public async Task<User> CreateAsync(
+        int projectId,
+        string userName,
+        string displayName,
+        string email,
+        string password,
+        ProjectRole projectRole,
+        IReadOnlyCollection<string> roleNames,
+        CancellationToken cancellationToken = default)
+    {
+        _authorization.EnsureInRole(RoleCatalog.Admin);
+
+        var (hash, salt) = _passwordHasher.Hash(password);
+        var user = new User
+        {
+            UserName = userName.Trim(),
+            DisplayName = displayName.Trim(),
+            Email = email.Trim(),
+            PasswordHash = hash,
+            PasswordSalt = salt,
+            IsActive = true
+        };
+
+        var roles = await _users.GetRolesAsync(cancellationToken);
+        foreach (var roleName in roleNames.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var role = roles.FirstOrDefault(x => x.Name.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+            if (role is null)
+            {
+                continue;
+            }
+
+            user.UserRoles.Add(new UserRole { User = user, RoleId = role.Id, Role = role });
+        }
+
+        await _users.AddAsync(user, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var project = await _projects.GetByIdAsync(projectId, cancellationToken);
+        if (project is not null)
+        {
+            project.Members.Add(new ProjectMember
+            {
+                ProjectId = project.Id,
+                UserId = user.Id,
+                User = user,
+                ProjectRole = projectRole,
+                JoinedAtUtc = DateTime.UtcNow
+            });
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        return user;
+    }
+
+    public async Task<User?> UpdateAsync(
+        int userId,
+        string displayName,
+        string email,
+        bool isActive,
+        ProjectRole? projectRole,
+        IReadOnlyCollection<string> roleNames,
+        CancellationToken cancellationToken = default)
+    {
+        _authorization.EnsureInRole(RoleCatalog.Admin);
+        var user = await _users.GetByIdAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            return null;
+        }
+
+        user.DisplayName = displayName.Trim();
+        user.Email = email.Trim();
+        user.IsActive = isActive;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+
+        user.UserRoles.Clear();
+        var roles = await _users.GetRolesAsync(cancellationToken);
+        foreach (var roleName in roleNames.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var role = roles.FirstOrDefault(x => x.Name.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+            if (role is null)
+            {
+                continue;
+            }
+
+            user.UserRoles.Add(new UserRole { UserId = user.Id, User = user, RoleId = role.Id, Role = role });
+        }
+
+        if (projectRole.HasValue)
+        {
+            foreach (var membership in user.ProjectMemberships)
+            {
+                membership.ProjectRole = projectRole.Value;
+            }
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return user;
+    }
+
+    public async Task<bool> ResetPasswordAsync(int userId, string newPassword, CancellationToken cancellationToken = default)
+    {
+        _authorization.EnsureInRole(RoleCatalog.Admin);
+        var user = await _users.GetByIdAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            return false;
+        }
+
+        var (hash, salt) = _passwordHasher.Hash(newPassword);
+        user.PasswordHash = hash;
+        user.PasswordSalt = salt;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public Task<User?> DeactivateAsync(int userId, CancellationToken cancellationToken = default) =>
+        UpdateStatusAsync(userId, false, cancellationToken);
+
+    public Task<User?> ActivateAsync(int userId, CancellationToken cancellationToken = default) =>
+        UpdateStatusAsync(userId, true, cancellationToken);
+
+    private async Task<User?> UpdateStatusAsync(int userId, bool isActive, CancellationToken cancellationToken)
+    {
+        _authorization.EnsureInRole(RoleCatalog.Admin);
+        var user = await _users.GetByIdAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            return null;
+        }
+
+        user.IsActive = isActive;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return user;
+    }
+}

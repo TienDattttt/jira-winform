@@ -1,0 +1,71 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.WinForms\\Forms\\LoginForm.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:JiraClone.WinForms\\Forms\\LoginForm.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.WinForms\\JiraClone.WinForms.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:JiraClone.WinForms\\JiraClone.WinForms.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.WinForms\\JiraClone.WinForms.csproj.user||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:JiraClone.WinForms\\JiraClone.WinForms.csproj.user||{FA3CD31E-987B-443A-9B81-186104E8DAC1}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "LoginForm.cs",
+              "DocumentMoniker": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.WinForms\\Forms\\LoginForm.cs",
+              "RelativeDocumentMoniker": "JiraClone.WinForms\\Forms\\LoginForm.cs",
+              "ToolTip": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.WinForms\\Forms\\LoginForm.cs",
+              "RelativeToolTip": "JiraClone.WinForms\\Forms\\LoginForm.cs",
+              "ViewState": "AgIAACwBAAAAAAAAAAAAADsBAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-10T15:09:45.843Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "JiraClone.WinForms.csproj",
+              "DocumentMoniker": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.WinForms\\JiraClone.WinForms.csproj",
+              "RelativeDocumentMoniker": "JiraClone.WinForms\\JiraClone.WinForms.csproj",
+              "ToolTip": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.WinForms\\JiraClone.WinForms.csproj",
+              "RelativeToolTip": "JiraClone.WinForms\\JiraClone.WinForms.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAARAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-03-10T15:07:09.894Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "JiraClone.WinForms.csproj.user",
+              "DocumentMoniker": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.WinForms\\JiraClone.WinForms.csproj.user",
+              "RelativeDocumentMoniker": "JiraClone.WinForms\\JiraClone.WinForms.csproj.user",
+              "ToolTip": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.WinForms\\JiraClone.WinForms.csproj.user",
+              "RelativeToolTip": "JiraClone.WinForms\\JiraClone.WinForms.csproj.user",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003464|",
+              "WhenOpened": "2026-03-10T15:06:59.239Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

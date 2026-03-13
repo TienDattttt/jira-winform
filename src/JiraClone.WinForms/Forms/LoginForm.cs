@@ -1,0 +1,396 @@
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
+using JiraClone.WinForms.Composition;
+using JiraClone.WinForms.Theme;
+
+namespace JiraClone.WinForms.Forms;
+
+public class LoginForm : Form
+{
+    private readonly AppSession _session;
+    private readonly ShadowPanel _cardPanel;
+    private readonly TextBox _emailTextBox;
+    private readonly TextBox _passwordTextBox;
+    private readonly Label _errorLabel;
+    private readonly Button _loginButton;
+    private readonly Button _showPasswordButton;
+
+    private Point _dragOrigin;
+    private Point _formOrigin;
+    private bool _dragging;
+
+    public LoginForm(AppSession session)
+    {
+        _session = session;
+
+        Text = "Jira Clone Login";
+        FormBorderStyle = FormBorderStyle.None;
+        StartPosition = FormStartPosition.CenterScreen;
+        AutoScaleMode = AutoScaleMode.Font;
+        ClientSize = new Size(1280, 800);
+        MinimumSize = new Size(960, 640);
+        BackColor = JiraTheme.BgPage;
+        KeyPreview = true;
+        DoubleBuffered = true;
+
+        _cardPanel = new ShadowPanel
+        {
+            Size = new Size(460, 540),
+            BackColor = Color.Transparent,
+            Anchor = AnchorStyles.None,
+        };
+
+        _emailTextBox = JiraControlFactory.CreateTextBox();
+        _emailTextBox.Height = 40;
+        _emailTextBox.Dock = DockStyle.Fill;
+        _emailTextBox.Text = "admin";
+
+        _passwordTextBox = JiraControlFactory.CreateTextBox();
+        _passwordTextBox.Height = 40;
+        _passwordTextBox.Dock = DockStyle.Fill;
+        _passwordTextBox.UseSystemPasswordChar = true;
+        _passwordTextBox.Text = "admin123";
+
+        _showPasswordButton = new Button
+        {
+            Text = "Show",
+            Dock = DockStyle.Right,
+            Width = 84,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = JiraTheme.BgSurface,
+            ForeColor = JiraTheme.Primary,
+            Font = JiraTheme.FontCaption,
+            Cursor = Cursors.Hand,
+            TabStop = false,
+        };
+        _showPasswordButton.MinimumSize = new Size(92, 40);
+        _showPasswordButton.FlatAppearance.BorderSize = 0;
+        _showPasswordButton.MouseDown += (_, _) => SetPasswordVisibility(true);
+        _showPasswordButton.MouseUp += (_, _) => SetPasswordVisibility(false);
+        _showPasswordButton.MouseLeave += (_, _) => SetPasswordVisibility(false);
+
+        _errorLabel = JiraControlFactory.CreateLabel(string.Empty, true);
+        _errorLabel.ForeColor = JiraTheme.Danger;
+        _errorLabel.AutoSize = false;
+        _errorLabel.Height = 36;
+        _errorLabel.Dock = DockStyle.Top;
+        _errorLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _errorLabel.Visible = false;
+
+        _loginButton = JiraControlFactory.CreatePrimaryButton("Log in");
+        _loginButton.AutoSize = false;
+        _loginButton.Dock = DockStyle.Fill;
+        _loginButton.MinimumSize = new Size(0, 40);
+        _loginButton.Click += async (_, _) => await LoginAsync();
+
+        AcceptButton = _loginButton;
+
+        BuildLayout();
+        WireDragging(_cardPanel);
+
+        Resize += (_, _) => CenterCard();
+        Shown += (_, _) =>
+        {
+            CenterCard();
+            _emailTextBox.Select();
+        };
+        KeyDown += (_, eventArgs) =>
+        {
+            if (eventArgs.KeyCode == Keys.Escape)
+            {
+                Close();
+            }
+        };
+    }
+
+    private void BuildLayout()
+    {
+        Controls.Add(_cardPanel);
+
+        var content = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(36, 28, 36, 32),
+        };
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 10,
+            BackColor = JiraTheme.BgSurface,
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var logoHost = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
+        var logo = new LogoControl
+        {
+            Size = new Size(48, 48),
+            Location = new Point((logoHost.Width - 48) / 2, 8),
+            Anchor = AnchorStyles.Top,
+        };
+        logoHost.Controls.Add(logo);
+        logoHost.Resize += (_, _) => logo.Left = (logoHost.ClientSize.Width - logo.Width) / 2;
+
+        var title = JiraControlFactory.CreateLabel("Log in to Jira Clone");
+        title.Font = JiraTheme.FontH1;
+        title.TextAlign = ContentAlignment.MiddleCenter;
+        title.Dock = DockStyle.Fill;
+
+        var subtitle = JiraControlFactory.CreateLabel("Enter your credentials", true);
+        subtitle.Font = JiraTheme.FontSmall;
+        subtitle.TextAlign = ContentAlignment.TopCenter;
+        subtitle.Dock = DockStyle.Fill;
+
+        var emailLabel = JiraControlFactory.CreateLabel("Email");
+        emailLabel.Dock = DockStyle.Fill;
+        emailLabel.TextAlign = ContentAlignment.BottomLeft;
+
+        var emailHost = BuildInputHost(_emailTextBox);
+        var passwordLabel = JiraControlFactory.CreateLabel("Password");
+        passwordLabel.Dock = DockStyle.Fill;
+        passwordLabel.TextAlign = ContentAlignment.BottomLeft;
+        var passwordHost = BuildPasswordHost();
+
+        layout.Controls.Add(logoHost, 0, 0);
+        layout.Controls.Add(title, 0, 1);
+        layout.Controls.Add(subtitle, 0, 2);
+        layout.Controls.Add(emailLabel, 0, 3);
+        layout.Controls.Add(emailHost, 0, 4);
+        layout.Controls.Add(passwordLabel, 0, 5);
+        layout.Controls.Add(passwordHost, 0, 6);
+        layout.Controls.Add(_errorLabel, 0, 7);
+        layout.Controls.Add(_loginButton, 0, 8);
+
+        content.Controls.Add(layout);
+        _cardPanel.Controls.Add(content);
+    }
+
+    private Panel BuildInputHost(Control input)
+    {
+        return new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(0),
+            Controls = { input }
+        };
+    }
+
+    private Control BuildPasswordHost()
+    {
+        var host = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(0),
+            MinimumSize = new Size(0, 40),
+        };
+
+        host.Controls.Add(_passwordTextBox);
+        host.Controls.Add(_showPasswordButton);
+
+        return host;
+    }
+
+    private void CenterCard()
+    {
+        _cardPanel.Location = new Point(
+            (ClientSize.Width - _cardPanel.Width) / 2,
+            (ClientSize.Height - _cardPanel.Height) / 2);
+    }
+
+    private void WireDragging(Control control)
+    {
+        control.MouseDown += StartDrag;
+        control.MouseMove += DragWindow;
+        control.MouseUp += StopDrag;
+
+        foreach (Control child in control.Controls)
+        {
+            WireDragging(child);
+        }
+
+        control.ControlAdded += (_, args) =>
+        {
+            if (args.Control is not null)
+            {
+                WireDragging(args.Control);
+            }
+        };
+    }
+
+    private void StartDrag(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left)
+        {
+            return;
+        }
+
+        _dragging = true;
+        _dragOrigin = Cursor.Position;
+        _formOrigin = Location;
+    }
+
+    private void DragWindow(object? sender, MouseEventArgs e)
+    {
+        if (!_dragging)
+        {
+            return;
+        }
+
+        var current = Cursor.Position;
+        Location = new Point(
+            _formOrigin.X + (current.X - _dragOrigin.X),
+            _formOrigin.Y + (current.Y - _dragOrigin.Y));
+    }
+
+    private void StopDrag(object? sender, MouseEventArgs e) => _dragging = false;
+
+    private void SetPasswordVisibility(bool visible)
+    {
+        _passwordTextBox.UseSystemPasswordChar = !visible;
+        _showPasswordButton.Text = visible ? "Hide" : "Show";
+    }
+
+    private async Task LoginAsync()
+    {
+        try
+        {
+            SetBusyState(true);
+            HideError();
+
+            var result = await _session.Authentication.LoginAsync(_emailTextBox.Text.Trim(), _passwordTextBox.Text);
+            if (!result.Succeeded || result.User is null)
+            {
+                ShowError(result.ErrorMessage ?? "Login failed.");
+                return;
+            }
+
+            Hide();
+            using var mainForm = new MainForm(_session, result.User.DisplayName);
+            mainForm.ShowDialog(this);
+            Close();
+        }
+        catch (Exception exception)
+        {
+            ShowError(exception.Message);
+        }
+        finally
+        {
+            SetBusyState(false);
+        }
+    }
+
+    private void SetBusyState(bool isBusy)
+    {
+        UseWaitCursor = isBusy;
+        _loginButton.Enabled = !isBusy;
+        _emailTextBox.Enabled = !isBusy;
+        _passwordTextBox.Enabled = !isBusy;
+        _showPasswordButton.Enabled = !isBusy;
+    }
+
+    private void ShowError(string message)
+    {
+        _errorLabel.Text = message;
+        _errorLabel.Visible = true;
+    }
+
+    private void HideError()
+    {
+        _errorLabel.Visible = false;
+        _errorLabel.Text = string.Empty;
+    }
+
+    private sealed class LogoControl : Control
+    {
+        public LogoControl()
+        {
+            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            DoubleBuffered = true;
+            BackColor = Color.Transparent;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SetClip(new Rectangle(0, 0, Width, Height));
+            e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            using var fill = new SolidBrush(JiraTheme.Primary);
+            using var textBrush = new SolidBrush(Color.White);
+            e.Graphics.FillEllipse(fill, ClientRectangle);
+
+            var font = new Font("Segoe UI", 22f, FontStyle.Bold);
+            var textBounds = ClientRectangle;
+            TextRenderer.DrawText(e.Graphics, "J", font, textBounds, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+    }
+
+    private sealed class ShadowPanel : Panel
+    {
+        public ShadowPanel()
+        {
+            DoubleBuffered = true;
+            Padding = new Padding(14);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SetClip(new Rectangle(0, 0, Width, Height));
+            e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            var shadowBounds = new Rectangle(12, 12, Width - 24, Height - 24);
+            using var shadowPath = CreateRoundedPath(shadowBounds, 16);
+
+            using var shadowBrush = new SolidBrush(Color.FromArgb(30, 9, 30, 66));
+            e.Graphics.FillPath(shadowBrush, shadowPath);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            base.OnPaintBackground(e);
+
+            var cardBounds = new Rectangle(0, 0, Width - 16, Height - 16);
+            cardBounds.Offset(0, 0);
+
+            e.Graphics.SetClip(new Rectangle(0, 0, Width, Height));
+            e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var path = CreateRoundedPath(cardBounds, 12);
+            using var brush = new SolidBrush(JiraTheme.BgSurface);
+            using var border = new Pen(JiraTheme.Border);
+
+            e.Graphics.FillPath(brush, path);
+            e.Graphics.DrawPath(border, path);
+        }
+
+        private static GraphicsPath CreateRoundedPath(Rectangle bounds, int radius)
+        {
+            var diameter = radius * 2;
+            var path = new GraphicsPath();
+
+            path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+            path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+            path.CloseFigure();
+
+            return path;
+        }
+    }
+}
