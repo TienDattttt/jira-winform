@@ -10,10 +10,12 @@ public class IssueConfiguration : IEntityTypeConfiguration<Issue>
     {
         builder.ToTable("Issues");
         builder.HasIndex(x => new { x.ProjectId, x.IssueKey }).IsUnique();
-        builder.HasIndex(x => new { x.ProjectId, x.Status, x.BoardPosition });
-        builder.HasIndex(x => new { x.ProjectId, x.SprintId, x.Status });
+        builder.HasIndex(x => new { x.ProjectId, x.WorkflowStatusId, x.BoardPosition });
+        builder.HasIndex(x => new { x.ProjectId, x.SprintId, x.WorkflowStatusId });
         builder.HasIndex(x => x.ReporterId);
         builder.HasIndex(x => x.UpdatedAtUtc);
+        builder.HasIndex(x => x.ParentIssueId);
+        builder.HasIndex(x => x.FixVersionId);
         builder.Property(x => x.IssueKey).HasMaxLength(40).IsRequired();
         builder.Property(x => x.Title).HasMaxLength(200).IsRequired();
         builder.Property(x => x.BoardPosition).HasColumnType("decimal(18,4)");
@@ -22,6 +24,7 @@ public class IssueConfiguration : IEntityTypeConfiguration<Issue>
         builder.HasOne(x => x.Reporter).WithMany().HasForeignKey(x => x.ReporterId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.ParentIssue).WithMany(x => x.SubIssues).HasForeignKey(x => x.ParentIssueId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(x => x.ParentIssueId);
+        builder.HasOne(x => x.FixVersion).WithMany(x => x.Issues).HasForeignKey(x => x.FixVersionId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(x => x.WorkflowStatus).WithMany(x => x.Issues).HasForeignKey(x => x.WorkflowStatusId).OnDelete(DeleteBehavior.Restrict);
     }
 }

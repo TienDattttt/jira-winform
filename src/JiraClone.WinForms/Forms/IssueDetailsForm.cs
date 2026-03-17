@@ -3,6 +3,9 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
+using JiraLabelEntity = JiraClone.Domain.Entities.Label;
+using JiraComponentEntity = JiraClone.Domain.Entities.Component;
+using JiraProjectVersionEntity = JiraClone.Domain.Entities.ProjectVersion;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
@@ -14,7 +17,7 @@ namespace JiraClone.WinForms.Forms;
 
 public class IssueDetailsForm : Form
 {
-    private const string DescriptionPlaceholder = "Add a description...";
+    private const int DescriptionSectionHeight = 290;
     private const int PreferredLeftPanelMinWidth = 420;
     private const int PreferredRightPanelMinWidth = 260;
     private readonly AppSession _session;
@@ -30,7 +33,10 @@ public class IssueDetailsForm : Form
     private readonly Label _priorityBadge = CreateMetaBadge();
     private readonly Label _updatedLabel = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly TextBox _titleEditor = JiraControlFactory.CreateTextBox();
-    private readonly RichTextBox _description = new() { Dock = DockStyle.Top, Height = 140, BorderStyle = BorderStyle.FixedSingle, Font = JiraTheme.FontBody };
+    private readonly MarkdownEditorControl _descriptionEditor = new() { Dock = DockStyle.Fill };
+    private readonly MarkdownViewerControl _descriptionViewer = new() { Dock = DockStyle.Fill, Visible = false };
+    private readonly Button _descriptionEdit = CreateModeButton("Edit");
+    private readonly Button _descriptionPreview = CreateModeButton("Preview");
     private readonly AttachmentPicker _attachmentPicker = new() { Dock = DockStyle.Top, Height = 42 };
     private readonly AttachmentListControl _attachments = new() { Dock = DockStyle.Fill };
     private readonly Button _commentsTab = MakeTab("Comments", true);
@@ -48,6 +54,10 @@ public class IssueDetailsForm : Form
     private readonly Button _logTime = JiraControlFactory.CreateSecondaryButton("Log Time");
     private readonly AvatarValueControl _assignee = new() { Width = 220, Cursor = Cursors.Hand };
     private readonly AvatarValueControl _reporter = new() { Width = 220 };
+    private readonly FlowLayoutPanel _labelsField = new() { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, FlowDirection = FlowDirection.LeftToRight, MaximumSize = new Size(220, 0), Margin = new Padding(0), BackColor = Color.Transparent };
+    private readonly Button _editLabels = JiraControlFactory.CreateSecondaryButton("Edit Labels");
+    private readonly ComboBox _component = CreateValueCombo();
+    private readonly ComboBox _fixVersion = CreateValueCombo();
     private readonly Button _delete = JiraControlFactory.CreateSecondaryButton("Delete");
     private readonly LinkLabel _parentLink = new() { AutoSize = true, Font = JiraTheme.FontBody, LinkColor = JiraTheme.PrimaryActive, Visible = false };
     private readonly Panel _parentSection = new() { Dock = DockStyle.Top, Height = 40, Visible = false, BackColor = JiraTheme.BgSurface };
@@ -55,9 +65,15 @@ public class IssueDetailsForm : Form
     private readonly Panel _childSection = new() { Dock = DockStyle.Top, AutoSize = true, Visible = false, BackColor = JiraTheme.BgSurface };
     private IssueDetailsDto? _details;
     private IReadOnlyList<User> _users = Array.Empty<User>();
+    private IReadOnlyList<JiraLabelEntity> _availableLabels = Array.Empty<JiraLabelEntity>();
+    private IReadOnlyList<JiraComponentEntity> _availableComponents = Array.Empty<JiraComponentEntity>();
+    private IReadOnlyList<JiraProjectVersionEntity> _availableVersions = Array.Empty<JiraProjectVersionEntity>();
     private HashSet<int> _selectedAssigneeIds = [];
+    private HashSet<int> _selectedLabelIds = [];
     private bool _loading;
-    private bool _showingPlaceholder;
+    private string _descriptionMarkdown = string.Empty;
+    private bool _descriptionPreviewMode;
+    private bool _descriptionModeInitialized;
 
     public IssueDetailsForm(AppSession session, int issueId, int projectId)
     {
@@ -93,8 +109,9 @@ public class IssueDetailsForm : Form
         };
         _titleEditor.Leave += async (_, _) => await CommitTitleAsync();
 
-        _description.Enter += (_, _) => ClearPlaceholder();
-        _description.Leave += async (_, _) => await SaveIssueAsync();
+        _descriptionEdit.Click += (_, _) => SetDescriptionMode(false, true);
+        _descriptionPreview.Click += async (_, _) => await ShowDescriptionPreviewAsync();
+        _descriptionEditor.EditorLeave += async (_, _) => await SaveDescriptionAsync();
 
         _commentInput.Multiline = true;
         _commentInput.Height = 72;
@@ -111,6 +128,16 @@ public class IssueDetailsForm : Form
         _sprint.SelectedIndexChanged += async (_, _) => await SaveIssueAsync();
         _storyPoints.ValueChanged += async (_, _) => { if (_storyPoints.Focused) await SaveIssueAsync(); };
         _assignee.Click += async (_, _) => await ShowAssigneePickerAsync();
+        _editLabels.AutoSize = false;
+        _editLabels.Size = new Size(96, 28);
+        _editLabels.Margin = new Padding(0, 0, 0, 0);
+        _editLabels.Click += async (_, _) => await ShowLabelPickerAsync();
+        _component.DisplayMember = nameof(LookupOption.Text);
+        _component.ValueMember = nameof(LookupOption.Value);
+        _component.SelectedIndexChanged += async (_, _) => await SaveComponentAsync();
+        _fixVersion.DisplayMember = nameof(LookupOption.Text);
+        _fixVersion.ValueMember = nameof(LookupOption.Value);
+        _fixVersion.SelectedIndexChanged += async (_, _) => await SaveFixVersionAsync();
         _logTime.AutoSize = false;
         _logTime.Size = new Size(100, 36);
         _logTime.Click += async (_, _) => await LogTimeAsync();
@@ -240,12 +267,69 @@ public class IssueDetailsForm : Form
         panel.Controls.Add(JiraControlFactory.CreateSeparator());
         panel.Controls.Add(BuildAttachments());
         panel.Controls.Add(JiraControlFactory.CreateSeparator());
-        panel.Controls.Add(_description);
-        panel.Controls.Add(TopLabel("Description"));
+        panel.Controls.Add(BuildDescriptionSection());
         panel.Controls.Add(_metaRow);
         panel.Controls.Add(titleHost);
         panel.Controls.Add(crumbs);
         return panel;
+    }
+
+    private Control BuildDescriptionSection()
+    {
+        var host = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = DescriptionSectionHeight,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(0, 8, 0, 8)
+        };
+
+        var header = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 40,
+            BackColor = JiraTheme.BgSurface
+        };
+
+        var label = TopLabel("Description");
+        label.Dock = DockStyle.Left;
+        label.Margin = new Padding(0, 8, 0, 0);
+
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            Width = 188,
+            Height = 36,
+            WrapContents = false,
+            BackColor = JiraTheme.BgSurface,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0)
+        };
+
+        _descriptionEdit.AutoSize = false;
+        _descriptionEdit.Size = new Size(76, 32);
+        _descriptionEdit.Margin = new Padding(0, 0, 8, 0);
+        _descriptionPreview.AutoSize = false;
+        _descriptionPreview.Size = new Size(96, 32);
+        _descriptionPreview.Margin = new Padding(0);
+        actions.Controls.Add(_descriptionEdit);
+        actions.Controls.Add(_descriptionPreview);
+
+        header.Controls.Add(actions);
+        header.Controls.Add(label);
+
+        var content = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(0, 8, 0, 0)
+        };
+        content.Controls.Add(_descriptionViewer);
+        content.Controls.Add(_descriptionEditor);
+
+        host.Controls.Add(content);
+        host.Controls.Add(header);
+        return host;
     }
 
     private Control BuildAttachments()
@@ -309,11 +393,14 @@ public class IssueDetailsForm : Form
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         AddField(fields, 0, "Assignee", _assignee);
         AddField(fields, 1, "Reporter", _reporter);
-        AddField(fields, 2, "Priority", _priority);
-        AddField(fields, 3, "Sprint", _sprint);
-        AddField(fields, 4, "Story points", _storyPoints);
+        AddField(fields, 2, "Labels", _labelsField);
+        AddField(fields, 3, "Component", _component);
+        AddField(fields, 4, "Fix version", _fixVersion);
+        AddField(fields, 5, "Priority", _priority);
+        AddField(fields, 6, "Sprint", _sprint);
+        AddField(fields, 7, "Story points", _storyPoints);
 
-        var detailsBlock = new Panel { Dock = DockStyle.Top, Height = 302, BackColor = JiraTheme.BgSurface };
+        var detailsBlock = new Panel { Dock = DockStyle.Top, Height = 418, BackColor = JiraTheme.BgSurface };
         detailsBlock.Controls.Add(fields);
         detailsBlock.Controls.Add(statusHost);
         detailsBlock.Controls.Add(TopLabel("Status"));
@@ -354,10 +441,14 @@ public class IssueDetailsForm : Form
         try
         {
             _loading = true;
-            if (refreshReferenceData)
+            if (refreshReferenceData || _users.Count == 0)
             {
                 _users = await _session.Users.GetProjectUsersAsync(_projectId);
+                _availableLabels = await _session.Labels.GetByProjectAsync(_projectId);
+                _availableComponents = await _session.Components.GetByProjectAsync(_projectId);
+                _availableVersions = await _session.Versions.GetByProjectAsync(_projectId);
                 _sprint.Bind(await _session.Sprints.GetByProjectAsync(_projectId));
+                BindMetadataOptions();
             }
 
             _details = await _session.Issues.GetDetailsAsync(_issueId);
@@ -398,13 +489,23 @@ public class IssueDetailsForm : Form
         badge.Location = new Point(8, 0);
         _typeHost.Controls.Add(badge);
 
-        if (string.IsNullOrWhiteSpace(issue.DescriptionText)) ShowPlaceholder();
-        else { _showingPlaceholder = false; _description.ForeColor = JiraTheme.TextPrimary; _description.Text = issue.DescriptionText; }
+        if (!_descriptionModeInitialized)
+        {
+            _descriptionPreviewMode = !string.IsNullOrWhiteSpace(issue.DescriptionText);
+            _descriptionModeInitialized = true;
+        }
+
+        BindDescription(issue.DescriptionText);
 
         _status.SelectedItem = issue.Status;
         _priority.SelectedItem = issue.Priority;
         if (issue.SprintId.HasValue) _sprint.SelectedValue = issue.SprintId.Value; else _sprint.SelectedIndex = -1;
         _storyPoints.Value = Math.Max(_storyPoints.Minimum, Math.Min(_storyPoints.Maximum, issue.StoryPoints ?? 0));
+
+        _selectedLabelIds = issue.IssueLabels.Select(x => x.LabelId).ToHashSet();
+        RenderLabelChips();
+        SelectLookupValue(_component, issue.IssueComponents.Select(x => (int?)x.ComponentId).FirstOrDefault());
+        SelectLookupValue(_fixVersion, issue.FixVersionId);
 
         _selectedAssigneeIds = issue.Assignees.Select(x => x.UserId).ToHashSet();
         ApplyAssigneeSummary(issue.Assignees.Select(x => x.User.DisplayName).ToList());
@@ -488,6 +589,62 @@ public class IssueDetailsForm : Form
         _assignee.SetPerson($"{names[0]} +{names.Count - 1}", summaryInitials, true);
     }
 
+    private void BindMetadataOptions()
+    {
+        _component.DataSource = BuildLookupOptions(_availableComponents.Select(x => new LookupOption(x.Id, x.Name)).ToList(), "No component");
+        _fixVersion.DataSource = BuildLookupOptions(_availableVersions.Select(x => new LookupOption(x.Id, x.IsReleased ? $"{x.Name} (Released)" : x.Name)).ToList(), "No fix version");
+    }
+
+    private void RenderLabelChips()
+    {
+        _labelsField.SuspendLayout();
+        try
+        {
+            _labelsField.Controls.Clear();
+            var selectedLabels = _availableLabels.Where(x => _selectedLabelIds.Contains(x.Id)).OrderBy(x => x.Name).ToList();
+            if (selectedLabels.Count == 0)
+            {
+                var empty = JiraControlFactory.CreateLabel("No labels", true);
+                empty.Margin = new Padding(0, 4, 8, 4);
+                _labelsField.Controls.Add(empty);
+            }
+            else
+            {
+                foreach (var label in selectedLabels)
+                {
+                    _labelsField.Controls.Add(new LabelChipControl
+                    {
+                        ChipText = label.Name,
+                        ColorHex = label.Color,
+                        Margin = new Padding(0, 0, 6, 6)
+                    });
+                }
+            }
+
+            _labelsField.Controls.Add(_editLabels);
+        }
+        finally
+        {
+            _labelsField.ResumeLayout();
+        }
+    }
+
+    private static void SelectLookupValue(ComboBox comboBox, int? value)
+    {
+        if (comboBox.DataSource is not IEnumerable<LookupOption> options)
+        {
+            return;
+        }
+
+        var target = options.FirstOrDefault(x => x.Value == value) ?? options.First();
+        comboBox.SelectedItem = target;
+    }
+
+    private static List<LookupOption> BuildLookupOptions(List<LookupOption> options, string emptyText)
+    {
+        options.Insert(0, new LookupOption(null, emptyText));
+        return options;
+    }
     private void BeginTitleEdit()
     {
         _titleEditor.Text = _title.Text;
@@ -517,19 +674,71 @@ public class IssueDetailsForm : Form
         _title.Visible = true;
     }
 
-    private void ShowPlaceholder()
+    private void BindDescription(string? markdown)
     {
-        _showingPlaceholder = true;
-        _description.ForeColor = JiraTheme.TextSecondary;
-        _description.Text = DescriptionPlaceholder;
+        _descriptionMarkdown = markdown ?? string.Empty;
+        _descriptionEditor.SetContent(_descriptionMarkdown);
+        _descriptionViewer.SetContent(_descriptionMarkdown);
+        SetDescriptionMode(_descriptionPreviewMode);
     }
 
-    private void ClearPlaceholder()
+    private async Task ShowDescriptionPreviewAsync()
     {
-        if (!_showingPlaceholder) return;
-        _showingPlaceholder = false;
-        _description.Clear();
-        _description.ForeColor = JiraTheme.TextPrimary;
+        CaptureDescriptionMarkdown();
+        SetDescriptionMode(true);
+        await SaveDescriptionAsync();
+    }
+
+    private async Task SaveDescriptionAsync()
+    {
+        if (_loading || _details is null)
+        {
+            return;
+        }
+
+        CaptureDescriptionMarkdown();
+        var nextDescription = NormalizeDescription(_descriptionMarkdown);
+        var currentDescription = NormalizeDescription(_details.Issue.DescriptionText);
+        if (string.Equals(nextDescription, currentDescription, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await SaveIssueAsync();
+    }
+
+    private void CaptureDescriptionMarkdown()
+    {
+        if (_descriptionPreviewMode)
+        {
+            return;
+        }
+
+        _descriptionMarkdown = _descriptionEditor.GetContent();
+        _descriptionViewer.SetContent(_descriptionMarkdown);
+    }
+
+    private void SetDescriptionMode(bool previewMode, bool focusEditor = false)
+    {
+        _descriptionPreviewMode = previewMode;
+        _descriptionEditor.Visible = !previewMode;
+        _descriptionViewer.Visible = previewMode;
+        _descriptionEditor.SetReadOnly(previewMode);
+        _descriptionViewer.SetContent(_descriptionMarkdown);
+        ApplyModeButtonStyle(_descriptionEdit, !previewMode);
+        ApplyModeButtonStyle(_descriptionPreview, previewMode);
+
+        if (!previewMode && focusEditor)
+        {
+            _descriptionEditor.FocusEditor();
+        }
+    }
+
+    private static string? NormalizeDescription(string? markdown)
+    {
+        return string.IsNullOrWhiteSpace(markdown)
+            ? null
+            : markdown.Trim();
     }
 
     private void ActivateTab(bool comments)
@@ -550,12 +759,13 @@ public class IssueDetailsForm : Form
         try
         {
             var currentUserId = _session.CurrentUserContext.RequireUserId();
+            CaptureDescriptionMarkdown();
             var model = new IssueEditModel
             {
                 Id = _details.Issue.Id,
                 ProjectId = _details.Issue.ProjectId,
                 Title = _titleEditor.Visible ? _titleEditor.Text.Trim() : _title.Text.Trim(),
-                DescriptionText = _showingPlaceholder ? null : _description.Text.Trim(),
+                DescriptionText = NormalizeDescription(_descriptionMarkdown),
                 Type = _details.Issue.Type,
                 Status = _status.SelectedItem is IssueStatus s ? s : _details.Issue.Status,
                 Priority = _priority.SelectedItem is IssuePriority p ? p : _details.Issue.Priority,
@@ -607,6 +817,83 @@ public class IssueDetailsForm : Form
         await SaveIssueAsync();
     }
 
+    private async Task ShowLabelPickerAsync()
+    {
+        if (_details is null)
+        {
+            return;
+        }
+
+        using var dialog = new LabelPickerDialog(_availableLabels, _selectedLabelIds);
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            await _session.Labels.AssignToIssueAsync(_issueId, dialog.SelectedLabelIds);
+            _selectedLabelIds = dialog.SelectedLabelIds.ToHashSet();
+            RenderLabelChips();
+            await LoadDetailsAsync(false);
+            DialogResult = DialogResult.OK;
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogService.Show(ex);
+        }
+    }
+
+    private async Task SaveComponentAsync()
+    {
+        if (_loading || _details is null)
+        {
+            return;
+        }
+
+        var selectedComponentId = _component.SelectedValue is int componentId ? (int?)componentId : null;
+        var currentComponentId = _details.Issue.IssueComponents.Select(x => (int?)x.ComponentId).FirstOrDefault();
+        if (selectedComponentId == currentComponentId)
+        {
+            return;
+        }
+
+        try
+        {
+            await _session.Components.AssignToIssueAsync(_issueId, selectedComponentId);
+            await LoadDetailsAsync(false);
+            DialogResult = DialogResult.OK;
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogService.Show(ex);
+        }
+    }
+
+    private async Task SaveFixVersionAsync()
+    {
+        if (_loading || _details is null)
+        {
+            return;
+        }
+
+        var selectedVersionId = _fixVersion.SelectedValue is int versionId ? (int?)versionId : null;
+        if (selectedVersionId == _details.Issue.FixVersionId)
+        {
+            return;
+        }
+
+        try
+        {
+            await _session.Versions.AssignToIssueAsync(_issueId, selectedVersionId);
+            await LoadDetailsAsync(false);
+            DialogResult = DialogResult.OK;
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogService.Show(ex);
+        }
+    }
     private async Task AddCommentAsync()
     {
         var body = _commentInput.Text.Trim();
@@ -754,6 +1041,45 @@ public class IssueDetailsForm : Form
         e.DrawFocusRectangle();
     }
 
+    private static ComboBox CreateValueCombo()
+    {
+        return new ComboBox
+        {
+            DrawMode = DrawMode.Normal,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = 220,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = JiraTheme.BgSurface,
+            ForeColor = JiraTheme.TextPrimary,
+            Font = JiraTheme.FontBody
+        };
+    }
+    private static Button CreateModeButton(string text)
+    {
+        return new Button
+        {
+            Text = text,
+            FlatStyle = FlatStyle.Flat,
+            AutoSize = false,
+            Height = 32,
+            BackColor = JiraTheme.BgSurface,
+            ForeColor = JiraTheme.TextSecondary,
+            Font = JiraTheme.FontSmall,
+            Cursor = Cursors.Hand,
+            UseVisualStyleBackColor = false
+        };
+    }
+
+    private static void ApplyModeButtonStyle(Button button, bool active)
+    {
+        button.BackColor = active ? JiraTheme.Blue100 : JiraTheme.BgSurface;
+        button.ForeColor = active ? JiraTheme.PrimaryActive : JiraTheme.TextSecondary;
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.BorderColor = active ? JiraTheme.Primary : JiraTheme.Border;
+        button.FlatAppearance.MouseOverBackColor = active ? JiraTheme.Blue100 : JiraTheme.Neutral100;
+        button.FlatAppearance.MouseDownBackColor = active ? JiraTheme.Blue100 : JiraTheme.Neutral200;
+    }
+
     private static Button MakeTab(string text, bool active)
     {
         var button = new Button { Text = text, FlatStyle = FlatStyle.Flat, AutoSize = false, Width = text == "Comments" ? 100 : 90, Height = 32, BackColor = JiraTheme.BgSurface, Font = JiraTheme.FontSmall };
@@ -891,6 +1217,78 @@ public class IssueDetailsForm : Form
         public string Comment => _comment.Text;
     }
 
+    private sealed record LookupOption(int? Value, string Text)
+    {
+        public override string ToString() => Text;
+    }
+
+    private sealed class LabelPickerDialog : Form
+    {
+        private readonly CheckedListBox _labels = new()
+        {
+            Dock = DockStyle.Fill,
+            BorderStyle = BorderStyle.FixedSingle,
+            CheckOnClick = true,
+            BackColor = JiraTheme.BgSurface,
+            ForeColor = JiraTheme.TextPrimary,
+            Font = JiraTheme.FontBody
+        };
+
+        public LabelPickerDialog(IReadOnlyList<JiraLabelEntity> labels, IEnumerable<int> selectedLabelIds)
+        {
+            Text = "Edit Labels";
+            StartPosition = FormStartPosition.CenterParent;
+            AutoScaleMode = AutoScaleMode.Font;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            ClientSize = new Size(420, 420);
+            MinimumSize = new Size(420, 420);
+            MaximizeBox = false;
+            MinimizeBox = false;
+            BackColor = JiraTheme.BgSurface;
+
+            var selected = selectedLabelIds.ToHashSet();
+            foreach (var label in labels.OrderBy(x => x.Name))
+            {
+                _labels.Items.Add(label, selected.Contains(label.Id));
+            }
+
+            _labels.DisplayMember = nameof(JiraLabelEntity.Name);
+
+            var save = JiraControlFactory.CreatePrimaryButton("Apply");
+            var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
+            save.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };
+            cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+
+            var buttons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 52,
+                FlowDirection = FlowDirection.RightToLeft,
+                Padding = new Padding(12),
+                BackColor = JiraTheme.BgSurface
+            };
+            buttons.Controls.Add(save);
+            buttons.Controls.Add(cancel);
+
+            var caption = JiraControlFactory.CreateLabel("Choose one or more labels", true);
+            caption.Dock = DockStyle.Top;
+            caption.Height = 28;
+
+            var content = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(16),
+                BackColor = JiraTheme.BgSurface
+            };
+            content.Controls.Add(_labels);
+            content.Controls.Add(caption);
+
+            Controls.Add(content);
+            Controls.Add(buttons);
+        }
+
+        public IReadOnlyList<int> SelectedLabelIds => _labels.CheckedItems.Cast<JiraLabelEntity>().Select(x => x.Id).ToList();
+    }
     private sealed class AssigneePickerDialog : Form
     {
         private readonly CheckedListBox _assignees = new()
@@ -959,6 +1357,23 @@ public class IssueDetailsForm : Form
         public IReadOnlyList<int> SelectedUserIds => _assignees.CheckedItems.Cast<User>().Select(x => x.Id).ToList();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

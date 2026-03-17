@@ -1,10 +1,10 @@
-using JiraClone.Application.Abstractions;
+﻿using JiraClone.Application.Abstractions;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Enums;
 
 namespace JiraClone.Application.Boards;
 
-public class BoardQueryService
+public class BoardQueryService : IBoardQueryService
 {
     private static readonly IReadOnlyDictionary<IssueStatus, string> DefaultColumnNames = new Dictionary<IssueStatus, string>
     {
@@ -44,7 +44,8 @@ public class BoardQueryService
                         issue.BoardPosition,
                         issue.Reporter.DisplayName,
                         issue.Assignees.Select(a => a.User.DisplayName).ToList(),
-                        issue.ParentIssue?.IssueKey))
+                        issue.ParentIssue?.IssueKey,
+                        issue.StoryPoints))
                     .ToList();
 
                 return new BoardColumnDto(status, DefaultColumnNames[status], items);

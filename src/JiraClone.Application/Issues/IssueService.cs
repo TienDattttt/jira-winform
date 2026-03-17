@@ -50,13 +50,14 @@ public class IssueService
             throw new ValidationException($"Project with id {model.ProjectId} was not found.");
         }
 
+        var descriptionText = MarkdownHtmlRenderer.Normalize(model.DescriptionText);
         var issue = new Issue
         {
             ProjectId = model.ProjectId,
             IssueKey = await GenerateIssueKeyAsync(project, cancellationToken),
             Title = model.Title.Trim(),
-            DescriptionText = model.DescriptionText,
-            DescriptionHtml = model.DescriptionText,
+            DescriptionText = descriptionText,
+            DescriptionHtml = MarkdownHtmlRenderer.Render(descriptionText),
             Type = model.Type,
             Priority = model.Priority,
             ReporterId = model.ReporterId,
@@ -73,9 +74,14 @@ public class IssueService
         {
             var parent = await _issues.GetByIdAsync(model.ParentIssueId.Value, cancellationToken);
             if (parent is null)
+            {
                 throw new ValidationException($"Parent issue with id {model.ParentIssueId.Value} was not found.");
+            }
+
             if (parent.Type == IssueType.Subtask)
+            {
                 throw new ValidationException("A subtask cannot be a parent of another issue.");
+            }
         }
 
         issue.MoveTo(model.Status, await _issues.GetNextBoardPositionAsync(model.ProjectId, model.Status, cancellationToken));
@@ -111,9 +117,10 @@ public class IssueService
         }
 
         var oldStatus = issue.Status;
+        var descriptionText = MarkdownHtmlRenderer.Normalize(model.DescriptionText);
         issue.Title = model.Title.Trim();
-        issue.DescriptionText = model.DescriptionText;
-        issue.DescriptionHtml = model.DescriptionText;
+        issue.DescriptionText = descriptionText;
+        issue.DescriptionHtml = MarkdownHtmlRenderer.Render(descriptionText);
         issue.Type = model.Type;
         issue.Priority = model.Priority;
         issue.ReporterId = model.ReporterId;
@@ -270,4 +277,3 @@ public class IssueService
         return result;
     }
 }
-

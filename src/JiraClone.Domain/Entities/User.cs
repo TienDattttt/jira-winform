@@ -13,6 +13,7 @@ public class User : AggregateRoot
     public bool IsActive { get; set; } = true;
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
     public ICollection<ProjectMember> ProjectMemberships { get; set; } = new List<ProjectMember>();
+    public ICollection<Component> LedComponents { get; set; } = new List<Component>();
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public ICollection<IssueAssignee> AssignedIssues { get; set; } = new List<IssueAssignee>();
 }

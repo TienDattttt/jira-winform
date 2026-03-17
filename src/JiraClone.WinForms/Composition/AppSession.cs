@@ -4,13 +4,19 @@ using JiraClone.Application.Attachments;
 using JiraClone.Application.Auth;
 using JiraClone.Application.Boards;
 using JiraClone.Application.Comments;
+using JiraClone.Application.Components;
 using JiraClone.Application.Issues;
+using JiraClone.Application.Labels;
 using JiraClone.Application.Models;
 using JiraClone.Application.Projects;
 using JiraClone.Application.Roles;
 using JiraClone.Application.Sprints;
 using JiraClone.Application.Users;
+using JiraClone.Application.Versions;
 using JiraClone.Domain.Entities;
+using ProjectLabel = JiraClone.Domain.Entities.Label;
+using ProjectComponent = JiraClone.Domain.Entities.Component;
+using ProjectVersionEntity = JiraClone.Domain.Entities.ProjectVersion;
 using JiraClone.Domain.Enums;
 using JiraClone.Infrastructure.Security;
 using JiraClone.Infrastructure.Storage;
@@ -26,6 +32,7 @@ public sealed class AppSession : IDisposable
     private readonly IPasswordHasher _passwordHasher;
     private readonly FileShareAttachmentService _attachmentStorage;
     private readonly SemaphoreSlim _operationGate = new(1, 1);
+    private Project? _activeProject;
 
     public AppSession(IDbContextFactory<JiraCloneDbContext> dbContextFactory, string attachmentRootPath)
     {
@@ -52,6 +59,9 @@ public sealed class AppSession : IDisposable
         Users = new UserQueryOperations(this);
         UserCommands = new UserCommandOperations(this);
         Issues = new IssueOperations(this);
+        Labels = new LabelOperations(this);
+        Components = new ComponentOperations(this);
+        Versions = new VersionOperations(this);
         Comments = new CommentOperations(this);
         Sprints = new SprintOperations(this);
         ActivityLog = new ActivityLogOperations(this);
@@ -67,10 +77,16 @@ public sealed class AppSession : IDisposable
     public UserQueryOperations Users { get; }
     public UserCommandOperations UserCommands { get; }
     public IssueOperations Issues { get; }
+    public LabelOperations Labels { get; }
+    public ComponentOperations Components { get; }
+    public VersionOperations Versions { get; }
     public CommentOperations Comments { get; }
     public SprintOperations Sprints { get; }
     public ActivityLogOperations ActivityLog { get; }
     public AttachmentOperations Attachments { get; }
+    public Project? ActiveProject => _activeProject;
+
+    public event EventHandler<ProjectChangedEventArgs>? ProjectChanged;
 
     internal JiraCloneDbContext CreateDbContext() => _dbContextFactory.CreateDbContext();
 
@@ -80,8 +96,8 @@ public sealed class AppSession : IDisposable
     internal ProjectQueryService CreateProjectQueryService(JiraCloneDbContext dbContext) =>
         new(new ProjectRepository(dbContext));
 
-    internal ProjectCommandService CreateProjectCommandService(JiraCloneDbContext dbContext) =>
-        new(new ProjectRepository(dbContext), new UserRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext));
+    internal IProjectCommandService CreateProjectCommandService(JiraCloneDbContext dbContext) =>
+        new ProjectCommandService(new ProjectRepository(dbContext), new UserRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext));
 
     internal BoardQueryService CreateBoardQueryService(JiraCloneDbContext dbContext) =>
         new(new IssueRepository(dbContext));
@@ -103,17 +119,104 @@ public sealed class AppSession : IDisposable
             new ActivityLogRepository(dbContext),
             new UnitOfWork(dbContext));
 
+    internal ILabelService CreateLabelService(JiraCloneDbContext dbContext) =>
+        new LabelService(
+            new LabelRepository(dbContext),
+            new IssueRepository(dbContext),
+            new ProjectRepository(dbContext),
+            Authorization,
+            new ActivityLogRepository(dbContext),
+            CurrentUserContext,
+            new UnitOfWork(dbContext));
+
+    internal IComponentService CreateComponentService(JiraCloneDbContext dbContext) =>
+        new ComponentService(
+            new ComponentRepository(dbContext),
+            new IssueRepository(dbContext),
+            new ProjectRepository(dbContext),
+            new UserRepository(dbContext),
+            Authorization,
+            new ActivityLogRepository(dbContext),
+            CurrentUserContext,
+            new UnitOfWork(dbContext));
+
+    internal IVersionService CreateVersionService(JiraCloneDbContext dbContext) =>
+        new VersionService(
+            new ProjectVersionRepository(dbContext),
+            new IssueRepository(dbContext),
+            new ProjectRepository(dbContext),
+            Authorization,
+            new ActivityLogRepository(dbContext),
+            CurrentUserContext,
+            new UnitOfWork(dbContext));
+
     internal CommentService CreateCommentService(JiraCloneDbContext dbContext) =>
         new(new CommentRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), new UnitOfWork(dbContext));
 
-    internal SprintService CreateSprintService(JiraCloneDbContext dbContext) =>
-        new(new SprintRepository(dbContext), new IssueRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext));
+    internal ISprintService CreateSprintService(JiraCloneDbContext dbContext) =>
+        new SprintService(new SprintRepository(dbContext), new IssueRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext));
 
     internal ActivityLogService CreateActivityLogService(JiraCloneDbContext dbContext) =>
         new(new ActivityLogRepository(dbContext));
 
     internal AttachmentFacade CreateAttachmentFacade(JiraCloneDbContext dbContext) =>
         new(_attachmentStorage, new AttachmentRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), new UnitOfWork(dbContext));
+
+    public async Task<Project?> InitializeActiveProjectAsync(CancellationToken cancellationToken = default)
+    {
+        return await RefreshActiveProjectAsync(cancellationToken);
+    }
+
+    public async Task<Project?> SetActiveProjectAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        if (CurrentUserContext.CurrentUser is null)
+        {
+            SetActiveProjectInternal(null, raiseEvent: true);
+            return null;
+        }
+
+        await using var dbContext = CreateDbContext();
+        var project = await CreateProjectQueryService(dbContext).GetByIdAsync(projectId, cancellationToken);
+        var currentUserId = CurrentUserContext.RequireUserId();
+        if (project is null || !project.IsActive || project.Members.All(x => x.UserId != currentUserId))
+        {
+            throw new InvalidOperationException("The selected project is not available for the current user.");
+        }
+
+        SetActiveProjectInternal(project, raiseEvent: true);
+        return _activeProject;
+    }
+
+    internal async Task<Project?> RefreshActiveProjectAsync(CancellationToken cancellationToken = default, bool raiseEvent = false)
+    {
+        if (CurrentUserContext.CurrentUser is null)
+        {
+            SetActiveProjectInternal(null, raiseEvent);
+            return null;
+        }
+
+        var currentUserId = CurrentUserContext.RequireUserId();
+        await using var dbContext = CreateDbContext();
+        var projectQueryService = CreateProjectQueryService(dbContext);
+        Project? project = null;
+
+        if (_activeProject?.Id is int currentProjectId)
+        {
+            project = await projectQueryService.GetByIdAsync(currentProjectId, cancellationToken);
+            if (project is not null && (!project.IsActive || project.Members.All(x => x.UserId != currentUserId)))
+            {
+                project = null;
+            }
+        }
+
+        if (project is null)
+        {
+            project = (await projectQueryService.GetAccessibleProjectsAsync(currentUserId, cancellationToken)).FirstOrDefault();
+        }
+
+        SetActiveProjectInternal(project, raiseEvent);
+        return _activeProject;
+    }
 
     public async Task RunSerializedAsync(Func<Task> operation, CancellationToken cancellationToken = default)
     {
@@ -146,7 +249,30 @@ public sealed class AppSession : IDisposable
         _operationGate.Dispose();
     }
 
-    public sealed class AuthenticationOperations
+    private void SetActiveProjectInternal(Project? project, bool raiseEvent)
+    {
+        var previousProject = _activeProject;
+        _activeProject = project;
+
+        if (raiseEvent && (previousProject is not null || project is not null))
+        {
+            ProjectChanged?.Invoke(this, new ProjectChangedEventArgs(previousProject, project));
+        }
+    }
+
+    public sealed class ProjectChangedEventArgs : EventArgs
+    {
+        public ProjectChangedEventArgs(Project? previousProject, Project? currentProject)
+        {
+            PreviousProject = previousProject;
+            CurrentProject = currentProject;
+        }
+
+        public Project? PreviousProject { get; }
+        public Project? CurrentProject { get; }
+    }
+
+        public sealed class AuthenticationOperations
     {
         private readonly AppSession _session;
 
@@ -155,11 +281,17 @@ public sealed class AppSession : IDisposable
         public async Task<AuthResult> LoginAsync(string userName, string password, CancellationToken cancellationToken = default)
         {
             await using var dbContext = _session.CreateDbContext();
-            return await _session.CreateAuthenticationService(dbContext).LoginAsync(userName, password, cancellationToken);
+            var result = await _session.CreateAuthenticationService(dbContext).LoginAsync(userName, password, cancellationToken);
+            if (result.Succeeded)
+            {
+                _session.SetActiveProjectInternal(null, raiseEvent: false);
+            }
+
+            return result;
         }
     }
 
-    public sealed class ProjectQueryOperations
+        public sealed class ProjectQueryOperations
     {
         private readonly AppSession _session;
 
@@ -167,45 +299,115 @@ public sealed class AppSession : IDisposable
 
         public async Task<Project?> GetActiveProjectAsync(CancellationToken cancellationToken = default)
         {
+            return await _session.RefreshActiveProjectAsync(cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<Project>> GetAccessibleProjectsAsync(CancellationToken cancellationToken = default)
+        {
+            if (_session.CurrentUserContext.CurrentUser is null)
+            {
+                return [];
+            }
+
             await using var dbContext = _session.CreateDbContext();
-            return await _session.CreateProjectQueryService(dbContext).GetActiveProjectAsync(cancellationToken);
+            return await _session.CreateProjectQueryService(dbContext).GetAccessibleProjectsAsync(_session.CurrentUserContext.RequireUserId(), cancellationToken);
+        }
+
+        public async Task<Project?> GetByIdAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateProjectQueryService(dbContext).GetByIdAsync(projectId, cancellationToken);
         }
     }
 
-    public sealed class ProjectCommandOperations
+        public sealed class ProjectCommandOperations
     {
         private readonly AppSession _session;
 
         internal ProjectCommandOperations(AppSession session) => _session = session;
 
+        public async Task<Project> CreateProjectAsync(string name, string key, ProjectCategory category, string? description, IReadOnlyCollection<ProjectMemberInput> members, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateProjectCommandService(dbContext).CreateProjectAsync(name, key, category, description, members, cancellationToken);
+        }
+
+        public async Task<bool> ProjectKeyExistsAsync(string key, int? excludeProjectId = null, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateProjectCommandService(dbContext).ProjectKeyExistsAsync(key, excludeProjectId, cancellationToken);
+        }
+
         public async Task<Project?> UpdateProjectAsync(int projectId, string name, string? description, ProjectCategory category, string? url, CancellationToken cancellationToken = default)
         {
             await using var dbContext = _session.CreateDbContext();
-            return await _session.CreateProjectCommandService(dbContext).UpdateProjectAsync(projectId, name, description, category, url, cancellationToken);
+            var project = await _session.CreateProjectCommandService(dbContext).UpdateProjectAsync(projectId, name, description, category, url, cancellationToken);
+            if (project is not null && _session.ActiveProject?.Id == project.Id)
+            {
+                _session.SetActiveProjectInternal(project, raiseEvent: true);
+            }
+
+            return project;
+        }
+
+        public async Task<bool> ArchiveProjectAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            var archived = await _session.CreateProjectCommandService(dbContext).ArchiveProjectAsync(projectId, cancellationToken);
+            if (archived)
+            {
+                await _session.RefreshActiveProjectAsync(cancellationToken, raiseEvent: true);
+            }
+
+            return archived;
         }
 
         public async Task<bool> AddMemberAsync(int projectId, int userId, ProjectRole projectRole, CancellationToken cancellationToken = default)
         {
             await using var dbContext = _session.CreateDbContext();
-            return await _session.CreateProjectCommandService(dbContext).AddMemberAsync(projectId, userId, projectRole, cancellationToken);
+            var added = await _session.CreateProjectCommandService(dbContext).AddMemberAsync(projectId, userId, projectRole, cancellationToken);
+            if (added && _session.ActiveProject?.Id == projectId)
+            {
+                await _session.RefreshActiveProjectAsync(cancellationToken, raiseEvent: true);
+            }
+
+            return added;
         }
 
         public async Task<bool> UpdateMemberRoleAsync(int projectId, int userId, ProjectRole projectRole, CancellationToken cancellationToken = default)
         {
             await using var dbContext = _session.CreateDbContext();
-            return await _session.CreateProjectCommandService(dbContext).UpdateMemberRoleAsync(projectId, userId, projectRole, cancellationToken);
+            var updated = await _session.CreateProjectCommandService(dbContext).UpdateMemberRoleAsync(projectId, userId, projectRole, cancellationToken);
+            if (updated && _session.ActiveProject?.Id == projectId)
+            {
+                await _session.RefreshActiveProjectAsync(cancellationToken, raiseEvent: true);
+            }
+
+            return updated;
         }
 
         public async Task<bool> RemoveMemberAsync(int projectId, int userId, CancellationToken cancellationToken = default)
         {
             await using var dbContext = _session.CreateDbContext();
-            return await _session.CreateProjectCommandService(dbContext).RemoveMemberAsync(projectId, userId, cancellationToken);
+            var removed = await _session.CreateProjectCommandService(dbContext).RemoveMemberAsync(projectId, userId, cancellationToken);
+            if (removed && (_session.ActiveProject?.Id == projectId || _session.CurrentUserContext.CurrentUser?.Id == userId))
+            {
+                await _session.RefreshActiveProjectAsync(cancellationToken, raiseEvent: true);
+            }
+
+            return removed;
         }
 
         public async Task<bool> UpdateBoardColumnAsync(int projectId, int boardColumnId, string name, int? wipLimit, CancellationToken cancellationToken = default)
         {
             await using var dbContext = _session.CreateDbContext();
-            return await _session.CreateProjectCommandService(dbContext).UpdateBoardColumnAsync(projectId, boardColumnId, name, wipLimit, cancellationToken);
+            var updated = await _session.CreateProjectCommandService(dbContext).UpdateBoardColumnAsync(projectId, boardColumnId, name, wipLimit, cancellationToken);
+            if (updated && _session.ActiveProject?.Id == projectId)
+            {
+                await _session.RefreshActiveProjectAsync(cancellationToken, raiseEvent: true);
+            }
+
+            return updated;
         }
     }
 
@@ -339,6 +541,123 @@ public sealed class AppSession : IDisposable
         }
     }
 
+    public sealed class LabelOperations
+    {
+        private readonly AppSession _session;
+
+        internal LabelOperations(AppSession session) => _session = session;
+
+        public async Task<IReadOnlyList<ProjectLabel>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateLabelService(dbContext).GetByProjectAsync(projectId, cancellationToken);
+        }
+
+        public async Task<ProjectLabel> CreateAsync(int projectId, string name, string color, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateLabelService(dbContext).CreateAsync(projectId, name, color, cancellationToken);
+        }
+
+        public async Task<ProjectLabel?> UpdateAsync(int labelId, string name, string color, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateLabelService(dbContext).UpdateAsync(labelId, name, color, cancellationToken);
+        }
+
+        public async Task<bool> DeleteAsync(int labelId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateLabelService(dbContext).DeleteAsync(labelId, cancellationToken);
+        }
+
+        public async Task<bool> AssignToIssueAsync(int issueId, IReadOnlyCollection<int> labelIds, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateLabelService(dbContext).AssignToIssueAsync(issueId, labelIds, cancellationToken);
+        }
+    }
+
+    public sealed class ComponentOperations
+    {
+        private readonly AppSession _session;
+
+        internal ComponentOperations(AppSession session) => _session = session;
+
+        public async Task<IReadOnlyList<ProjectComponent>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateComponentService(dbContext).GetByProjectAsync(projectId, cancellationToken);
+        }
+
+        public async Task<ProjectComponent> CreateAsync(int projectId, string name, string? description, int? leadUserId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateComponentService(dbContext).CreateAsync(projectId, name, description, leadUserId, cancellationToken);
+        }
+
+        public async Task<ProjectComponent?> UpdateAsync(int componentId, string name, string? description, int? leadUserId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateComponentService(dbContext).UpdateAsync(componentId, name, description, leadUserId, cancellationToken);
+        }
+
+        public async Task<bool> DeleteAsync(int componentId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateComponentService(dbContext).DeleteAsync(componentId, cancellationToken);
+        }
+
+        public async Task<bool> AssignToIssueAsync(int issueId, int? componentId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateComponentService(dbContext).AssignToIssueAsync(issueId, componentId, cancellationToken);
+        }
+    }
+
+    public sealed class VersionOperations
+    {
+        private readonly AppSession _session;
+
+        internal VersionOperations(AppSession session) => _session = session;
+
+        public async Task<IReadOnlyList<ProjectVersionEntity>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateVersionService(dbContext).GetByProjectAsync(projectId, cancellationToken);
+        }
+
+        public async Task<ProjectVersionEntity> CreateAsync(int projectId, string name, string? description, DateTime? releaseDate, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateVersionService(dbContext).CreateAsync(projectId, name, description, releaseDate, cancellationToken);
+        }
+
+        public async Task<ProjectVersionEntity?> UpdateAsync(int versionId, string name, string? description, DateTime? releaseDate, bool isReleased, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateVersionService(dbContext).UpdateAsync(versionId, name, description, releaseDate, isReleased, cancellationToken);
+        }
+
+        public async Task<bool> DeleteAsync(int versionId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateVersionService(dbContext).DeleteAsync(versionId, cancellationToken);
+        }
+
+        public async Task<bool> AssignToIssueAsync(int issueId, int? versionId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateVersionService(dbContext).AssignToIssueAsync(issueId, versionId, cancellationToken);
+        }
+
+        public async Task<ProjectVersionEntity?> MarkReleasedAsync(int versionId, DateTime? releaseDate = null, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateVersionService(dbContext).MarkReleasedAsync(versionId, releaseDate, cancellationToken);
+        }
+    }
+
     public sealed class CommentOperations
     {
         private readonly AppSession _session;
@@ -411,6 +730,18 @@ public sealed class AppSession : IDisposable
             await using var dbContext = _session.CreateDbContext();
             return await _session.CreateSprintService(dbContext).CloseSprintAsync(sprintId, moveToSprintId, cancellationToken);
         }
+
+        public async Task<BurndownReportDto?> GetBurndownDataAsync(int sprintId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateSprintService(dbContext).GetBurndownDataAsync(sprintId, cancellationToken);
+        }
+
+        public async Task<VelocityReportDto> GetVelocityDataAsync(int projectId, int lastN = 6, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateSprintService(dbContext).GetVelocityDataAsync(projectId, lastN, cancellationToken);
+        }
     }
 
     public sealed class ActivityLogOperations
@@ -457,6 +788,9 @@ public sealed class AppSession : IDisposable
         }
     }
 }
+
+
+
 
 
 

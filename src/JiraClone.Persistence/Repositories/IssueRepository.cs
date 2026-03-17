@@ -60,6 +60,11 @@ public class IssueRepository : IIssueRepository
             .ThenInclude(x => x.User)
             .Include(x => x.Attachments)
             .Include(x => x.ParentIssue)
+            .Include(x => x.FixVersion)
+            .Include(x => x.IssueLabels)
+            .ThenInclude(x => x.Label)
+            .Include(x => x.IssueComponents)
+            .ThenInclude(x => x.Component)
             .FirstOrDefaultAsync(x => x.Id == issueId && !x.IsDeleted, cancellationToken);
 
     public async Task<decimal> GetNextBoardPositionAsync(int projectId, IssueStatus status, CancellationToken cancellationToken = default)
@@ -95,8 +100,6 @@ public class IssueRepository : IIssueRepository
             return 1;
         }
 
-        // Use raw SQL with UPDLOCK to atomically read the max sequence under a lock,
-        // preventing two concurrent calls from reading the same value.
         var maxSequence = await _dbContext.Database
             .SqlQueryRaw<int?>(
                 @"SELECT MAX(
@@ -131,12 +134,10 @@ public class IssueRepository : IIssueRepository
 
         if (childType == IssueType.Subtask)
         {
-            // Subtasks can be children of Task, Bug, Story, or Epic
             query = query.Where(x => x.Type != IssueType.Subtask);
         }
         else
         {
-            // Stories, Tasks, Bugs can only have Epic as parent
             query = query.Where(x => x.Type == IssueType.Epic);
         }
 

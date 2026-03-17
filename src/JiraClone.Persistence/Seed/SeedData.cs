@@ -83,6 +83,19 @@ public static class SeedData
             new { Id = 3, ProjectId = 1, Name = "In Progress", StatusCode = IssueStatus.InProgress, DisplayOrder = 3, WipLimit = (int?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
             new { Id = 4, ProjectId = 1, Name = "Done", StatusCode = IssueStatus.Done, DisplayOrder = 4, WipLimit = (int?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt });
 
+        modelBuilder.Entity<Label>().HasData(
+            new Label { Id = 1, ProjectId = 1, Name = "Desktop", Color = "#4688EC", CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
+            new Label { Id = 2, ProjectId = 1, Name = "Migration", Color = "#2ABB7F", CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
+            new Label { Id = 3, ProjectId = 1, Name = "Board", Color = "#FCA700", CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt });
+
+        modelBuilder.Entity<Component>().HasData(
+            new Component { Id = 1, ProjectId = 1, Name = "Board UI", Description = "Column layout, issue cards, and interaction polish.", LeadUserId = 2, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
+            new Component { Id = 2, ProjectId = 1, Name = "Persistence", Description = "Entity Framework mappings and repository behavior.", LeadUserId = 3, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt });
+
+        modelBuilder.Entity<ProjectVersion>().HasData(
+            new ProjectVersion { Id = 1, ProjectId = 1, Name = "Desktop MVP", Description = "First usable internal desktop milestone.", ReleaseDate = new DateTime(2026, 3, 31, 0, 0, 0, DateTimeKind.Utc), IsReleased = false, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
+            new ProjectVersion { Id = 2, ProjectId = 1, Name = "Alpha Cut", Description = "Initial feature-complete alpha cut.", ReleaseDate = new DateTime(2026, 3, 20, 0, 0, 0, DateTimeKind.Utc), IsReleased = true, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt });
+
         modelBuilder.Entity<Sprint>().HasData(new
         {
             Id = 1,
@@ -103,6 +116,7 @@ public static class SeedData
                 Id = 1,
                 ProjectId = 1,
                 SprintId = 1,
+                FixVersionId = (int?)1,
                 IssueKey = "JIRA-1",
                 Title = "Set up WinForms solution skeleton",
                 DescriptionHtml = "Build the initial desktop solution.",
@@ -127,6 +141,7 @@ public static class SeedData
                 Id = 2,
                 ProjectId = 1,
                 SprintId = 1,
+                FixVersionId = (int?)2,
                 IssueKey = "JIRA-2",
                 Title = "Implement SQL Server persistence model",
                 DescriptionHtml = "Add EF Core context and mappings.",
@@ -151,6 +166,7 @@ public static class SeedData
                 Id = 3,
                 ProjectId = 1,
                 SprintId = 1,
+                FixVersionId = (int?)1,
                 IssueKey = "JIRA-3",
                 Title = "Build board screen",
                 DescriptionHtml = "Render issue columns in the desktop app.",
@@ -175,6 +191,7 @@ public static class SeedData
                 Id = 4,
                 ProjectId = 1,
                 SprintId = 1,
+                FixVersionId = (int?)2,
                 IssueKey = "JIRA-4",
                 Title = "Seed admin login",
                 DescriptionHtml = "Provide an initial admin credential for local login.",
@@ -200,6 +217,17 @@ public static class SeedData
             new { IssueId = 2, UserId = 3, AssignedAtUtc = createdAt },
             new { IssueId = 3, UserId = 2, AssignedAtUtc = createdAt },
             new { IssueId = 3, UserId = 3, AssignedAtUtc = createdAt });
+
+        modelBuilder.Entity<IssueLabel>().HasData(
+            new { IssueId = 1, LabelId = 1 },
+            new { IssueId = 1, LabelId = 2 },
+            new { IssueId = 2, LabelId = 2 },
+            new { IssueId = 3, LabelId = 1 },
+            new { IssueId = 3, LabelId = 3 });
+
+        modelBuilder.Entity<IssueComponent>().HasData(
+            new { IssueId = 2, ComponentId = 2 },
+            new { IssueId = 3, ComponentId = 1 });
 
         modelBuilder.Entity<Comment>().HasData(
             new { Id = 1, IssueId = 3, UserId = 3, Body = "Board rendering is in progress.", IsDeleted = false, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },

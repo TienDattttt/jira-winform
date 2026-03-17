@@ -13,6 +13,10 @@ public class Project : AggregateRoot
     public bool IsActive { get; set; } = true;
     public ICollection<ProjectMember> Members { get; set; } = new List<ProjectMember>();
     public ICollection<BoardColumn> BoardColumns { get; set; } = new List<BoardColumn>();
+    public ICollection<WorkflowDefinition> WorkflowDefinitions { get; set; } = new List<WorkflowDefinition>();
+    public ICollection<Label> Labels { get; set; } = new List<Label>();
+    public ICollection<Component> Components { get; set; } = new List<Component>();
+    public ICollection<ProjectVersion> Versions { get; set; } = new List<ProjectVersion>();
     public ICollection<Issue> Issues { get; set; } = new List<Issue>();
     public ICollection<Sprint> Sprints { get; set; } = new List<Sprint>();
 }

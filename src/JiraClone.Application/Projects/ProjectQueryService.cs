@@ -14,4 +14,10 @@ public class ProjectQueryService
 
     public Task<Project?> GetActiveProjectAsync(CancellationToken cancellationToken = default) =>
         _projects.GetActiveProjectAsync(cancellationToken);
+
+    public Task<IReadOnlyList<Project>> GetAccessibleProjectsAsync(int userId, CancellationToken cancellationToken = default) =>
+        _projects.GetAccessibleProjectsAsync(userId, cancellationToken);
+
+    public Task<Project?> GetByIdAsync(int projectId, CancellationToken cancellationToken = default) =>
+        _projects.GetByIdAsync(projectId, cancellationToken);
 }

@@ -16,7 +16,8 @@ public class Issue : AggregateRoot
     public string? DescriptionHtml { get; set; }
     public string? DescriptionText { get; set; }
     public IssueType Type { get; set; } = IssueType.Task;
-    public IssueStatus Status { get; private set; } = IssueStatus.Backlog;
+    public int WorkflowStatusId { get; private set; }
+    public WorkflowStatus WorkflowStatus { get; set; } = null!;
     public IssuePriority Priority { get; set; } = IssuePriority.Medium;
     public int ReporterId { get; set; }
     public User Reporter { get; set; } = null!;
@@ -38,21 +39,26 @@ public class Issue : AggregateRoot
             _storyPoints = value;
         }
     }
+
     public DateOnly? DueDate { get; set; }
     public decimal BoardPosition { get; set; } = 1;
     public bool IsDeleted { get; set; }
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
     public int? ParentIssueId { get; set; }
     public Issue? ParentIssue { get; set; }
+    public int? FixVersionId { get; set; }
+    public ProjectVersion? FixVersion { get; set; }
     public ICollection<Issue> SubIssues { get; set; } = new List<Issue>();
     public ICollection<IssueAssignee> Assignees { get; set; } = new List<IssueAssignee>();
+    public ICollection<IssueLabel> IssueLabels { get; set; } = new List<IssueLabel>();
+    public ICollection<IssueComponent> IssueComponents { get; set; } = new List<IssueComponent>();
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
     public ICollection<ActivityLog> ActivityLogs { get; set; } = new List<ActivityLog>();
 
-    public void MoveTo(IssueStatus status, decimal boardPosition)
+    public void MoveTo(int workflowStatusId, decimal boardPosition)
     {
-        Status = status;
+        WorkflowStatusId = workflowStatusId;
         BoardPosition = boardPosition;
         UpdatedAtUtc = DateTime.UtcNow;
     }

@@ -325,6 +325,67 @@ namespace JiraClone.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.Component", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("LeadUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeadUserId");
+
+                    b.HasIndex("ProjectId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Components", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Column layout, issue cards, and interaction polish.",
+                            LeadUserId = 2,
+                            Name = "Board UI",
+                            ProjectId = 1,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Entity Framework mappings and repository behavior.",
+                            LeadUserId = 3,
+                            Name = "Persistence",
+                            ProjectId = 1,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.Issue", b =>
                 {
                     b.Property<int>("Id")
@@ -352,6 +413,9 @@ namespace JiraClone.Persistence.Migrations
                         .HasColumnType("date");
 
                     b.Property<int?>("EstimateHours")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FixVersionId")
                         .HasColumnType("int");
 
                     b.Property<bool>("IsDeleted")
@@ -412,6 +476,8 @@ namespace JiraClone.Persistence.Migrations
 
                     b.HasIndex("CreatedById");
 
+                    b.HasIndex("FixVersionId");
+
                     b.HasIndex("ParentIssueId");
 
                     b.HasIndex("ReporterId");
@@ -440,6 +506,7 @@ namespace JiraClone.Persistence.Migrations
                             DescriptionText = "Build the initial desktop solution.",
                             DueDate = new DateOnly(2026, 3, 20),
                             EstimateHours = 8,
+                            FixVersionId = 1,
                             IsDeleted = false,
                             IssueKey = "JIRA-1",
                             Priority = 4,
@@ -464,6 +531,7 @@ namespace JiraClone.Persistence.Migrations
                             DescriptionText = "Add EF Core context and mappings.",
                             DueDate = new DateOnly(2026, 3, 22),
                             EstimateHours = 10,
+                            FixVersionId = 2,
                             IsDeleted = false,
                             IssueKey = "JIRA-2",
                             Priority = 4,
@@ -488,6 +556,7 @@ namespace JiraClone.Persistence.Migrations
                             DescriptionText = "Render issue columns in the desktop app.",
                             DueDate = new DateOnly(2026, 3, 25),
                             EstimateHours = 16,
+                            FixVersionId = 1,
                             IsDeleted = false,
                             IssueKey = "JIRA-3",
                             Priority = 3,
@@ -512,6 +581,7 @@ namespace JiraClone.Persistence.Migrations
                             DescriptionText = "Provide an initial admin credential for local login.",
                             DueDate = new DateOnly(2026, 3, 12),
                             EstimateHours = 2,
+                            FixVersionId = 2,
                             IsDeleted = false,
                             IssueKey = "JIRA-4",
                             Priority = 2,
@@ -571,6 +641,139 @@ namespace JiraClone.Persistence.Migrations
                             IssueId = 3,
                             UserId = 3,
                             AssignedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.IssueComponent", b =>
+                {
+                    b.Property<int>("IssueId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ComponentId")
+                        .HasColumnType("int");
+
+                    b.HasKey("IssueId", "ComponentId");
+
+                    b.HasIndex("ComponentId");
+
+                    b.ToTable("IssueComponents", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            IssueId = 2,
+                            ComponentId = 2
+                        },
+                        new
+                        {
+                            IssueId = 3,
+                            ComponentId = 1
+                        });
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.IssueLabel", b =>
+                {
+                    b.Property<int>("IssueId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LabelId")
+                        .HasColumnType("int");
+
+                    b.HasKey("IssueId", "LabelId");
+
+                    b.HasIndex("LabelId");
+
+                    b.ToTable("IssueLabels", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            IssueId = 1,
+                            LabelId = 1
+                        },
+                        new
+                        {
+                            IssueId = 1,
+                            LabelId = 2
+                        },
+                        new
+                        {
+                            IssueId = 2,
+                            LabelId = 2
+                        },
+                        new
+                        {
+                            IssueId = 3,
+                            LabelId = 1
+                        },
+                        new
+                        {
+                            IssueId = 3,
+                            LabelId = 3
+                        });
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.Label", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Labels", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Color = "#4688EC",
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Desktop",
+                            ProjectId = 1,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Color = "#2ABB7F",
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Migration",
+                            ProjectId = 1,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Color = "#FCA700",
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Board",
+                            ProjectId = 1,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
 
@@ -676,6 +879,72 @@ namespace JiraClone.Persistence.Migrations
                             UserId = 3,
                             JoinedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             ProjectRole = 3
+                        });
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.ProjectVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsReleased")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReleaseDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "IsReleased");
+
+                    b.HasIndex("ProjectId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("ProjectVersions", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "First usable internal desktop milestone.",
+                            IsReleased = false,
+                            Name = "Desktop MVP",
+                            ProjectId = 1,
+                            ReleaseDate = new DateTime(2026, 3, 31, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Initial feature-complete alpha cut.",
+                            IsReleased = true,
+                            Name = "Alpha Cut",
+                            ProjectId = 1,
+                            ReleaseDate = new DateTime(2026, 3, 20, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
 
@@ -1011,6 +1280,24 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.Component", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.User", "LeadUser")
+                        .WithMany("LedComponents")
+                        .HasForeignKey("LeadUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("JiraClone.Domain.Entities.Project", "Project")
+                        .WithMany("Components")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LeadUser");
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.Issue", b =>
                 {
                     b.HasOne("JiraClone.Domain.Entities.User", "CreatedBy")
@@ -1018,6 +1305,11 @@ namespace JiraClone.Persistence.Migrations
                         .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("JiraClone.Domain.Entities.ProjectVersion", "FixVersion")
+                        .WithMany("Issues")
+                        .HasForeignKey("FixVersionId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("JiraClone.Domain.Entities.Issue", "ParentIssue")
                         .WithMany("SubIssues")
@@ -1041,6 +1333,8 @@ namespace JiraClone.Persistence.Migrations
                         .HasForeignKey("SprintId");
 
                     b.Navigation("CreatedBy");
+
+                    b.Navigation("FixVersion");
 
                     b.Navigation("ParentIssue");
 
@@ -1070,6 +1364,55 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.IssueComponent", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.Component", "Component")
+                        .WithMany("IssueComponents")
+                        .HasForeignKey("ComponentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("JiraClone.Domain.Entities.Issue", "Issue")
+                        .WithMany("IssueComponents")
+                        .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Component");
+
+                    b.Navigation("Issue");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.IssueLabel", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.Issue", "Issue")
+                        .WithMany("IssueLabels")
+                        .HasForeignKey("IssueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("JiraClone.Domain.Entities.Label", "Label")
+                        .WithMany("IssueLabels")
+                        .HasForeignKey("LabelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Issue");
+
+                    b.Navigation("Label");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.Label", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.Project", "Project")
+                        .WithMany("Labels")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.ProjectMember", b =>
                 {
                     b.HasOne("JiraClone.Domain.Entities.Project", "Project")
@@ -1087,6 +1430,17 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("Project");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.ProjectVersion", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.Project", "Project")
+                        .WithMany("Versions")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.Sprint", b =>
@@ -1119,6 +1473,11 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.Component", b =>
+                {
+                    b.Navigation("IssueComponents");
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.Issue", b =>
                 {
                     b.Navigation("ActivityLogs");
@@ -1129,18 +1488,38 @@ namespace JiraClone.Persistence.Migrations
 
                     b.Navigation("Comments");
 
+                    b.Navigation("IssueComponents");
+
+                    b.Navigation("IssueLabels");
+
                     b.Navigation("SubIssues");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.Label", b =>
+                {
+                    b.Navigation("IssueLabels");
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.Project", b =>
                 {
                     b.Navigation("BoardColumns");
 
+                    b.Navigation("Components");
+
                     b.Navigation("Issues");
+
+                    b.Navigation("Labels");
 
                     b.Navigation("Members");
 
                     b.Navigation("Sprints");
+
+                    b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.ProjectVersion", b =>
+                {
+                    b.Navigation("Issues");
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.Role", b =>
@@ -1158,6 +1537,8 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("AssignedIssues");
 
                     b.Navigation("Comments");
+
+                    b.Navigation("LedComponents");
 
                     b.Navigation("ProjectMemberships");
 

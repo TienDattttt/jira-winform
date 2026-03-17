@@ -13,21 +13,53 @@ public class ProjectRepository : IProjectRepository
         _dbContext = dbContext;
     }
 
-    public Task<Project?> GetActiveProjectAsync(CancellationToken cancellationToken = default) =>
-        _dbContext.Projects
-            .Include(x => x.BoardColumns)
-            .Include(x => x.Members)
-            .ThenInclude(x => x.User)
-            .ThenInclude(x => x.UserRoles)
-            .ThenInclude(x => x.Role)
-            .FirstOrDefaultAsync(x => x.IsActive, cancellationToken);
+    public async Task<Project?> GetActiveProjectAsync(CancellationToken cancellationToken = default)
+    {
+        return await IncludeProjectGraph()
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.Name)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 
-    public Task<Project?> GetByIdAsync(int projectId, CancellationToken cancellationToken = default) =>
-        _dbContext.Projects
+    public async Task<IReadOnlyList<Project>> GetAccessibleProjectsAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        return await IncludeProjectGraph()
+            .Where(x => x.IsActive && x.Members.Any(member => member.UserId == userId))
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Project?> GetByIdAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        return await IncludeProjectGraph()
+            .FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
+    }
+
+    public Task<bool> ExistsByKeyAsync(string key, int? excludeProjectId = null, CancellationToken cancellationToken = default)
+    {
+        var normalizedKey = (key ?? string.Empty).Trim().ToUpperInvariant();
+        return _dbContext.Projects.AnyAsync(
+            x => x.Key == normalizedKey && (!excludeProjectId.HasValue || x.Id != excludeProjectId.Value),
+            cancellationToken);
+    }
+
+    public Task AddAsync(Project project, CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Projects.AddAsync(project, cancellationToken).AsTask();
+    }
+
+    private IQueryable<Project> IncludeProjectGraph()
+    {
+        return _dbContext.Projects
+            .AsSplitQuery()
             .Include(x => x.BoardColumns)
             .Include(x => x.Members)
             .ThenInclude(x => x.User)
             .ThenInclude(x => x.UserRoles)
             .ThenInclude(x => x.Role)
-            .FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
+            .Include(x => x.Labels)
+            .Include(x => x.Components)
+            .ThenInclude(x => x.LeadUser)
+            .Include(x => x.Versions);
+    }
 }

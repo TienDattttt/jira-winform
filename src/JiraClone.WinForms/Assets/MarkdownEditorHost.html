@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=11" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Markdown Editor</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css" />
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background: #ffffff;
+            color: #1e1f21;
+            font-family: "Segoe UI", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        .editor-shell {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 0;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 12px;
+            border: 1px solid #dddee1;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            background: #f8f8f8;
+        }
+
+        .toolbar button {
+            min-width: 38px;
+            height: 32px;
+            border: 1px solid #dddee1;
+            border-radius: 4px;
+            background: #ffffff;
+            color: #1e1f21;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 0 10px;
+        }
+
+        .toolbar button:hover {
+            background: #e9f2fe;
+            border-color: #4688ec;
+        }
+
+        .toolbar button[disabled] {
+            cursor: default;
+            opacity: 0.45;
+        }
+
+        #markdown-input,
+        .EasyMDEContainer,
+        .CodeMirror {
+            width: 100%;
+            height: 100%;
+        }
+
+        #markdown-input {
+            resize: none;
+            border: 1px solid #dddee1;
+            border-radius: 0 0 4px 4px;
+            padding: 14px;
+            font-family: Consolas, "Segoe UI", monospace;
+            font-size: 13px;
+            line-height: 1.55;
+            outline: none;
+        }
+
+        #markdown-input:focus {
+            border-color: #4688ec;
+        }
+
+        .editor-frame {
+            flex: 1;
+            min-height: 0;
+        }
+
+        .EasyMDEContainer {
+            border: 1px solid #dddee1;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+        }
+
+        .EasyMDEContainer .CodeMirror {
+            border: none;
+            font-family: Consolas, "Segoe UI", monospace;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .EasyMDEContainer .CodeMirror-focused {
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-shell">
+        <div class="toolbar" id="toolbar">
+            <button type="button" data-command="bold"><strong>B</strong></button>
+            <button type="button" data-command="italic"><em>I</em></button>
+            <button type="button" data-command="heading">H</button>
+            <button type="button" data-command="code">Code</button>
+            <button type="button" data-command="link">Link</button>
+            <button type="button" data-command="bullet">Bullets</button>
+            <button type="button" data-command="number">Numbered</button>
+        </div>
+        <div class="editor-frame">
+            <textarea id="markdown-input" placeholder="Add a description..."></textarea>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js"></script>
+    <script>
+        var editor = null;
+        var textarea = null;
+        var readOnly = false;
+
+        function getSelectionText() {
+            if (editor) {
+                return editor.codemirror.getSelection();
+            }
+
+            return textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
+        }
+
+        function focusEditor() {
+            if (editor) {
+                editor.codemirror.focus();
+                return;
+            }
+
+            textarea.focus();
+        }
+
+        function replaceSelection(prefix, suffix, placeholder) {
+            var selected = getSelectionText() || placeholder || '';
+
+            if (editor) {
+                editor.codemirror.replaceSelection(prefix + selected + suffix);
+                focusEditor();
+                return;
+            }
+
+            var start = textarea.selectionStart;
+            var end = textarea.selectionEnd;
+            var next = textarea.value.substring(0, start) + prefix + selected + suffix + textarea.value.substring(end);
+            textarea.value = next;
+            textarea.selectionStart = start + prefix.length;
+            textarea.selectionEnd = start + prefix.length + selected.length;
+            focusEditor();
+        }
+
+        function prefixLines(prefix) {
+            if (editor) {
+                var doc = editor.codemirror.getDoc();
+                var selection = doc.getSelection() || 'List item';
+                var lines = selection.split('\n');
+                for (var i = 0; i < lines.length; i++) {
+                    lines[i] = prefix + lines[i];
+                }
+
+                doc.replaceSelection(lines.join('\n'));
+                focusEditor();
+                return;
+            }
+
+            var start = textarea.selectionStart;
+            var end = textarea.selectionEnd;
+            var selectionText = textarea.value.substring(start, end) || 'List item';
+            var rows = selectionText.split('\n');
+            for (var j = 0; j < rows.length; j++) {
+                rows[j] = prefix + rows[j];
+            }
+
+            var replacement = rows.join('\n');
+            textarea.value = textarea.value.substring(0, start) + replacement + textarea.value.substring(end);
+            textarea.selectionStart = start;
+            textarea.selectionEnd = start + replacement.length;
+            focusEditor();
+        }
+
+        function handleToolbarClick(command) {
+            if (readOnly) {
+                return;
+            }
+
+            if (command === 'bold') {
+                replaceSelection('**', '**', 'Bold text');
+                return;
+            }
+
+            if (command === 'italic') {
+                replaceSelection('*', '*', 'Italic text');
+                return;
+            }
+
+            if (command === 'heading') {
+                prefixLines('## ');
+                return;
+            }
+
+            if (command === 'code') {
+                replaceSelection('`', '`', 'code');
+                return;
+            }
+
+            if (command === 'link') {
+                replaceSelection('[', '](https://)', 'Link text');
+                return;
+            }
+
+            if (command === 'bullet') {
+                prefixLines('- ');
+                return;
+            }
+
+            if (command === 'number') {
+                prefixLines('1. ');
+            }
+        }
+
+        function wireToolbar() {
+            var toolbar = document.getElementById('toolbar');
+            var buttons = toolbar.getElementsByTagName('button');
+            for (var i = 0; i < buttons.length; i++) {
+                buttons[i].onclick = function() {
+                    handleToolbarClick(this.getAttribute('data-command'));
+                };
+            }
+        }
+
+        function updateToolbarState() {
+            var toolbar = document.getElementById('toolbar');
+            var buttons = toolbar.getElementsByTagName('button');
+            for (var i = 0; i < buttons.length; i++) {
+                buttons[i].disabled = readOnly;
+            }
+        }
+
+        function initializeEditor() {
+            textarea = document.getElementById('markdown-input');
+            wireToolbar();
+
+            if (window.EasyMDE) {
+                editor = new EasyMDE({
+                    element: textarea,
+                    autoDownloadFontAwesome: false,
+                    spellChecker: false,
+                    status: false,
+                    toolbar: false,
+                    placeholder: 'Add a description...'
+                });
+            }
+
+            setReadOnly(readOnly);
+        }
+
+        function setValue(value) {
+            var next = value || '';
+            if (editor) {
+                editor.value(next);
+                return;
+            }
+
+            textarea.value = next;
+        }
+
+        function getValue() {
+            if (editor) {
+                return editor.value();
+            }
+
+            return textarea ? textarea.value : '';
+        }
+
+        function setReadOnly(value) {
+            readOnly = !!value;
+            if (editor) {
+                editor.codemirror.setOption('readOnly', readOnly ? 'nocursor' : false);
+            }
+
+            if (textarea) {
+                textarea.readOnly = readOnly;
+            }
+
+            updateToolbarState();
+        }
+
+        window.onload = initializeEditor;
+    </script>
+</body>
+</html>

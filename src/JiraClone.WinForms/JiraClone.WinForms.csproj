@@ -25,6 +25,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="Assets\MarkdownEditorHost.html" />
+    <EmbeddedResource Include="Assets\MarkdownEditorHost.html" />
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

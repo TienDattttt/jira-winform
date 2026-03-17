@@ -1,4 +1,7 @@
+using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
 using JiraClone.Application.Abstractions;
+using JiraClone.Application.Models;
 using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
@@ -6,8 +9,16 @@ using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
 
 namespace JiraClone.Application.Projects;
 
-public class ProjectCommandService
+public class ProjectCommandService : IProjectCommandService
 {
+    private static readonly (IssueStatus Status, string Name)[] DefaultBoardColumns =
+    [
+        (IssueStatus.Backlog, "Backlog"),
+        (IssueStatus.Selected, "Selected"),
+        (IssueStatus.InProgress, "In Progress"),
+        (IssueStatus.Done, "Done")
+    ];
+
     private readonly IProjectRepository _projects;
     private readonly IUserRepository _users;
     private readonly IAuthorizationService _authorization;
@@ -31,6 +42,91 @@ public class ProjectCommandService
         _unitOfWork = unitOfWork;
     }
 
+    public async Task<Project> CreateProjectAsync(string name, string key, ProjectCategory category, string? description, IReadOnlyCollection<ProjectMemberInput> members, CancellationToken cancellationToken = default)
+    {
+        _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
+
+        var normalizedName = name?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            throw new ValidationException("Project name is required.");
+        }
+
+        var normalizedKey = NormalizeProjectKey(key);
+        if (!Regex.IsMatch(normalizedKey, "^[A-Z]{2,10}$", RegexOptions.CultureInvariant))
+        {
+            throw new ValidationException("Project key must match [A-Z]{2,10}.");
+        }
+
+        if (await _projects.ExistsByKeyAsync(normalizedKey, cancellationToken: cancellationToken))
+        {
+            throw new ValidationException("Project key already exists.");
+        }
+
+        var actor = _currentUserContext.CurrentUser ?? throw new InvalidOperationException("No user is currently logged in.");
+        var now = DateTime.UtcNow;
+        var project = new Project
+        {
+            Key = normalizedKey,
+            Name = normalizedName,
+            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+            Category = category,
+            IsActive = true,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+        };
+
+        for (var index = 0; index < DefaultBoardColumns.Length; index++)
+        {
+            var column = DefaultBoardColumns[index];
+            project.BoardColumns.Add(new BoardColumn
+            {
+                Name = column.Name,
+                StatusCode = column.Status,
+                DisplayOrder = index + 1,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            });
+        }
+
+        var uniqueMembers = (members ?? Array.Empty<ProjectMemberInput>())
+            .Where(x => x.UserId > 0)
+            .GroupBy(x => x.UserId)
+            .Select(x => x.First())
+            .ToList();
+
+        AddProjectMember(project, actor, ProjectRole.Admin, now);
+
+        foreach (var member in uniqueMembers)
+        {
+            if (member.UserId == actor.Id)
+            {
+                continue;
+            }
+
+            var user = await _users.GetByIdAsync(member.UserId, cancellationToken);
+            if (user is null || !user.IsActive)
+            {
+                throw new ValidationException($"User {member.UserId} is not available for project membership.");
+            }
+
+            AddProjectMember(project, user, member.ProjectRole, now);
+        }
+
+        await _projects.AddAsync(project, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await AddProjectActivityAsync(project.Id, ActivityActionType.Created, nameof(Project.Name), null, project.Name, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await _projects.GetByIdAsync(project.Id, cancellationToken) ?? project;
+    }
+
+    public Task<bool> ProjectKeyExistsAsync(string key, int? excludeProjectId = null, CancellationToken cancellationToken = default)
+    {
+        return _projects.ExistsByKeyAsync(NormalizeProjectKey(key), excludeProjectId, cancellationToken);
+    }
+
     public async Task<Project?> UpdateProjectAsync(int projectId, string name, string? description, ProjectCategory category, string? url, CancellationToken cancellationToken = default)
     {
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
@@ -40,9 +136,15 @@ public class ProjectCommandService
             return null;
         }
 
+        var normalizedName = name?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            throw new ValidationException("Project name is required.");
+        }
+
         var oldName = project.Name;
-        project.Name = name.Trim();
-        project.Description = description;
+        project.Name = normalizedName;
+        project.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
         project.Category = category;
         project.Url = string.IsNullOrWhiteSpace(url) ? null : url.Trim();
         project.UpdatedAtUtc = DateTime.UtcNow;
@@ -50,6 +152,23 @@ public class ProjectCommandService
         await AddProjectActivityAsync(project.Id, ActivityActionType.Updated, nameof(Project.Name), oldName, project.Name, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return project;
+    }
+
+    public async Task<bool> ArchiveProjectAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        _authorization.EnsureInRole(RoleCatalog.Admin);
+        var project = await _projects.GetByIdAsync(projectId, cancellationToken);
+        if (project is null || !project.IsActive)
+        {
+            return false;
+        }
+
+        project.IsActive = false;
+        project.UpdatedAtUtc = DateTime.UtcNow;
+
+        await AddProjectActivityAsync(projectId, ActivityActionType.Updated, nameof(Project.IsActive), bool.TrueString, bool.FalseString, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<bool> UpdateMemberRoleAsync(int projectId, int userId, ProjectRole projectRole, CancellationToken cancellationToken = default)
@@ -74,7 +193,7 @@ public class ProjectCommandService
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var project = await _projects.GetByIdAsync(projectId, cancellationToken);
         var user = await _users.GetByIdAsync(userId, cancellationToken);
-        if (project is null || user is null || project.Members.Any(x => x.UserId == userId))
+        if (project is null || user is null || !user.IsActive || project.Members.Any(x => x.UserId == userId))
         {
             return false;
         }
@@ -120,13 +239,40 @@ public class ProjectCommandService
             return false;
         }
 
+        var normalizedName = name?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            throw new ValidationException("Column name is required.");
+        }
+
         var oldValue = $"{column.Name}|{column.WipLimit}";
-        column.Name = name.Trim();
+        column.Name = normalizedName;
         column.WipLimit = wipLimit;
         column.UpdatedAtUtc = DateTime.UtcNow;
         await AddProjectActivityAsync(projectId, ActivityActionType.Updated, nameof(BoardColumn.Name), oldValue, $"{column.Name}|{column.WipLimit}", cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    private static string NormalizeProjectKey(string? key)
+    {
+        return (key ?? string.Empty).Trim().ToUpperInvariant();
+    }
+
+    private static void AddProjectMember(Project project, User user, ProjectRole role, DateTime joinedAtUtc)
+    {
+        if (project.Members.Any(x => x.UserId == user.Id))
+        {
+            return;
+        }
+
+        project.Members.Add(new ProjectMember
+        {
+            UserId = user.Id,
+            User = user,
+            ProjectRole = role,
+            JoinedAtUtc = joinedAtUtc,
+        });
     }
 
     private async Task AddProjectActivityAsync(int projectId, ActivityActionType actionType, string? fieldName, string? oldValue, string? newValue, CancellationToken cancellationToken)
@@ -148,3 +294,4 @@ public class ProjectCommandService
         }, cancellationToken);
     }
 }
+

@@ -10,4 +10,8 @@
     <ProjectReference Include="..\JiraClone.Domain\JiraClone.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Markdig" Version="0.37.0" />
+  </ItemGroup>
+
 </Project>

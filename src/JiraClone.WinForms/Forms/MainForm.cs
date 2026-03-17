@@ -4,6 +4,7 @@ using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
+using JiraClone.WinForms.Controls;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -16,11 +17,14 @@ public class MainForm : Form
     private readonly Panel _contentPanel = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgPage };
     private readonly Label _breadcrumbLabel = new() { AutoSize = true, Font = JiraTheme.FontSmall, ForeColor = JiraTheme.TextSecondary };
     private readonly TextBox _searchBox = JiraControlFactory.CreateTextBox();
+    private readonly SidebarNavItem _projectsItem = new(NavKind.Projects, "Projects");
     private readonly SidebarNavItem _boardItem = new(NavKind.Board, "Board");
     private readonly SidebarNavItem _backlogItem = new(NavKind.Backlog, "Backlog");
     private readonly SidebarNavItem _sprintsItem = new(NavKind.Sprints, "Sprints");
     private readonly SidebarNavItem _issuesItem = new(NavKind.Issues, "Issues");
+    private readonly SidebarNavItem _reportsItem = new(NavKind.Reports, "Reports");
     private readonly SidebarNavItem _settingsItem = new(NavKind.Settings, "Settings");
+    private readonly ProjectSwitcherControl _projectSwitcher;
     private readonly InitialsAvatar _sidebarAvatar;
     private readonly InitialsAvatar _navbarAvatar;
     private readonly Label _sidebarUserLabel;
@@ -35,6 +39,7 @@ public class MainForm : Form
     {
         _session = session;
         _displayName = session.CurrentUserContext.CurrentUser?.DisplayName ?? displayName;
+        _projectSwitcher = new ProjectSwitcherControl(session);
 
         Text = $"Jira Clone Desktop - {_displayName}";
         StartPosition = FormStartPosition.CenterScreen;
@@ -46,7 +51,7 @@ public class MainForm : Form
 
         _searchBox.Width = 300;
         _searchBox.MinimumSize = new Size(220, 38);
-        _searchBox.PlaceholderText = "Search project";
+        _searchBox.PlaceholderText = "Search projects";
         _searchBox.TextChanged += (_, _) => ApplyShellSearch();
 
         var initials = BuildInitials(_displayName);
@@ -70,8 +75,19 @@ public class MainForm : Form
 
         BuildLayout();
         WireNavigation();
+        _session.ProjectChanged += HandleSessionProjectChanged;
 
         Shown += async (_, _) => await LoadProjectContextAsync();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _session.ProjectChanged -= HandleSessionProjectChanged;
+        }
+
+        base.Dispose(disposing);
     }
 
     private void BuildLayout()
@@ -129,7 +145,7 @@ public class MainForm : Form
             Padding = new Padding(0, 14, 0, 0),
             BackColor = JiraTheme.BgSidebar,
         };
-        navStack.Controls.AddRange([_boardItem, _backlogItem, _sprintsItem, _issuesItem, _settingsItem]);
+        navStack.Controls.AddRange([_projectsItem, _boardItem, _backlogItem, _sprintsItem, _issuesItem, _reportsItem, _settingsItem]);
 
         var bottomSection = new Panel
         {
@@ -159,6 +175,7 @@ public class MainForm : Form
 
         sidebar.Controls.Add(bottomSection);
         sidebar.Controls.Add(navStack);
+        sidebar.Controls.Add(_projectSwitcher);
         sidebar.Controls.Add(separatorTop);
         sidebar.Controls.Add(brandRow);
         return sidebar;
@@ -217,11 +234,20 @@ public class MainForm : Form
 
     private void WireNavigation()
     {
+        _projectsItem.Click += (_, _) => NavigateTo(_projectsItem, CreateProjectListControl);
         _boardItem.Click += (_, _) => NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
         _backlogItem.Click += (_, _) => NavigateTo(_backlogItem, () => new BoardForm(_session, activeSprintOnly: false));
         _sprintsItem.Click += (_, _) => NavigateTo(_sprintsItem, () => new SprintManagementForm(_session));
         _issuesItem.Click += (_, _) => NavigateTo(_issuesItem, () => new IssueNavigatorView(_session));
+        _reportsItem.Click += (_, _) => NavigateTo(_reportsItem, () => new ReportsForm(_session));
         _settingsItem.Click += (_, _) => NavigateTo(_settingsItem, () => new ProjectSettingsForm(_session));
+    }
+
+    private ProjectListForm CreateProjectListControl()
+    {
+        var control = new ProjectListForm(_session);
+        control.ProjectOpened += (_, _) => NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
+        return control;
     }
 
     private void NavigateTo(SidebarNavItem navItem, Func<Control> createContent)
@@ -239,7 +265,7 @@ public class MainForm : Form
         _activeContent = createContent();
         _activeContent.Dock = DockStyle.Fill;
         _contentPanel.Controls.Add(_activeContent);
-        _breadcrumbLabel.Text = $"Projects > {_projectName} > {navItem.TextLabel}";
+        UpdateProjectChrome();
         ApplyShellSearch();
     }
 
@@ -247,11 +273,13 @@ public class MainForm : Form
     {
         try
         {
-            var project = await _session.Projects.GetActiveProjectAsync();
-            if (project is not null)
+            await _session.InitializeActiveProjectAsync();
+            UpdateProjectChrome();
+
+            if (_session.ActiveProject is null)
             {
-                _projectName = project.Name;
-                _searchBox.PlaceholderText = $"Search in {_projectName}";
+                NavigateTo(_projectsItem, CreateProjectListControl);
+                return;
             }
 
             NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
@@ -260,6 +288,67 @@ public class MainForm : Form
         {
             ErrorDialogService.Show(exception);
         }
+    }
+
+    private async void HandleSessionProjectChanged(object? sender, AppSession.ProjectChangedEventArgs eventArgs)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        try
+        {
+            UpdateProjectChrome();
+            if (_session.ActiveProject is null && _activeNavItem?.Kind != NavKind.Projects)
+            {
+                NavigateTo(_projectsItem, CreateProjectListControl);
+                return;
+            }
+
+            if (_activeContent is not null)
+            {
+                await RefreshActiveContentAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+
+    private void UpdateProjectChrome()
+    {
+        _projectName = _session.ActiveProject?.Name ?? "Projects";
+        _createIssueButton.Enabled = _session.ActiveProject is not null;
+        _searchBox.PlaceholderText = GetSearchPlaceholder();
+        _breadcrumbLabel.Text = BuildBreadcrumb();
+    }
+
+    private string GetSearchPlaceholder()
+    {
+        return _activeNavItem?.Kind == NavKind.Projects
+            ? "Search your projects"
+            : _session.ActiveProject is not null
+                ? $"Search in {_projectName}"
+                : "Search projects";
+    }
+
+    private string BuildBreadcrumb()
+    {
+        if (_activeNavItem is null)
+        {
+            return _session.ActiveProject is null ? "Projects > Your Projects" : $"Projects > {_projectName}";
+        }
+
+        if (_activeNavItem.Kind == NavKind.Projects)
+        {
+            return "Projects > Your Projects";
+        }
+
+        return _session.ActiveProject is null
+            ? $"Projects > {_activeNavItem.TextLabel}"
+            : $"Projects > {_projectName} > {_activeNavItem.TextLabel}";
     }
 
     private async Task CreateIssueAsync()
@@ -301,8 +390,14 @@ public class MainForm : Form
             case UserManagementForm userManagementForm:
                 await userManagementForm.RefreshUsersAsync();
                 break;
+            case ReportsForm reportsForm:
+                await reportsForm.RefreshReportsAsync();
+                break;
             case ProjectSettingsForm projectSettingsForm:
                 await projectSettingsForm.RefreshProjectAsync();
+                break;
+            case ProjectListForm projectListForm:
+                await projectListForm.RefreshProjectsAsync();
                 break;
         }
     }
@@ -323,8 +418,14 @@ public class MainForm : Form
             case UserManagementForm userManagementForm:
                 userManagementForm.SetShellSearch(_searchBox.Text);
                 break;
+            case ReportsForm reportsForm:
+                reportsForm.SetShellSearch(_searchBox.Text);
+                break;
             case ProjectSettingsForm projectSettingsForm:
                 projectSettingsForm.SetShellSearch(_searchBox.Text);
+                break;
+            case ProjectListForm projectListForm:
+                projectListForm.SetShellSearch(_searchBox.Text);
                 break;
         }
     }
@@ -358,10 +459,12 @@ public class MainForm : Form
 
     private enum NavKind
     {
+        Projects,
         Board,
         Backlog,
         Sprints,
         Issues,
+        Reports,
         Settings
     }
 
@@ -386,6 +489,7 @@ public class MainForm : Form
         }
 
         public string TextLabel { get; }
+        public NavKind Kind => _kind;
 
         public void SetActive(bool active)
         {
@@ -422,6 +526,12 @@ public class MainForm : Form
 
             switch (_kind)
             {
+                case NavKind.Projects:
+                    graphics.DrawRectangle(pen, bounds.X + 1, bounds.Y + 6, 15, 11);
+                    graphics.DrawLine(pen, bounds.X + 4, bounds.Y + 6, bounds.X + 7, bounds.Y + 2);
+                    graphics.DrawLine(pen, bounds.X + 7, bounds.Y + 2, bounds.X + 12, bounds.Y + 2);
+                    graphics.DrawLine(pen, bounds.X + 12, bounds.Y + 2, bounds.X + 14, bounds.Y + 6);
+                    break;
                 case NavKind.Board:
                     graphics.DrawRectangle(pen, bounds.X, bounds.Y + 2, 7, 7);
                     graphics.DrawRectangle(pen, bounds.X + 10, bounds.Y + 2, 7, 7);
@@ -439,6 +549,14 @@ public class MainForm : Form
                     break;
                 case NavKind.Issues:
                     graphics.FillEllipse(fill, bounds.X + 4, bounds.Y + 6, 10, 10);
+                    break;
+                case NavKind.Reports:
+                    graphics.DrawLine(pen, bounds.X + 1, bounds.Bottom - 4, bounds.Right - 1, bounds.Bottom - 4);
+                    graphics.FillRectangle(fill, bounds.X + 2, bounds.Bottom - 9, 3, 5);
+                    graphics.FillRectangle(fill, bounds.X + 8, bounds.Bottom - 13, 3, 9);
+                    graphics.FillRectangle(fill, bounds.X + 14, bounds.Bottom - 17, 3, 13);
+                    graphics.DrawLine(pen, bounds.X + 2, bounds.Bottom - 12, bounds.X + 9, bounds.Bottom - 15);
+                    graphics.DrawLine(pen, bounds.X + 9, bounds.Bottom - 15, bounds.Right - 2, bounds.Y + 7);
                     break;
                 case NavKind.Settings:
                     graphics.DrawEllipse(pen, bounds.X + 4, bounds.Y + 6, 10, 10);
@@ -877,6 +995,13 @@ public class MainForm : Form
         private sealed record IssueSummaryRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
     }
 }
+
+
+
+
+
+
+
 
 
 
