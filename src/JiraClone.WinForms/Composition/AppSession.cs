@@ -325,6 +325,18 @@ public sealed class AppSession : IDisposable
             await using var dbContext = _session.CreateDbContext();
             return await _session.CreateIssueService(dbContext).DeleteAsync(issueId, userId, cancellationToken);
         }
+
+        public async Task<IReadOnlyList<Issue>> GetPotentialParentsAsync(int projectId, IssueType childType, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await new IssueRepository(dbContext).GetPotentialParentsAsync(projectId, childType, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<Issue>> GetSubIssuesAsync(int issueId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await new IssueRepository(dbContext).GetSubIssuesAsync(issueId, cancellationToken);
+        }
     }
 
     public sealed class CommentOperations

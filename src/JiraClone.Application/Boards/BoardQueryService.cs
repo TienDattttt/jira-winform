@@ -43,7 +43,8 @@ public class BoardQueryService
                         issue.Status,
                         issue.BoardPosition,
                         issue.Reporter.DisplayName,
-                        issue.Assignees.Select(a => a.User.DisplayName).ToList()))
+                        issue.Assignees.Select(a => a.User.DisplayName).ToList(),
+                        issue.ParentIssue?.IssueKey))
                     .ToList();
 
                 return new BoardColumnDto(status, DefaultColumnNames[status], items);

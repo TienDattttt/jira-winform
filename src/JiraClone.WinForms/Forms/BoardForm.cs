@@ -20,6 +20,10 @@ public class BoardForm : UserControl
     private readonly ComboBox _typeFilter = CreateFilterCombo(130);
     private readonly TextBox _searchFilter = JiraControlFactory.CreateTextBox();
     private readonly Button _clearFiltersButton = JiraControlFactory.CreateSecondaryButton("Clear filters");
+    private readonly Dictionary<IssueStatus, BoardColumnControl> _columnControls = new();
+    private readonly Panel _toastPanel = new();
+    private readonly Label _toastLabel = JiraControlFactory.CreateLabel(string.Empty, true);
+    private readonly System.Windows.Forms.Timer _toastTimer = new() { Interval = 2600 };
     private readonly FlowLayoutPanel _boardColumnsPanel = new()
     {
         Dock = DockStyle.Top,
@@ -77,14 +81,58 @@ public class BoardForm : UserControl
         _searchFilter.TextChanged += (_, _) => ApplyFilters();
         _clearFiltersButton.Click += (_, _) => ClearFilters();
 
+        ConfigureToast();
+
         _boardScrollPanel.Controls.Add(_boardColumnsPanel);
 
+        Controls.Add(_toastPanel);
         Controls.Add(_boardScrollPanel);
         Controls.Add(BuildFilterBar());
         Controls.Add(BuildTopBar());
 
         Load += async (_, _) => await LoadBoardAsync();
-        Resize += (_, _) => UpdateColumnHeights();
+        Resize += (_, _) =>
+        {
+            UpdateColumnHeights();
+            PositionToast();
+        };
+    }
+
+    public Task RefreshBoardAsync() => LoadBoardAsync();
+
+    public void SetShellSearch(string searchText)
+    {
+        var value = searchText ?? string.Empty;
+        if (string.Equals(_searchFilter.Text, value, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _searchFilter.Text = value;
+        ApplyFilters();
+    }
+
+    private void ConfigureToast()
+    {
+        _toastPanel.Visible = false;
+        _toastPanel.Size = new Size(300, 56);
+        _toastPanel.BackColor = JiraTheme.BgSurface;
+        _toastPanel.Padding = new Padding(14, 10, 14, 10);
+
+        _toastLabel.Dock = DockStyle.Fill;
+        _toastLabel.Font = JiraTheme.FontSmall;
+        _toastLabel.ForeColor = JiraTheme.TextPrimary;
+
+        _toastPanel.Controls.Add(_toastLabel);
+        _toastPanel.Paint += (_, e) =>
+        {
+            using var accentBrush = new SolidBrush(JiraTheme.Blue600);
+            using var borderPen = new Pen(JiraTheme.Border);
+            e.Graphics.FillRectangle(accentBrush, 0, 0, 4, _toastPanel.Height);
+            e.Graphics.DrawRectangle(borderPen, 0, 0, _toastPanel.Width - 1, _toastPanel.Height - 1);
+        };
+
+        _toastTimer.Tick += (_, _) => HideToast();
     }
 
     private Control BuildTopBar()
@@ -170,20 +218,6 @@ public class BoardForm : UserControl
         Font = JiraTheme.FontBody,
         IntegralHeight = false
     };
-
-    public Task RefreshBoardAsync() => LoadBoardAsync();
-
-    public void SetShellSearch(string searchText)
-    {
-        var value = searchText ?? string.Empty;
-        if (string.Equals(_searchFilter.Text, value, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        _searchFilter.Text = value;
-        ApplyFilters();
-    }
 
     private async Task LoadBoardAsync()
     {
@@ -295,28 +329,32 @@ public class BoardForm : UserControl
 
     private void ApplyFilters()
     {
+        RenderColumns(_loadedColumns.Select(GetFilteredColumn).ToList());
+    }
+
+    private BoardColumnDto GetFilteredColumn(BoardColumnDto column)
+    {
         var assignee = _assigneeFilter.SelectedItem as string;
         var priority = _priorityFilter.SelectedItem as string;
         var type = _typeFilter.SelectedItem as string;
         var search = _searchFilter.Text.Trim();
 
-        var filtered = _loadedColumns
-            .Select(column => new BoardColumnDto(
-                column.Status,
-                column.Name,
-                column.Issues
-                    .Where(issue =>
-                        (string.IsNullOrWhiteSpace(assignee) || assignee.StartsWith("All ") || issue.AssigneeNames.Contains(assignee)) &&
-                        (string.IsNullOrWhiteSpace(priority) || priority.StartsWith("All ") || string.Equals(issue.Priority.ToString(), priority, StringComparison.OrdinalIgnoreCase)) &&
-                        (string.IsNullOrWhiteSpace(type) || type.StartsWith("All ") || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)) &&
-                        (string.IsNullOrWhiteSpace(search) ||
-                         issue.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                         issue.IssueKey.Contains(search, StringComparison.OrdinalIgnoreCase)))
-                    .OrderBy(issue => issue.BoardPosition)
-                    .ToList()))
+        var issues = column.Issues
+            .Where(issue => IssueMatchesFilters(issue, assignee, priority, type, search))
+            .OrderBy(issue => issue.BoardPosition)
             .ToList();
 
-        RenderColumns(filtered);
+        return column with { Issues = issues };
+    }
+
+    private static bool IssueMatchesFilters(IssueSummaryDto issue, string? assignee, string? priority, string? type, string search)
+    {
+        return (string.IsNullOrWhiteSpace(assignee) || assignee.StartsWith("All ") || issue.AssigneeNames.Contains(assignee)) &&
+               (string.IsNullOrWhiteSpace(priority) || priority.StartsWith("All ") || string.Equals(issue.Priority.ToString(), priority, StringComparison.OrdinalIgnoreCase)) &&
+               (string.IsNullOrWhiteSpace(type) || type.StartsWith("All ") || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)) &&
+               (string.IsNullOrWhiteSpace(search) ||
+                issue.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                issue.IssueKey.Contains(search, StringComparison.OrdinalIgnoreCase));
     }
 
     private void ClearFilters()
@@ -343,45 +381,75 @@ public class BoardForm : UserControl
     private void RenderColumns(IReadOnlyList<BoardColumnDto> columns)
     {
         _boardColumnsPanel.SuspendLayout();
-        _boardColumnsPanel.Controls.Clear();
         var totalWidth = 0;
 
         foreach (var column in columns)
         {
-            var control = new BoardColumnControl(column)
-            {
-                Margin = new Padding(0, 0, 16, 0),
-                Height = Math.Max(200, _boardScrollPanel.ClientSize.Height - 8),
-            };
-            control.IssueSelected += async (_, issueId) => await OpenIssueDetailsAsync(issueId);
-            control.CreateIssueRequested += async (_, status) => await CreateIssueAsync(status);
-            control.IssueMoveRequested += async (_, args) => await MoveIssueAsync(args);
-            _boardColumnsPanel.Controls.Add(control);
+            var control = GetOrCreateColumnControl(column.Status, column);
+            control.Bind(column);
             totalWidth += control.Width + control.Margin.Horizontal;
         }
 
         _boardColumnsPanel.ResumeLayout();
+        UpdateBoardScrollMetrics(totalWidth);
+    }
+
+    private BoardColumnControl GetOrCreateColumnControl(IssueStatus status, BoardColumnDto column)
+    {
+        if (_columnControls.TryGetValue(status, out var existing))
+        {
+            return existing;
+        }
+
+        var control = new BoardColumnControl(column)
+        {
+            Margin = new Padding(0, 0, 16, 0),
+            Height = Math.Max(200, _boardScrollPanel.ClientSize.Height - 8),
+        };
+        control.IssueSelected += async (_, issueId) => await OpenIssueDetailsAsync(issueId);
+        control.CreateIssueRequested += async (_, issueStatus) => await CreateIssueAsync(issueStatus);
+        control.IssueMoveRequested += async (_, args) => await MoveIssueAsync(args);
+        _columnControls[status] = control;
+        _boardColumnsPanel.Controls.Add(control);
+        return control;
+    }
+
+    private void RenderMovedColumns(IReadOnlyCollection<IssueStatus> statuses, int issueId, IssueStatus targetStatus)
+    {
+        foreach (var status in statuses.Distinct())
+        {
+            var column = _loadedColumns.FirstOrDefault(x => x.Status == status);
+            if (column is null)
+            {
+                continue;
+            }
+
+            var filteredColumn = GetFilteredColumn(column);
+            var control = GetOrCreateColumnControl(status, filteredColumn);
+            control.Bind(filteredColumn, status == targetStatus ? issueId : null);
+        }
+    }
+
+    private void UpdateBoardScrollMetrics(int totalWidth)
+    {
         _boardScrollPanel.AutoScrollMinSize = new Size(Math.Max(_boardScrollPanel.ClientSize.Width, totalWidth + 16), _boardScrollPanel.ClientSize.Height - 8);
     }
 
     private void UpdateColumnHeights()
     {
-        foreach (Control control in _boardColumnsPanel.Controls)
+        foreach (var control in _columnControls.Values)
         {
             control.Height = Math.Max(200, _boardScrollPanel.ClientSize.Height - 8);
         }
+
+        UpdateBoardScrollMetrics(_columnControls.Values.Sum(control => control.Width + control.Margin.Horizontal));
     }
 
     private async Task StartSprintAsync()
     {
         try
         {
-            if (_projectId == 0)
-            {
-                return;
-            }
-
-            if (_activeSprint is not null)
+            if (_projectId == 0 || _activeSprint is not null)
             {
                 return;
             }
@@ -443,25 +511,131 @@ public class BoardForm : UserControl
     {
         try
         {
-            var currentUserId = _session.CurrentUserContext.CurrentUser?.Id ?? 1;
+            if (args.SourceStatus == args.TargetStatus)
+            {
+                return;
+            }
+
+            var currentUserId = _session.CurrentUserContext.RequireUserId();
             var targetColumn = _loadedColumns.FirstOrDefault(x => x.Status == args.TargetStatus);
             var boardPosition = targetColumn?.Issues.OrderBy(x => x.BoardPosition).FirstOrDefault() is { } first
                 ? first.BoardPosition - 1m
                 : 1m;
 
-            if (await _session.Issues.MoveAsync(args.IssueId, args.TargetStatus, boardPosition, currentUserId))
+            var moved = await _session.RunSerializedAsync(async () =>
             {
-                await LoadBoardAsync();
+                await using var dbContext = _session.CreateDbContext();
+                return await _session.CreateIssueService(dbContext).UpdateStatusAsync(args.IssueId, args.TargetStatus, boardPosition, currentUserId);
+            });
+
+            if (!moved)
+            {
+                return;
             }
+
+            ApplyIssueMoveLocally(args.IssueId, args.SourceStatus, args.TargetStatus, boardPosition);
+            ShowMoveToast(args.TargetStatus);
         }
         catch (Exception exception)
         {
             ErrorDialogService.Show(exception);
         }
     }
+
+    private void ApplyIssueMoveLocally(int issueId, IssueStatus sourceStatus, IssueStatus targetStatus, decimal boardPosition)
+    {
+        if (sourceStatus == targetStatus)
+        {
+            return;
+        }
+
+        var sourceColumn = _loadedColumns.FirstOrDefault(x => x.Status == sourceStatus);
+        if (sourceColumn is null)
+        {
+            return;
+        }
+
+        var issue = sourceColumn.Issues.FirstOrDefault(x => x.Id == issueId);
+        if (issue is null)
+        {
+            return;
+        }
+
+        var updatedIssue = issue with
+        {
+            Status = targetStatus,
+            BoardPosition = boardPosition,
+        };
+
+        _loadedColumns = _loadedColumns
+            .Select(column =>
+            {
+                if (column.Status == sourceStatus)
+                {
+                    return column with
+                    {
+                        Issues = column.Issues
+                            .Where(x => x.Id != issueId)
+                            .OrderBy(x => x.BoardPosition)
+                            .ToList()
+                    };
+                }
+
+                if (column.Status == targetStatus)
+                {
+                    return column with
+                    {
+                        Issues = column.Issues
+                            .Where(x => x.Id != issueId)
+                            .Append(updatedIssue)
+                            .OrderBy(x => x.BoardPosition)
+                            .ToList()
+                    };
+                }
+
+                return column;
+            })
+            .ToList();
+
+        RenderMovedColumns(new[] { sourceStatus, targetStatus }, issueId, targetStatus);
+    }
+
+    private void ShowMoveToast(IssueStatus status)
+    {
+        _toastLabel.Text = $"Issue moved to {FormatStatus(status)}";
+        PositionToast();
+        _toastPanel.Visible = true;
+        _toastPanel.BringToFront();
+        _toastTimer.Stop();
+        _toastTimer.Start();
+    }
+
+    private void HideToast()
+    {
+        _toastTimer.Stop();
+        _toastPanel.Visible = false;
+    }
+
+    private void PositionToast()
+    {
+        _toastPanel.Location = new Point(
+            Math.Max(16, Width - _toastPanel.Width - 24),
+            80 + 72 + 12);
+    }
+
+    private static string FormatStatus(IssueStatus status) => status switch
+    {
+        IssueStatus.InProgress => "In Progress",
+        _ => status.ToString()
+    };
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _toastTimer.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
 }
-
-
-
-
-

@@ -21,5 +21,7 @@ public class IssueConfiguration : IEntityTypeConfiguration<Issue>
         builder.Property(x => x.RowVersion).IsRowVersion();
         builder.HasOne(x => x.Reporter).WithMany().HasForeignKey(x => x.ReporterId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.ParentIssue).WithMany(x => x.SubIssues).HasForeignKey(x => x.ParentIssueId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => x.ParentIssueId);
     }
 }

@@ -31,6 +31,8 @@ public class IssueEditorForm : Form
         IntegralHeight = false,
     };
     private readonly SprintSelectorControl _sprintSelector = new() { Dock = DockStyle.Fill, MinimumSize = new Size(0, 38) };
+    private readonly ComboBox _parentComboBox = CreateCombo();
+    private readonly Panel _parentRow;
     private readonly Button _saveButton = JiraControlFactory.CreatePrimaryButton("Save issue");
     private readonly Button _cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
 
@@ -71,6 +73,12 @@ public class IssueEditorForm : Form
             DialogResult = DialogResult.Cancel;
             Close();
         };
+
+        _parentComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+        _parentRow = WrapControl(_parentComboBox, 44);
+        _parentRow.Visible = false;
+
+        _typeComboBox.SelectedIndexChanged += async (_, _) => await RefreshParentListAsync();
 
         Controls.Add(BuildLayout());
         Shown += async (_, _) => await LoadDataAsync();
@@ -123,7 +131,8 @@ public class IssueEditorForm : Form
         AddRow(formLayout, 4, "Priority", WrapControl(_priorityComboBox, 44));
         AddRow(formLayout, 5, "Reporter", WrapControl(_reporterComboBox, 44));
         AddRow(formLayout, 6, "Sprint", WrapControl(_sprintSelector, 44));
-        AddRow(formLayout, 7, "Assignees", WrapControl(_assigneesList, 148));
+        AddRow(formLayout, 7, "Parent", _parentRow);
+        AddRow(formLayout, 8, "Assignees", WrapControl(_assigneesList, 148));
 
         host.Controls.Add(formLayout);
         host.Controls.Add(footer);
@@ -229,6 +238,13 @@ public class IssueEditorForm : Form
 
                 _assigneesList.SetItemChecked(index, details.Issue.Assignees.Any(a => a.UserId == user.Id));
             }
+
+            // Load parent info after type is set
+            await RefreshParentListAsync();
+            if (details.Issue.ParentIssueId.HasValue)
+            {
+                _parentComboBox.SelectedValue = details.Issue.ParentIssueId.Value;
+            }
         }
         catch (Exception exception)
         {
@@ -241,7 +257,7 @@ public class IssueEditorForm : Form
     {
         try
         {
-            var currentUserId = _session.CurrentUserContext.CurrentUser?.Id ?? 1;
+            var currentUserId = _session.CurrentUserContext.RequireUserId();
             var model = new IssueEditModel
             {
                 Id = _issueId,
@@ -254,6 +270,7 @@ public class IssueEditorForm : Form
                 ReporterId = _reporterComboBox.SelectedValue is int reporterId ? reporterId : 1,
                 CreatedById = currentUserId,
                 SprintId = _sprintSelector.SelectedValue is int sprintId ? sprintId : null,
+                ParentIssueId = _parentComboBox.Visible && _parentComboBox.SelectedValue is int parentId ? parentId : null,
                 AssigneeIds = _assigneesList.CheckedItems.Cast<User>().Select(x => x.Id).ToArray()
             };
 
@@ -274,4 +291,49 @@ public class IssueEditorForm : Form
             ErrorDialogService.Show(exception);
         }
     }
+
+    private async Task RefreshParentListAsync()
+    {
+        try
+        {
+            if (_typeComboBox.SelectedItem is not IssueType selectedType)
+            {
+                _parentRow.Visible = false;
+                return;
+            }
+
+            if (selectedType == IssueType.Epic)
+            {
+                _parentRow.Visible = false;
+                _parentComboBox.DataSource = null;
+                return;
+            }
+
+            var potentialParents = await _session.Issues.GetPotentialParentsAsync(_projectId, selectedType);
+            if (potentialParents.Count == 0 && selectedType != IssueType.Subtask)
+            {
+                _parentRow.Visible = false;
+                _parentComboBox.DataSource = null;
+                return;
+            }
+
+            var items = potentialParents.Select(p => new { p.Id, Display = $"{p.IssueKey} — {p.Title}" }).ToList();
+
+            if (selectedType != IssueType.Subtask)
+            {
+                items.Insert(0, new { Id = 0, Display = "(None)" });
+            }
+
+            _parentComboBox.DataSource = items;
+            _parentComboBox.DisplayMember = "Display";
+            _parentComboBox.ValueMember = "Id";
+            _parentRow.Visible = true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to load parent list: {ex.Message}");
+            _parentRow.Visible = false;
+        }
+    }
 }
+

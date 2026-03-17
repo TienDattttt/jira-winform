@@ -11,4 +11,5 @@ public sealed record IssueSummaryDto(
     IssueStatus Status,
     decimal BoardPosition,
     string ReporterName,
-    IReadOnlyList<string> AssigneeNames);
+    IReadOnlyList<string> AssigneeNames,
+    string? ParentIssueKey = null);

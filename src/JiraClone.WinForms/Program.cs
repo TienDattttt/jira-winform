@@ -2,6 +2,7 @@ using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Forms;
 using JiraClone.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace JiraClone.WinForms;
@@ -13,18 +14,30 @@ internal static class Program
     {
         ApplicationConfiguration.Initialize();
 
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+            .AddEnvironmentVariables("JIRACLONE_")
+            .Build();
+
         var connectionString =
-            Environment.GetEnvironmentVariable("JIRACLONE_CONNECTION_STRING") ??
+            configuration.GetConnectionString("JiraClone") ??
             "Server=(localdb)\\MSSQLLocalDB;Database=JiraCloneWinForms;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True";
         var attachmentRootPath =
-            Environment.GetEnvironmentVariable("JIRACLONE_ATTACHMENTS_PATH") ??
-            Path.Combine(AppContext.BaseDirectory, "attachments");
+            configuration["Attachments:RootPath"] is { Length: > 0 } configPath
+                ? configPath
+                : Path.Combine(AppContext.BaseDirectory, "attachments");
 
         try
         {
             var services = new ServiceCollection();
             services.AddDbContextFactory<JiraCloneDbContext>(options =>
-                options.UseSqlServer(connectionString).EnableSensitiveDataLogging());
+            {
+                options.UseSqlServer(connectionString);
+#if DEBUG
+                options.EnableSensitiveDataLogging();
+#endif
+            });
 
             using var serviceProvider = services.BuildServiceProvider();
             using var session = new AppSession(
@@ -43,3 +56,4 @@ internal static class Program
         }
     }
 }
+

@@ -7,4 +7,5 @@ public sealed record IssueDetailsDto(
     Issue Issue,
     IReadOnlyList<Comment> Comments,
     IReadOnlyList<Attachment> Attachments,
-    IReadOnlyList<ActivityLogEntity> ActivityLogs);
+    IReadOnlyList<ActivityLogEntity> ActivityLogs,
+    IReadOnlyList<Issue> SubIssues);

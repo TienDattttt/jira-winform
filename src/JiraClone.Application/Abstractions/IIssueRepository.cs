@@ -13,4 +13,7 @@ public interface IIssueRepository
     Task<decimal> GetNextBoardPositionAsync(int projectId, IssueStatus status, CancellationToken cancellationToken = default);
     Task AddAsync(Issue issue, CancellationToken cancellationToken = default);
     Task RemoveAsync(Issue issue, CancellationToken cancellationToken = default);
+    Task<int> GetNextIssueSequenceAsync(int projectId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Issue>> GetSubIssuesAsync(int parentIssueId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Issue>> GetPotentialParentsAsync(int projectId, IssueType childType, CancellationToken cancellationToken = default);
 }

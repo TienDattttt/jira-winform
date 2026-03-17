@@ -42,6 +42,9 @@ public class Issue : AggregateRoot
     public decimal BoardPosition { get; set; } = 1;
     public bool IsDeleted { get; set; }
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    public int? ParentIssueId { get; set; }
+    public Issue? ParentIssue { get; set; }
+    public ICollection<Issue> SubIssues { get; set; } = new List<Issue>();
     public ICollection<IssueAssignee> Assignees { get; set; } = new List<IssueAssignee>();
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();

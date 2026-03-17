@@ -65,8 +65,18 @@ public class IssueService
             TimeSpentHours = model.TimeSpentHours,
             TimeRemainingHours = model.TimeRemainingHours,
             StoryPoints = model.StoryPoints,
-            SprintId = model.SprintId
+            SprintId = model.SprintId,
+            ParentIssueId = model.ParentIssueId
         };
+
+        if (model.ParentIssueId.HasValue)
+        {
+            var parent = await _issues.GetByIdAsync(model.ParentIssueId.Value, cancellationToken);
+            if (parent is null)
+                throw new ValidationException($"Parent issue with id {model.ParentIssueId.Value} was not found.");
+            if (parent.Type == IssueType.Subtask)
+                throw new ValidationException("A subtask cannot be a parent of another issue.");
+        }
 
         issue.MoveTo(model.Status, await _issues.GetNextBoardPositionAsync(model.ProjectId, model.Status, cancellationToken));
         issue.Assignees = await BuildAssigneesAsync(model.AssigneeIds, issue, cancellationToken);
@@ -112,6 +122,7 @@ public class IssueService
         issue.TimeRemainingHours = model.TimeRemainingHours;
         issue.StoryPoints = model.StoryPoints;
         issue.SprintId = model.SprintId;
+        issue.ParentIssueId = model.ParentIssueId;
         issue.Assignees.Clear();
         issue.Assignees = await BuildAssigneesAsync(model.AssigneeIds, issue, cancellationToken);
 
@@ -139,7 +150,10 @@ public class IssueService
         return issue;
     }
 
-    public async Task<bool> MoveAsync(int issueId, IssueStatus targetStatus, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
+    public Task<bool> MoveAsync(int issueId, IssueStatus targetStatus, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
+        => UpdateStatusAsync(issueId, targetStatus, boardPosition, userId, cancellationToken);
+
+    public async Task<bool> UpdateStatusAsync(int issueId, IssueStatus targetStatus, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
     {
         _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
         var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
@@ -176,7 +190,8 @@ public class IssueService
         var comments = await _comments.GetByIssueIdAsync(issueId, cancellationToken);
         var activity = await _activityLogs.GetIssueActivityAsync(issueId, cancellationToken);
         var attachments = await _attachments.GetByIssueIdAsync(issueId, cancellationToken);
-        return new IssueDetailsDto(issue, comments, attachments, activity);
+        var subIssues = await _issues.GetSubIssuesAsync(issueId, cancellationToken);
+        return new IssueDetailsDto(issue, comments, attachments, activity, subIssues);
     }
 
     public async Task<bool> DeleteAsync(int issueId, int? userId = null, CancellationToken cancellationToken = default)
@@ -213,32 +228,23 @@ public class IssueService
         {
             throw new ValidationException("Story points cannot be negative.");
         }
+
+        if (model.Type == IssueType.Subtask && !model.ParentIssueId.HasValue)
+        {
+            throw new ValidationException("Subtask must have a parent issue.");
+        }
+
+        if (model.Type == IssueType.Epic && model.ParentIssueId.HasValue)
+        {
+            throw new ValidationException("Epic cannot have a parent issue.");
+        }
     }
 
     private async Task<string> GenerateIssueKeyAsync(Project project, CancellationToken cancellationToken)
     {
         var prefix = $"{project.Key.Trim().ToUpperInvariant()}-";
-        var projectIssues = await _issues.GetProjectIssuesAsync(project.Id, cancellationToken);
-        var maxSequence = projectIssues
-            .Select(x => TryParseIssueSequence(x.IssueKey, prefix))
-            .Where(x => x.HasValue)
-            .Select(x => x!.Value)
-            .DefaultIfEmpty(0)
-            .Max();
-
-        return $"{prefix}{maxSequence + 1}";
-    }
-
-    private static int? TryParseIssueSequence(string issueKey, string prefix)
-    {
-        if (!issueKey.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        return int.TryParse(issueKey[prefix.Length..], out var sequence)
-            ? sequence
-            : null;
+        var nextSequence = await _issues.GetNextIssueSequenceAsync(project.Id, cancellationToken);
+        return $"{prefix}{nextSequence}";
     }
 
     private async Task<ICollection<IssueAssignee>> BuildAssigneesAsync(IEnumerable<int> assigneeIds, Issue issue, CancellationToken cancellationToken)
@@ -264,3 +270,4 @@ public class IssueService
         return result;
     }
 }
+

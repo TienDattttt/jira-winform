@@ -1,6 +1,7 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.WinForms.Composition;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Theme;
 
 namespace JiraClone.WinForms.Forms;
@@ -44,13 +45,13 @@ public class LoginForm : Form
         _emailTextBox = JiraControlFactory.CreateTextBox();
         _emailTextBox.Height = 40;
         _emailTextBox.Dock = DockStyle.Fill;
-        _emailTextBox.Text = "admin";
+        _emailTextBox.Text = string.Empty;
 
         _passwordTextBox = JiraControlFactory.CreateTextBox();
         _passwordTextBox.Height = 40;
         _passwordTextBox.Dock = DockStyle.Fill;
         _passwordTextBox.UseSystemPasswordChar = true;
-        _passwordTextBox.Text = "admin123";
+        _passwordTextBox.Text = string.Empty;
 
         _showPasswordButton = new Button
         {
@@ -331,6 +332,8 @@ public class LoginForm : Form
 
     private sealed class LogoControl : Control
     {
+        private static readonly Font LogoFont = new("Segoe UI", 22f, FontStyle.Bold);
+
         public LogoControl()
         {
             SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
@@ -349,9 +352,8 @@ public class LoginForm : Form
             using var textBrush = new SolidBrush(Color.White);
             e.Graphics.FillEllipse(fill, ClientRectangle);
 
-            var font = new Font("Segoe UI", 22f, FontStyle.Bold);
             var textBounds = ClientRectangle;
-            TextRenderer.DrawText(e.Graphics, "J", font, textBounds, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(e.Graphics, "J", LogoFont, textBounds, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
     }
 
@@ -371,7 +373,7 @@ public class LoginForm : Form
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
             var shadowBounds = new Rectangle(12, 12, Width - 24, Height - 24);
-            using var shadowPath = CreateRoundedPath(shadowBounds, 16);
+            using var shadowPath = GraphicsHelper.CreateRoundedPath(shadowBounds, 16);
 
             using var shadowBrush = new SolidBrush(Color.FromArgb(30, 9, 30, 66));
             e.Graphics.FillPath(shadowBrush, shadowPath);
@@ -387,7 +389,7 @@ public class LoginForm : Form
             e.Graphics.SetClip(new Rectangle(0, 0, Width, Height));
             e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var path = CreateRoundedPath(cardBounds, 12);
+            using var path = GraphicsHelper.CreateRoundedPath(cardBounds, 12);
             using var brush = new SolidBrush(JiraTheme.BgSurface);
             using var border = new Pen(JiraTheme.Border);
 
@@ -395,19 +397,7 @@ public class LoginForm : Form
             e.Graphics.DrawPath(border, path);
         }
 
-        private static GraphicsPath CreateRoundedPath(Rectangle bounds, int radius)
-        {
-            var diameter = radius * 2;
-            var path = new GraphicsPath();
 
-            path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
-            path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
-            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
-            path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
-            path.CloseFigure();
-
-            return path;
-        }
     }
 }
 

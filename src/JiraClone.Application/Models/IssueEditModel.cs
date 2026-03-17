@@ -18,5 +18,6 @@ public sealed class IssueEditModel
     public int? TimeRemainingHours { get; set; }
     public int? StoryPoints { get; set; }
     public int? SprintId { get; set; }
+    public int? ParentIssueId { get; set; }
     public IReadOnlyCollection<int> AssigneeIds { get; set; } = Array.Empty<int>();
 }

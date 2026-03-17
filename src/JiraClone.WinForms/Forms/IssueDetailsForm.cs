@@ -6,6 +6,7 @@ using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
+using JiraClone.WinForms.Dialogs;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -48,6 +49,10 @@ public class IssueDetailsForm : Form
     private readonly AvatarValueControl _assignee = new() { Width = 220, Cursor = Cursors.Hand };
     private readonly AvatarValueControl _reporter = new() { Width = 220 };
     private readonly Button _delete = JiraControlFactory.CreateSecondaryButton("Delete");
+    private readonly LinkLabel _parentLink = new() { AutoSize = true, Font = JiraTheme.FontBody, LinkColor = JiraTheme.PrimaryActive, Visible = false };
+    private readonly Panel _parentSection = new() { Dock = DockStyle.Top, Height = 40, Visible = false, BackColor = JiraTheme.BgSurface };
+    private readonly FlowLayoutPanel _childIssuesPanel = new() { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Visible = false, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 4, 0, 4) };
+    private readonly Panel _childSection = new() { Dock = DockStyle.Top, AutoSize = true, Visible = false, BackColor = JiraTheme.BgSurface };
     private IssueDetailsDto? _details;
     private IReadOnlyList<User> _users = Array.Empty<User>();
     private HashSet<int> _selectedAssigneeIds = [];
@@ -201,11 +206,13 @@ public class IssueDetailsForm : Form
                 _split.SplitterDistance = safeDistance;
             }
         }
-        catch (ArgumentOutOfRangeException)
+        catch (ArgumentOutOfRangeException ex)
         {
+            System.Diagnostics.Debug.WriteLine($"SplitLayout range error: {ex.Message}");
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
+            System.Diagnostics.Debug.WriteLine($"SplitLayout operation error: {ex.Message}");
         }
     }
 
@@ -317,8 +324,24 @@ public class IssueDetailsForm : Form
         timeBlock.Controls.Add(_logTime);
         timeBlock.Controls.Add(_time);
 
+        // Parent section
+        _parentLink.Dock = DockStyle.Fill;
+        _parentSection.Controls.Add(_parentLink);
+        var parentLabel = TopLabel("Parent");
+
+        // Child issues section
+        _childSection.Controls.Add(_childIssuesPanel);
+        var childLabel = TopLabel("Child Issues");
+        childLabel.Tag = "childLabel";
+
+        panel.Controls.Add(_childSection);
+        panel.Controls.Add(childLabel);
+        panel.Controls.Add(JiraControlFactory.CreateSeparator());
         panel.Controls.Add(timeBlock);
         panel.Controls.Add(TopLabel("Time Tracking"));
+        panel.Controls.Add(JiraControlFactory.CreateSeparator());
+        panel.Controls.Add(_parentSection);
+        panel.Controls.Add(parentLabel);
         panel.Controls.Add(JiraControlFactory.CreateSeparator());
         panel.Controls.Add(detailsBlock);
         panel.Controls.Add(detailsLabel);
@@ -390,6 +413,45 @@ public class IssueDetailsForm : Form
         _time.LoggedHours = issue.TimeSpentHours ?? 0;
         _time.RemainingHours = issue.TimeRemainingHours ?? Math.Max(0, _time.EstimatedHours - _time.LoggedHours);
         _time.Invalidate();
+
+        // Parent link
+        if (issue.ParentIssue is not null)
+        {
+            _parentLink.Text = $"{issue.ParentIssue.IssueKey} — {issue.ParentIssue.Title}";
+            _parentLink.Links.Clear();
+            _parentLink.Links.Add(0, issue.ParentIssue.IssueKey.Length, issue.ParentIssue.Id);
+            _parentSection.Visible = true;
+        }
+        else
+        {
+            _parentSection.Visible = false;
+        }
+
+        // Child issues
+        _childIssuesPanel.Controls.Clear();
+        if (details.SubIssues.Count > 0)
+        {
+            foreach (var child in details.SubIssues)
+            {
+                var row = new Label
+                {
+                    Text = $"  {child.IssueKey}  {child.Title}  [{child.Status}]",
+                    Font = JiraTheme.FontCaption,
+                    ForeColor = JiraTheme.TextPrimary,
+                    AutoSize = true,
+                    Padding = new Padding(0, 2, 0, 2),
+                    Cursor = Cursors.Hand
+                };
+                var childId = child.Id;
+                row.Click += (_, _) => { using var f = new IssueDetailsForm(_session, childId, _projectId); f.ShowDialog(this); };
+                _childIssuesPanel.Controls.Add(row);
+            }
+            _childSection.Visible = true;
+        }
+        else
+        {
+            _childSection.Visible = false;
+        }
     }
 
     private static Label CreateMetaBadge()
@@ -487,7 +549,7 @@ public class IssueDetailsForm : Form
         if (_loading || _details is null) return;
         try
         {
-            var currentUserId = _session.CurrentUserContext.CurrentUser?.Id ?? _details.Issue.CreatedById;
+            var currentUserId = _session.CurrentUserContext.RequireUserId();
             var model = new IssueEditModel
             {
                 Id = _details.Issue.Id,
@@ -551,7 +613,7 @@ public class IssueDetailsForm : Form
         if (string.IsNullOrWhiteSpace(body)) return;
         try
         {
-            await _session.Comments.AddAsync(_issueId, _session.CurrentUserContext.CurrentUser?.Id ?? 1, _projectId, body);
+            await _session.Comments.AddAsync(_issueId, _session.CurrentUserContext.RequireUserId(), _projectId, body);
             _commentInput.Clear();
             await LoadDetailsAsync(false);
             DialogResult = DialogResult.OK;
@@ -561,11 +623,11 @@ public class IssueDetailsForm : Form
 
     private async Task EditCommentAsync(Comment comment)
     {
-        var body = Microsoft.VisualBasic.Interaction.InputBox("Edit comment", "Edit Comment", comment.Body);
-        if (string.IsNullOrWhiteSpace(body)) return;
+        using var editDialog = new CommentEditDialog("Edit Comment", comment.Body);
+        if (editDialog.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(editDialog.Body)) return;
         try
         {
-            await _session.Comments.UpdateAsync(comment.Id, _session.CurrentUserContext.CurrentUser?.Id ?? 1, body);
+            await _session.Comments.UpdateAsync(comment.Id, _session.CurrentUserContext.RequireUserId(), editDialog.Body);
             await LoadDetailsAsync(false);
             DialogResult = DialogResult.OK;
         }
@@ -577,7 +639,7 @@ public class IssueDetailsForm : Form
         if (MessageBox.Show(this, "Delete this comment?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         try
         {
-            await _session.Comments.SoftDeleteAsync(comment.Id, _session.CurrentUserContext.CurrentUser?.Id ?? 1);
+            await _session.Comments.SoftDeleteAsync(comment.Id, _session.CurrentUserContext.RequireUserId());
             await LoadDetailsAsync(false);
             DialogResult = DialogResult.OK;
         }
@@ -588,7 +650,7 @@ public class IssueDetailsForm : Form
     {
         try
         {
-            await _session.Attachments.AddAsync(_issueId, _projectId, _session.CurrentUserContext.CurrentUser?.Id ?? 1, path);
+            await _session.Attachments.AddAsync(_issueId, _projectId, _session.CurrentUserContext.RequireUserId(), path);
             await LoadDetailsAsync(false);
             DialogResult = DialogResult.OK;
         }
@@ -616,7 +678,7 @@ public class IssueDetailsForm : Form
         if (MessageBox.Show(this, $"Delete attachment '{attachment.OriginalFileName}'?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         try
         {
-            await _session.Attachments.SoftDeleteAsync(attachment.Id, _session.CurrentUserContext.CurrentUser?.Id ?? 1, _projectId);
+            await _session.Attachments.SoftDeleteAsync(attachment.Id, _session.CurrentUserContext.RequireUserId(), _projectId);
             await LoadDetailsAsync(false);
             DialogResult = DialogResult.OK;
         }
@@ -635,7 +697,7 @@ public class IssueDetailsForm : Form
             await SaveIssueAsync();
             if (!string.IsNullOrWhiteSpace(dialog.Comment))
             {
-                await _session.Comments.AddAsync(_issueId, _session.CurrentUserContext.CurrentUser?.Id ?? 1, _projectId, $"Logged {dialog.Hours}h: {dialog.Comment.Trim()}");
+                await _session.Comments.AddAsync(_issueId, _session.CurrentUserContext.RequireUserId(), _projectId, $"Logged {dialog.Hours}h: {dialog.Comment.Trim()}");
             }
             await LoadDetailsAsync(false);
         }

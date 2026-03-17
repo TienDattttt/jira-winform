@@ -45,6 +45,33 @@ public static class JiraIcons
                     graphics.DrawLine(pen, size / 2 - 1, size - 5, size - 3, 4);
                 }
                 break;
+            case IssueType.Epic:
+                using (var brush = new SolidBrush(Color.FromArgb(0x87, 0x77, 0xD9)))
+                {
+                    // Lightning bolt shape
+                    var points = new[]
+                    {
+                        new PointF(size * 0.55f, 0),
+                        new PointF(size * 0.25f, size * 0.5f),
+                        new PointF(size * 0.5f, size * 0.5f),
+                        new PointF(size * 0.4f, size),
+                        new PointF(size * 0.75f, size * 0.4f),
+                        new PointF(size * 0.5f, size * 0.4f)
+                    };
+                    graphics.FillPolygon(brush, points);
+                }
+                break;
+            case IssueType.Subtask:
+                using (var pen = new Pen(Color.FromArgb(0x4B, 0xAD, 0xE8), 1.8f))
+                {
+                    // Outer square
+                    graphics.DrawRectangle(pen, 1, 1, size - 4, size - 4);
+                    // Inner nested square
+                    var inset = size / 4;
+                    using var innerBrush = new SolidBrush(Color.FromArgb(0x4B, 0xAD, 0xE8));
+                    graphics.FillRectangle(innerBrush, inset + 1, inset + 1, size - inset * 2 - 2, size - inset * 2 - 2);
+                }
+                break;
             default:
                 using (var pen = new Pen(Color.FromArgb(0xC9, 0x7C, 0xF4), 2f))
                 {

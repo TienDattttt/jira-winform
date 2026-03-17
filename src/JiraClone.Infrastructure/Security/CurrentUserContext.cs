@@ -10,4 +10,7 @@ public class CurrentUserContext : ICurrentUserContext
     public void Set(User user) => CurrentUser = user;
 
     public void Clear() => CurrentUser = null;
+
+    public int RequireUserId() =>
+        CurrentUser?.Id ?? throw new InvalidOperationException("No user is currently logged in. Please log in again.");
 }

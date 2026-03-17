@@ -24,7 +24,7 @@ public class IssueServiceTests
         var activityLogRepository = new Mock<IActivityLogRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
         issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Selected, default)).ReturnsAsync(1m);
-        issueRepository.Setup(x => x.GetProjectIssuesAsync(1, default)).ReturnsAsync(Array.Empty<Issue>());
+        issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(1);
         issueRepository.Setup(x => x.AddAsync(It.IsAny<Issue>(), default)).Callback<Issue, CancellationToken>((issue, _) => issue.Id = 42).Returns(Task.CompletedTask);
         projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
         var service = CreateService(issueRepository, userRepository, projectRepository, commentRepository, attachmentRepository, authorization, activityLogRepository, unitOfWork);
@@ -47,11 +47,7 @@ public class IssueServiceTests
         var issueRepository = new Mock<IIssueRepository>();
         var projectRepository = new Mock<IProjectRepository>();
         issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Backlog, default)).ReturnsAsync(1m);
-        issueRepository.Setup(x => x.GetProjectIssuesAsync(1, default)).ReturnsAsync(
-        [
-            new Issue { Id = 1, ProjectId = 1, IssueKey = "PROJ-1", Title = "One", ReporterId = 3, CreatedById = 9 },
-            new Issue { Id = 2, ProjectId = 1, IssueKey = "PROJ-7", Title = "Seven", ReporterId = 3, CreatedById = 9 }
-        ]);
+        issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(8);
         projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
         var service = CreateService(issueRepository: issueRepository, projectRepository: projectRepository);
 
@@ -168,7 +164,7 @@ public class IssueServiceTests
         if (issueRepository is null)
         {
             issueRepository = new Mock<IIssueRepository>();
-            issueRepository.Setup(x => x.GetProjectIssuesAsync(1, default)).ReturnsAsync(Array.Empty<Issue>());
+            issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(1);
             issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, It.IsAny<IssueStatus>(), default)).ReturnsAsync(1m);
         }
 
@@ -183,19 +179,69 @@ public class IssueServiceTests
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
     }
 
-    private static IssueEditModel CreateModel(int? id = null, string title = "Issue title", IssueStatus status = IssueStatus.Backlog)
+    private static IssueEditModel CreateModel(int? id = null, string title = "Issue title", IssueStatus status = IssueStatus.Backlog, IssueType type = IssueType.Task, int? parentIssueId = null)
     {
         return new IssueEditModel
         {
             Id = id,
             ProjectId = 1,
             Title = title,
-            Type = IssueType.Task,
+            Type = type,
             Status = status,
             Priority = IssuePriority.Medium,
             ReporterId = 3,
             CreatedById = 9,
+            ParentIssueId = parentIssueId,
             AssigneeIds = Array.Empty<int>()
         };
+    }
+
+    [Fact]
+    public async Task CreateAsync_SubtaskWithoutParent_ThrowsValidationException()
+    {
+        var service = CreateService();
+        var model = CreateModel(type: IssueType.Subtask);
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync(model));
+    }
+
+    [Fact]
+    public async Task CreateAsync_EpicWithParent_ThrowsValidationException()
+    {
+        var service = CreateService();
+        var model = CreateModel(type: IssueType.Epic, parentIssueId: 10);
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync(model));
+    }
+
+    [Fact]
+    public async Task CreateAsync_SubtaskWithValidParent_SetsParentIssueId()
+    {
+        var issueRepository = new Mock<IIssueRepository>();
+        var parent = new Issue { Id = 10, ProjectId = 1, Title = "Parent", Type = IssueType.Task, ReporterId = 3, CreatedById = 9 };
+        issueRepository.Setup(x => x.GetByIdAsync(10, default)).ReturnsAsync(parent);
+        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Backlog, default)).ReturnsAsync(1m);
+        issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(1);
+        issueRepository.Setup(x => x.AddAsync(It.IsAny<Issue>(), default)).Returns(Task.CompletedTask);
+        var service = CreateService(issueRepository: issueRepository);
+        var model = CreateModel(type: IssueType.Subtask, parentIssueId: 10);
+
+        var result = await service.CreateAsync(model);
+
+        Assert.Equal(10, result.ParentIssueId);
+    }
+
+    [Fact]
+    public async Task CreateAsync_SubtaskOfSubtask_ThrowsValidationException()
+    {
+        var issueRepository = new Mock<IIssueRepository>();
+        var parent = new Issue { Id = 10, ProjectId = 1, Title = "Sub parent", Type = IssueType.Subtask, ReporterId = 3, CreatedById = 9 };
+        issueRepository.Setup(x => x.GetByIdAsync(10, default)).ReturnsAsync(parent);
+        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Backlog, default)).ReturnsAsync(1m);
+        issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(1);
+        var service = CreateService(issueRepository: issueRepository);
+        var model = CreateModel(type: IssueType.Subtask, parentIssueId: 10);
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync(model));
     }
 }
