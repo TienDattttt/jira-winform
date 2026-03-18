@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
@@ -32,11 +32,19 @@ public class MainForm : Form
     private readonly Button _logoutButton;
     private readonly Button _createIssueButton;
     private readonly Button _cancelButton;
+    private readonly Button _notificationButton;
+    private readonly Label _notificationBadge = new() { AutoSize = false, Size = new Size(18, 18), TextAlign = ContentAlignment.MiddleCenter, Font = JiraTheme.FontCaption, BackColor = JiraTheme.Danger, ForeColor = Color.White, Visible = false };
+    private readonly Panel _notificationDropdown = new() { Size = new Size(320, 420), Visible = false, BackColor = JiraTheme.BgSurface, Padding = new Padding(0) };
+    private readonly FlowLayoutPanel _notificationList = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = JiraTheme.BgSurface, Padding = new Padding(0) };
+    private readonly Label _notificationEmpty = JiraControlFactory.CreateLabel("No notifications yet.", true);
+    private readonly Button _markAllReadButton = JiraControlFactory.CreateSecondaryButton("Mark all as read");
 
     private string _projectName = "Project";
     private SidebarNavItem? _activeNavItem;
     private Control? _activeContent;
     private CancellationTokenSource? _uiOperationCts;
+    private System.Threading.Timer? _notificationTimer;
+    private int _notificationPollInFlight;
     private bool _isUiBusy;
 
     public MainForm(AppSession session, string displayName)
@@ -82,6 +90,14 @@ public class MainForm : Form
         _cancelButton.Visible = false;
         _cancelButton.Enabled = false;
         _cancelButton.Click += OnCancelButtonClick;
+        _notificationButton = JiraControlFactory.CreateSecondaryButton(string.Empty);
+        _notificationButton.AutoSize = false;
+        _notificationButton.Size = new Size(40, 38);
+        _notificationButton.Image = JiraIcons.GetBellIcon(JiraTheme.TextPrimary, 16);
+        _notificationButton.ImageAlign = ContentAlignment.MiddleCenter;
+        _notificationButton.Padding = new Padding(0);
+        _notificationButton.Click += OnNotificationButtonClick;
+        ConfigureNotificationDropdown();
 
         BuildLayout();
         WireNavigation();
@@ -101,6 +117,8 @@ public class MainForm : Form
             _logoutButton.Click -= OnLogoutButtonClick;
             _createIssueButton.Click -= OnCreateIssueButtonClick;
             _cancelButton.Click -= OnCancelButtonClick;
+            _notificationButton.Click -= OnNotificationButtonClick;
+            _notificationTimer?.Dispose();
             Shown -= OnMainFormShown;
             _projectsItem.Click -= OnProjectsItemClick;
             _dashboardItem.Click -= OnDashboardItemClick;
@@ -133,6 +151,9 @@ public class MainForm : Form
         root.Controls.Add(BuildSidebar(), 0, 0);
         root.Controls.Add(BuildMainArea(), 1, 0);
         Controls.Add(root);
+        Controls.Add(_notificationDropdown);
+        _notificationDropdown.BringToFront();
+        PositionNotificationDropdown();
     }
 
     private Control BuildSidebar()
@@ -241,18 +262,25 @@ public class MainForm : Form
             e.Graphics.DrawLine(pen, 0, navbar.Height - 1, navbar.Width, navbar.Height - 1);
         };
 
-        var rightPanel = new Panel { Dock = DockStyle.Right, Width = 680, BackColor = JiraTheme.BgSurface };
+        var rightPanel = new Panel { Dock = DockStyle.Right, Width = 740, BackColor = JiraTheme.BgSurface };
+        rightPanel.Controls.Add(_notificationBadge);
+        rightPanel.Controls.Add(_notificationButton);
         rightPanel.Controls.Add(_navbarAvatar);
         rightPanel.Controls.Add(_searchBox);
         rightPanel.Controls.Add(_createIssueButton);
         rightPanel.Controls.Add(_cancelButton);
-        rightPanel.Resize += (_, _) =>
+        void LayoutRightPanel()
         {
             _navbarAvatar.Location = new Point(rightPanel.Width - _navbarAvatar.Width, 1);
-            _searchBox.Location = new Point(rightPanel.Width - _navbarAvatar.Width - _searchBox.Width - 16, 0);
+            _notificationButton.Location = new Point(_navbarAvatar.Left - _notificationButton.Width - 12, 0);
+            _notificationBadge.Location = new Point(_notificationButton.Right - 10, -2);
+            _searchBox.Location = new Point(_notificationButton.Left - _searchBox.Width - 16, 0);
             _createIssueButton.Location = new Point(_searchBox.Left - _createIssueButton.Width - 12, 0);
             _cancelButton.Location = new Point(_createIssueButton.Left - _cancelButton.Width - 12, 0);
-        };
+        }
+
+        rightPanel.Resize += (_, _) => LayoutRightPanel();
+        LayoutRightPanel();
 
         var leftPanel = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
         leftPanel.Controls.Add(_breadcrumbLabel);
@@ -263,6 +291,272 @@ public class MainForm : Form
         return navbar;
     }
 
+    private void ConfigureNotificationDropdown()
+    {
+        _notificationDropdown.Visible = false;
+        _notificationDropdown.Padding = new Padding(0);
+        _notificationDropdown.BorderStyle = BorderStyle.FixedSingle;
+        _notificationDropdown.BackColor = JiraTheme.BgSurface;
+
+        var header = new Panel { Dock = DockStyle.Top, Height = 48, BackColor = JiraTheme.BgSurface, Padding = new Padding(12, 8, 12, 8) };
+        var title = JiraControlFactory.CreateLabel("Notifications");
+        title.Dock = DockStyle.Left;
+        title.Width = 140;
+        title.Font = JiraTheme.FontSmall;
+        _markAllReadButton.Dock = DockStyle.Right;
+        _markAllReadButton.AutoSize = false;
+        _markAllReadButton.Size = new Size(124, 30);
+        _markAllReadButton.Click += async (_, _) => await MarkAllNotificationsReadAsync();
+        header.Controls.Add(_markAllReadButton);
+        header.Controls.Add(title);
+
+        _notificationList.Padding = new Padding(0, 0, 0, 8);
+        _notificationEmpty.Dock = DockStyle.Fill;
+        _notificationEmpty.TextAlign = ContentAlignment.MiddleCenter;
+        _notificationEmpty.Visible = false;
+
+        _notificationDropdown.Controls.Add(_notificationEmpty);
+        _notificationDropdown.Controls.Add(_notificationList);
+        _notificationDropdown.Controls.Add(header);
+        _notificationDropdown.Paint += (_, e) =>
+        {
+            using var pen = new Pen(JiraTheme.Border);
+            e.Graphics.DrawRectangle(pen, 0, 0, _notificationDropdown.Width - 1, _notificationDropdown.Height - 1);
+        };
+    }
+
+    private void PositionNotificationDropdown()
+    {
+        if (!_notificationDropdown.IsHandleCreated && !IsHandleCreated)
+        {
+            return;
+        }
+
+        _notificationDropdown.Location = new Point(Math.Max(16, ClientSize.Width - _notificationDropdown.Width - 28), JiraTheme.NavbarHeight + 6);
+        _notificationDropdown.BringToFront();
+    }
+
+    private void StartNotificationWorker()
+    {
+        _notificationTimer ??= new System.Threading.Timer(_ => _ = PollNotificationsAsync(), null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
+    }
+
+    private async Task PollNotificationsAsync()
+    {
+        if (IsDisposed || _session.CurrentUserContext.CurrentUser is null)
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _notificationPollInFlight, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            var userId = _session.CurrentUserContext.RequireUserId();
+            var unreadCount = await _session.Notifications.GetUnreadCountAsync(userId);
+            var notifications = await _session.Notifications.GetRecentAsync(userId, 20);
+            if (!IsDisposed && IsHandleCreated)
+            {
+                BeginInvoke((MethodInvoker)(() => BindNotifications(notifications, unreadCount)));
+            }
+        }
+        catch
+        {
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _notificationPollInFlight, 0);
+        }
+    }
+
+    private void BindNotifications(IReadOnlyList<NotificationItemDto> notifications, int unreadCount)
+    {
+        _notificationBadge.Text = unreadCount > 99 ? "99+" : unreadCount.ToString();
+        _notificationBadge.Visible = unreadCount > 0;
+        _notificationList.SuspendLayout();
+        try
+        {
+            foreach (Control control in _notificationList.Controls)
+            {
+                control.Dispose();
+            }
+
+            _notificationList.Controls.Clear();
+            foreach (var notification in notifications)
+            {
+                _notificationList.Controls.Add(CreateNotificationRow(notification));
+            }
+        }
+        finally
+        {
+            _notificationList.ResumeLayout();
+        }
+
+        _notificationEmpty.Visible = notifications.Count == 0;
+        _notificationList.Visible = notifications.Count > 0;
+        _markAllReadButton.Enabled = unreadCount > 0;
+    }
+
+    private Control CreateNotificationRow(NotificationItemDto notification)
+    {
+        var row = new Panel
+        {
+            Width = _notificationDropdown.Width - 24,
+            Height = 68,
+            BackColor = notification.IsRead ? JiraTheme.BgSurface : JiraTheme.Blue100,
+            Margin = new Padding(8, 8, 8, 0),
+            Padding = new Padding(10, 10, 10, 10),
+            Cursor = Cursors.Hand
+        };
+        row.Paint += (_, e) =>
+        {
+            using var pen = new Pen(JiraTheme.Border);
+            e.Graphics.DrawRectangle(pen, 0, 0, row.Width - 1, row.Height - 1);
+        };
+
+        var icon = new InitialsAvatar(GetNotificationGlyph(notification.Type), 24) { BackCircleColor = GetNotificationColor(notification.Type) };
+        icon.Location = new Point(0, 12);
+
+        var title = JiraControlFactory.CreateLabel(notification.Title);
+        title.Location = new Point(36, 4);
+        title.Size = new Size(210, 20);
+        title.Font = JiraTheme.FontSmall;
+        title.ForeColor = JiraTheme.TextPrimary;
+
+        var time = JiraControlFactory.CreateLabel(FormatRelativeTime(notification.CreatedAtUtc), true);
+        time.Location = new Point(250, 4);
+        time.Size = new Size(48, 18);
+        time.Font = JiraTheme.FontCaption;
+        time.ForeColor = JiraTheme.TextSecondary;
+        time.TextAlign = ContentAlignment.TopRight;
+
+        var body = JiraControlFactory.CreateLabel(notification.Body, true);
+        body.Location = new Point(36, 26);
+        body.Size = new Size(252, 30);
+        body.Font = JiraTheme.FontCaption;
+        body.ForeColor = JiraTheme.TextSecondary;
+
+        async void OpenNotification(object? sender, EventArgs e)
+        {
+            await OpenNotificationAsync(notification);
+        }
+
+        row.Click += OpenNotification;
+        icon.Click += OpenNotification;
+        title.Click += OpenNotification;
+        time.Click += OpenNotification;
+        body.Click += OpenNotification;
+
+        row.Controls.Add(icon);
+        row.Controls.Add(title);
+        row.Controls.Add(time);
+        row.Controls.Add(body);
+        return row;
+    }
+
+    private async Task OpenNotificationAsync(NotificationItemDto notification)
+    {
+        try
+        {
+            var userId = _session.CurrentUserContext.RequireUserId();
+            await _session.Notifications.MarkReadAsync(notification.Id, userId);
+            if (notification.ProjectId.HasValue && _session.ActiveProject?.Id != notification.ProjectId.Value)
+            {
+                await _session.SetActiveProjectAsync(notification.ProjectId.Value);
+            }
+
+            _notificationDropdown.Visible = false;
+            await PollNotificationsAsync();
+
+            if (notification.IssueId.HasValue)
+            {
+                var projectId = notification.ProjectId ?? _session.ActiveProject?.Id ?? 0;
+                if (projectId > 0)
+                {
+                    using var dialog = new IssueDetailsForm(_session, notification.IssueId.Value, projectId);
+                    if (dialog.ShowDialog(this) == DialogResult.OK && _activeContent is not null)
+                    {
+                        await RefreshActiveContentAsync();
+                    }
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+
+    private async Task MarkAllNotificationsReadAsync()
+    {
+        try
+        {
+            var userId = _session.CurrentUserContext.RequireUserId();
+            await _session.Notifications.MarkAllReadAsync(userId);
+            await PollNotificationsAsync();
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+
+    private void OnNotificationButtonClick(object? sender, EventArgs e)
+    {
+        _notificationDropdown.Visible = !_notificationDropdown.Visible;
+        if (_notificationDropdown.Visible)
+        {
+            PositionNotificationDropdown();
+            _notificationDropdown.BringToFront();
+            _ = PollNotificationsAsync();
+        }
+    }
+
+    private static string FormatRelativeTime(DateTime utc)
+    {
+        var elapsed = DateTime.UtcNow - utc;
+        if (elapsed.TotalMinutes < 1)
+        {
+            return "now";
+        }
+
+        if (elapsed.TotalHours < 1)
+        {
+            return $"{Math.Max(1, (int)elapsed.TotalMinutes)}m";
+        }
+
+        if (elapsed.TotalDays < 1)
+        {
+            return $"{Math.Max(1, (int)elapsed.TotalHours)}h";
+        }
+
+        return $"{Math.Max(1, (int)elapsed.TotalDays)}d";
+    }
+
+    private static string GetNotificationGlyph(NotificationType type) => type switch
+    {
+        NotificationType.IssueAssigned => "A",
+        NotificationType.IssueStatusChanged => "S",
+        NotificationType.CommentAdded => "C",
+        NotificationType.CommentMentioned => "@",
+        NotificationType.SprintStarted => "S",
+        NotificationType.SprintCompleted => "F",
+        _ => "N"
+    };
+
+    private static Color GetNotificationColor(NotificationType type) => type switch
+    {
+        NotificationType.IssueAssigned => JiraTheme.Primary,
+        NotificationType.IssueStatusChanged => JiraTheme.Warning,
+        NotificationType.CommentAdded => JiraTheme.Green500,
+        NotificationType.CommentMentioned => JiraTheme.Purple500,
+        NotificationType.SprintStarted => JiraTheme.Teal500,
+        NotificationType.SprintCompleted => JiraTheme.Red600,
+        _ => JiraTheme.Neutral500
+    };
     private void WireNavigation()
     {
         _projectsItem.Click += OnProjectsItemClick;
@@ -1157,6 +1451,17 @@ public class MainForm : Form
         private sealed record IssueSummaryRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

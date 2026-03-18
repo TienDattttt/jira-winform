@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
@@ -69,6 +69,10 @@ public class IssueDetailsForm : Form
     private readonly Panel _dueDateField = new() { Width = 220, Height = 36, BackColor = Color.Transparent };
     private readonly LinkLabel _dueDateDisplay = new() { Dock = DockStyle.Fill, AutoSize = false, Height = 32, Font = JiraTheme.FontSmall, LinkBehavior = LinkBehavior.HoverUnderline, TextAlign = ContentAlignment.MiddleLeft, BackColor = Color.Transparent, Cursor = Cursors.Hand };
     private readonly DateTimePicker _dueDatePicker = new() { Dock = DockStyle.Fill, Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy", ShowCheckBox = true, Visible = false, CalendarForeColor = JiraTheme.TextPrimary, CalendarMonthBackground = JiraTheme.BgSurface, Font = JiraTheme.FontBody };
+    private readonly Panel _watchersField = new() { Width = 220, Height = 58, BackColor = Color.Transparent };
+    private readonly Label _watcherCountLabel = JiraControlFactory.CreateLabel(string.Empty, true);
+    private readonly FlowLayoutPanel _watcherAvatars = new() { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = false, Margin = new Padding(0), Padding = new Padding(0), BackColor = Color.Transparent };
+    private readonly Button _watchButton = JiraControlFactory.CreateSecondaryButton("Watch");
     private readonly Button _delete = JiraControlFactory.CreateSecondaryButton("Delete");
     private readonly LinkLabel _parentLink = new() { AutoSize = true, Font = JiraTheme.FontBody, LinkColor = JiraTheme.PrimaryActive, Visible = false };
     private readonly Panel _parentSection = new() { Dock = DockStyle.Top, Height = 40, Visible = false, BackColor = JiraTheme.BgSurface };
@@ -77,6 +81,7 @@ public class IssueDetailsForm : Form
     private IReadOnlyList<JiraLabelEntity> _availableLabels = Array.Empty<JiraLabelEntity>();
     private IReadOnlyList<JiraComponentEntity> _availableComponents = Array.Empty<JiraComponentEntity>();
     private IReadOnlyList<JiraProjectVersionEntity> _availableVersions = Array.Empty<JiraProjectVersionEntity>();
+    private IReadOnlyList<User> _watchers = Array.Empty<User>();
     private IReadOnlyList<WorkflowStatusOptionDto> _statusOptions = Array.Empty<WorkflowStatusOptionDto>();
     private HashSet<int> _selectedAssigneeIds = [];
     private HashSet<int> _selectedLabelIds = [];
@@ -85,6 +90,7 @@ public class IssueDetailsForm : Form
     private bool _descriptionPreviewMode;
     private bool _descriptionModeInitialized;
     private bool _dueDateEditing;
+    private bool _isWatching;
     private readonly bool _openChildIssuesByDefault;
 
     public IssueDetailsForm(AppSession session, int issueId, int projectId, bool openChildIssues = false)
@@ -187,6 +193,8 @@ public class IssueDetailsForm : Form
             }
         };
         _logTime.AutoSize = false;
+        ConfigureWatchField();
+        _watchButton.Click += async (_, _) => await ToggleWatchAsync();
         _logTime.Size = new Size(100, 36);
         _logTime.Click += async (_, _) => await LogTimeAsync();
         _delete.AutoSize = false;
@@ -455,7 +463,9 @@ public class IssueDetailsForm : Form
 
         var toolbar = new Panel { Dock = DockStyle.Top, Height = 38, BackColor = JiraTheme.BgSurface };
         _delete.Dock = DockStyle.Right;
+        _watchButton.Dock = DockStyle.Left;
         toolbar.Controls.Add(_delete);
+        toolbar.Controls.Add(_watchButton);
 
         var statusHost = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 4, 0, 0) };
         _status.Dock = DockStyle.Left;
@@ -465,16 +475,17 @@ public class IssueDetailsForm : Form
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         AddField(fields, 0, "Assignee", _assignee);
-        AddField(fields, 1, "Reporter", _reporter);
-        AddField(fields, 2, "Labels", _labelsField);
-        AddField(fields, 3, "Component", _component);
-        AddField(fields, 4, "Fix version", _fixVersion);
-        AddField(fields, 5, "Due date", _dueDateField);
-        AddField(fields, 6, "Priority", _priority);
-        AddField(fields, 7, "Sprint", _sprint);
-        AddField(fields, 8, "Story points", _storyPoints);
+        AddField(fields, 1, "Watchers", _watchersField);
+        AddField(fields, 2, "Reporter", _reporter);
+        AddField(fields, 3, "Labels", _labelsField);
+        AddField(fields, 4, "Component", _component);
+        AddField(fields, 5, "Fix version", _fixVersion);
+        AddField(fields, 6, "Due date", _dueDateField);
+        AddField(fields, 7, "Priority", _priority);
+        AddField(fields, 8, "Sprint", _sprint);
+        AddField(fields, 9, "Story points", _storyPoints);
 
-        var detailsBlock = new Panel { Dock = DockStyle.Top, Height = 454, BackColor = JiraTheme.BgSurface };
+        var detailsBlock = new Panel { Dock = DockStyle.Top, Height = 520, BackColor = JiraTheme.BgSurface };
         detailsBlock.Controls.Add(fields);
         detailsBlock.Controls.Add(statusHost);
         detailsBlock.Controls.Add(TopLabel("Status"));
@@ -518,6 +529,9 @@ public class IssueDetailsForm : Form
 
             _details = await _session.Issues.GetDetailsAsync(_issueId);
             if (_details is null) { ErrorDialogService.Show("Issue not found."); Close(); return; }
+            _watchers = await _session.Watchers.GetWatchersAsync(_issueId);
+            var currentUserId = _session.CurrentUserContext.CurrentUser?.Id ?? 0;
+            _isWatching = currentUserId > 0 && await _session.Watchers.IsWatchingAsync(_issueId, currentUserId);
             await BindStatusOptionsAsync(_details.Issue);
             BindIssue(_details);
             _comments.Bind(_details.Comments);
@@ -570,6 +584,7 @@ public class IssueDetailsForm : Form
         SelectLookupValue(_component, issue.IssueComponents.Select(x => (int?)x.ComponentId).FirstOrDefault());
         SelectLookupValue(_fixVersion, issue.FixVersionId);
         BindDueDate(issue);
+        RenderWatchers();
 
         _selectedAssigneeIds = issue.Assignees.Select(x => x.UserId).ToHashSet();
         ApplyAssigneeSummary(issue.Assignees.Select(x => x.User.DisplayName).ToList());
@@ -855,6 +870,95 @@ public class IssueDetailsForm : Form
         _assignee.SetPerson($"{names[0]} +{names.Count - 1}", summaryInitials, true);
     }
 
+    private void ConfigureWatchField()
+    {
+        _watchButton.AutoSize = false;
+        _watchButton.Size = new Size(118, 34);
+        _watchButton.Image = JiraIcons.GetEyeIcon(JiraTheme.PrimaryActive);
+        _watchButton.ImageAlign = ContentAlignment.MiddleLeft;
+        _watchButton.TextImageRelation = TextImageRelation.ImageBeforeText;
+        _watchButton.Padding = new Padding(10, 0, 10, 0);
+
+        _watcherCountLabel.Dock = DockStyle.Top;
+        _watcherCountLabel.Height = 18;
+        _watcherCountLabel.ForeColor = JiraTheme.TextSecondary;
+        _watcherCountLabel.Font = JiraTheme.FontCaption;
+        _watcherCountLabel.Margin = new Padding(0);
+        _watcherAvatars.Dock = DockStyle.Fill;
+        _watcherAvatars.Height = 28;
+        _watcherAvatars.WrapContents = false;
+        _watcherAvatars.Margin = new Padding(0);
+        _watchersField.Controls.Add(_watcherAvatars);
+        _watchersField.Controls.Add(_watcherCountLabel);
+    }
+
+    private void RenderWatchers()
+    {
+        _watcherCountLabel.Text = _watchers.Count switch
+        {
+            0 => "No watchers",
+            1 => "1 watcher",
+            _ => $"{_watchers.Count} watchers"
+        };
+
+        _watcherAvatars.SuspendLayout();
+        try
+        {
+            foreach (Control control in _watcherAvatars.Controls)
+            {
+                control.Dispose();
+            }
+
+            _watcherAvatars.Controls.Clear();
+            foreach (var watcher in _watchers.Take(4))
+            {
+                _watcherAvatars.Controls.Add(new TinyAvatar(Initials(watcher.DisplayName), 24) { Margin = new Padding(0, 0, 6, 0) });
+            }
+
+            if (_watchers.Count > 4)
+            {
+                _watcherAvatars.Controls.Add(new TinyAvatar($"+{_watchers.Count - 4}", 24) { Margin = new Padding(0, 0, 6, 0), BackCircleColor = JiraTheme.Neutral500 });
+            }
+        }
+        finally
+        {
+            _watcherAvatars.ResumeLayout();
+        }
+
+        _watchButton.Text = _isWatching ? "Watching" : "Watch";
+        _watchButton.BackColor = _isWatching ? JiraTheme.Blue100 : JiraTheme.BgSurface;
+        _watchButton.ForeColor = _isWatching ? JiraTheme.PrimaryActive : JiraTheme.TextPrimary;
+        _watchButton.FlatAppearance.BorderColor = _isWatching ? JiraTheme.Primary : JiraTheme.Border;
+    }
+
+    private async Task ToggleWatchAsync()
+    {
+        if (_details is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var currentUserId = _session.CurrentUserContext.RequireUserId();
+            if (_isWatching)
+            {
+                await _session.Watchers.UnwatchIssueAsync(_issueId, currentUserId);
+            }
+            else
+            {
+                await _session.Watchers.WatchIssueAsync(_issueId, currentUserId);
+            }
+
+            _watchers = await _session.Watchers.GetWatchersAsync(_issueId);
+            _isWatching = await _session.Watchers.IsWatchingAsync(_issueId, currentUserId);
+            RenderWatchers();
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogService.Show(ex);
+        }
+    }
     private void ConfigureDueDateField()
     {
         _dueDateDisplay.LinkColor = JiraTheme.TextSecondary;
@@ -1503,6 +1607,31 @@ public class IssueDetailsForm : Form
         return path;
     }
 
+    private sealed class TinyAvatar : Control
+    {
+        public TinyAvatar(string initials, int size)
+        {
+            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            Initials = initials;
+            Size = new Size(size, size);
+            BackColor = Color.Transparent;
+            DoubleBuffered = true;
+        }
+
+        public string Initials { get; }
+        public Color BackCircleColor { get; set; } = JiraTheme.Primary;
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SetClip(new Rectangle(0, 0, Width, Height));
+            e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var fill = new SolidBrush(BackCircleColor);
+            e.Graphics.FillEllipse(fill, ClientRectangle);
+            TextRenderer.DrawText(e.Graphics, Initials, JiraTheme.FontCaption, ClientRectangle, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+    }
     private sealed class AvatarValueControl : Control
     {
         private string _initials = "U";
@@ -1807,6 +1936,15 @@ public class IssueDetailsForm : Form
         public IReadOnlyList<int> SelectedUserIds => _assignees.CheckedItems.Cast<User>().Select(x => x.Id).ToList();
     }
 }
+
+
+
+
+
+
+
+
+
 
 
 

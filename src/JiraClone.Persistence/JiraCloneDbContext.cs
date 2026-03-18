@@ -31,6 +31,9 @@ public class JiraCloneDbContext : DbContext
     public DbSet<WorkflowStatus> WorkflowStatuses => Set<WorkflowStatus>();
     public DbSet<WorkflowTransition> WorkflowTransitions => Set<WorkflowTransition>();
 
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<Watcher> Watchers => Set<Watcher>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(JiraCloneDbContext).Assembly);
@@ -38,5 +41,6 @@ public class JiraCloneDbContext : DbContext
         base.OnModelCreating(modelBuilder);
     }
 }
+
 
 

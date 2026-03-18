@@ -1,4 +1,6 @@
+using System.Text.RegularExpressions;
 using JiraClone.Application.Abstractions;
+using JiraClone.Application.Common;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
@@ -9,15 +11,34 @@ namespace JiraClone.Application.Comments;
 
 public class CommentService
 {
+    private static readonly Regex MentionRegex = new("@([A-Za-z0-9._-]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private readonly ICommentRepository _comments;
+    private readonly IIssueRepository _issues;
+    private readonly IUserRepository _users;
+    private readonly IWatcherRepository _watchers;
+    private readonly INotificationRepository _notifications;
     private readonly IAuthorizationService _authorization;
     private readonly IActivityLogRepository _activityLogs;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<CommentService> _logger;
 
-    public CommentService(ICommentRepository comments, IAuthorizationService authorization, IActivityLogRepository activityLogs, IUnitOfWork unitOfWork, ILogger<CommentService>? logger = null)
+    public CommentService(
+        ICommentRepository comments,
+        IIssueRepository issues,
+        IUserRepository users,
+        IWatcherRepository watchers,
+        INotificationRepository notifications,
+        IAuthorizationService authorization,
+        IActivityLogRepository activityLogs,
+        IUnitOfWork unitOfWork,
+        ILogger<CommentService>? logger = null)
     {
         _comments = comments;
+        _issues = issues;
+        _users = users;
+        _watchers = watchers;
+        _notifications = notifications;
         _authorization = authorization;
         _activityLogs = activityLogs;
         _unitOfWork = unitOfWork;
@@ -28,11 +49,16 @@ public class CommentService
     {
         _logger.LogInformation("Adding comment to issue {IssueId} by user {UserId}.", issueId, userId);
         _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
+        var issue = await _issues.GetByIdAsync(issueId, cancellationToken)
+            ?? throw new NotFoundException($"Issue with id {issueId} was not found.");
+        var actor = await _users.GetByIdAsync(userId, cancellationToken);
+        var actorName = actor?.DisplayName ?? "Someone";
+        var normalizedBody = body.Trim();
         var comment = new Comment
         {
             IssueId = issueId,
             UserId = userId,
-            Body = body.Trim()
+            Body = normalizedBody
         };
 
         await _comments.AddAsync(comment, cancellationToken);
@@ -42,8 +68,46 @@ public class CommentService
             ProjectId = projectId,
             UserId = userId,
             ActionType = ActivityActionType.CommentAdded,
-            NewValue = body
+            NewValue = normalizedBody
         }, cancellationToken);
+
+        var mentionedUserIds = await ResolveMentionedUserIdsAsync(projectId, normalizedBody, userId, cancellationToken);
+        foreach (var recipientUserId in mentionedUserIds)
+        {
+            await _notifications.AddAsync(new Notification
+            {
+                RecipientUserId = recipientUserId,
+                IssueId = issue.Id,
+                ProjectId = issue.ProjectId,
+                Type = NotificationType.CommentMentioned,
+                Title = $"Mentioned on {issue.IssueKey}",
+                Body = $"{actorName} mentioned you in a comment on {issue.IssueKey} - {issue.Title}.",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.UtcNow
+            }, cancellationToken);
+        }
+
+        var watcherRecipientIds = (await _watchers.GetByIssueIdAsync(issueId, cancellationToken))
+            .Select(x => x.UserId)
+            .Where(recipientUserId => recipientUserId != userId && !mentionedUserIds.Contains(recipientUserId))
+            .Distinct()
+            .ToList();
+        foreach (var recipientUserId in watcherRecipientIds)
+        {
+            await _notifications.AddAsync(new Notification
+            {
+                RecipientUserId = recipientUserId,
+                IssueId = issue.Id,
+                ProjectId = issue.ProjectId,
+                Type = NotificationType.CommentAdded,
+                Title = $"New comment: {issue.IssueKey}",
+                Body = $"{actorName} commented on {issue.IssueKey}: {BuildExcerpt(normalizedBody)}",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.UtcNow
+            }, cancellationToken);
+        }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return comment;
@@ -101,5 +165,28 @@ public class CommentService
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    private async Task<HashSet<int>> ResolveMentionedUserIdsAsync(int projectId, string body, int actorUserId, CancellationToken cancellationToken)
+    {
+        var mentionedUserNames = MentionRegex.Matches(body)
+            .Select(match => match.Groups[1].Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (mentionedUserNames.Count == 0)
+        {
+            return [];
+        }
+
+        return (await _users.GetProjectUsersAsync(projectId, cancellationToken))
+            .Where(user => user.Id != actorUserId && mentionedUserNames.Contains(user.UserName))
+            .Select(user => user.Id)
+            .ToHashSet();
+    }
+
+    private static string BuildExcerpt(string value)
+    {
+        var trimmed = value.Replace(Environment.NewLine, " ").Trim();
+        return trimmed.Length <= 140 ? trimmed : $"{trimmed[..137]}...";
     }
 }

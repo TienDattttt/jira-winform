@@ -105,6 +105,41 @@ public static class JiraIcons
         return bitmap;
     }
 
+    public static Bitmap GetEyeIcon(Color color, int size = 16)
+    {
+        var bitmap = new Bitmap(size, size);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        graphics.Clear(Color.Transparent);
+
+        using var pen = new Pen(color, 1.6f);
+        var bounds = new RectangleF(1.5f, size * 0.24f, size - 3f, size * 0.52f);
+        graphics.DrawArc(pen, bounds, 0, 180);
+        graphics.DrawArc(pen, bounds, 180, 180);
+        using var fill = new SolidBrush(color);
+        var pupilSize = Math.Max(4f, size * 0.22f);
+        graphics.FillEllipse(fill, (size - pupilSize) / 2f, (size - pupilSize) / 2f, pupilSize, pupilSize);
+        return bitmap;
+    }
+
+    public static Bitmap GetBellIcon(Color color, int size = 16)
+    {
+        var bitmap = new Bitmap(size, size);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        graphics.Clear(Color.Transparent);
+
+        using var pen = new Pen(color, 1.6f);
+        var dome = new RectangleF(size * 0.22f, size * 0.16f, size * 0.56f, size * 0.56f);
+        graphics.DrawArc(pen, dome, 200, 140);
+        graphics.DrawLine(pen, size * 0.22f, size * 0.54f, size * 0.22f, size * 0.74f);
+        graphics.DrawLine(pen, size * 0.78f, size * 0.54f, size * 0.78f, size * 0.74f);
+        graphics.DrawLine(pen, size * 0.16f, size * 0.74f, size * 0.84f, size * 0.74f);
+        graphics.DrawLine(pen, size * 0.36f, size * 0.82f, size * 0.64f, size * 0.82f);
+        using var fill = new SolidBrush(color);
+        graphics.FillEllipse(fill, size * 0.44f, size * 0.08f, size * 0.12f, size * 0.12f);
+        return bitmap;
+    }
     public static Bitmap GetPriorityIcon(IssuePriority priority, int size = 16)
     {
         var bitmap = new Bitmap(size, size);
@@ -159,3 +194,4 @@ public static class JiraIcons
         graphics.DrawLine(pen, size - 4, top, size / 2, top + 5);
     }
 }
+

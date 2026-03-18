@@ -17,6 +17,6 @@ public class User : AggregateRoot
     public ICollection<SavedFilter> SavedFilters { get; set; } = new List<SavedFilter>();
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public ICollection<IssueAssignee> AssignedIssues { get; set; } = new List<IssueAssignee>();
+    public ICollection<Watcher> WatchedIssues { get; set; } = new List<Watcher>();
+    public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 }
-
-

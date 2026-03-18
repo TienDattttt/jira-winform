@@ -21,4 +21,5 @@ public class Project : AggregateRoot
     public ICollection<SavedFilter> SavedFilters { get; set; } = new List<SavedFilter>();
     public ICollection<Issue> Issues { get; set; } = new List<Issue>();
     public ICollection<Sprint> Sprints { get; set; } = new List<Sprint>();
+    public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 }

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using JiraClone.Application.Abstractions;
 using JiraClone.Application.Common;
 using JiraClone.Application.Models;
@@ -21,6 +21,8 @@ public class IssueService
     private readonly IActivityLogRepository _activityLogs;
     private readonly IWorkflowService _workflowService;
     private readonly IWorkflowRepository _workflows;
+    private readonly IWatcherRepository _watchers;
+    private readonly INotificationRepository _notifications;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<IssueService> _logger;
 
@@ -34,6 +36,8 @@ public class IssueService
         IActivityLogRepository activityLogs,
         IWorkflowService workflowService,
         IWorkflowRepository workflows,
+        IWatcherRepository watchers,
+        INotificationRepository notifications,
         IUnitOfWork unitOfWork,
         ILogger<IssueService>? logger = null)
     {
@@ -46,6 +50,8 @@ public class IssueService
         _activityLogs = activityLogs;
         _workflowService = workflowService;
         _workflows = workflows;
+        _watchers = watchers;
+        _notifications = notifications;
         _unitOfWork = unitOfWork;
         _logger = logger ?? NullLogger<IssueService>.Instance;
     }
@@ -100,6 +106,12 @@ public class IssueService
         }, cancellationToken);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (await QueueAssignmentNotificationsAsync(issue, [], model.AssigneeIds, model.CreatedById, cancellationToken))
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
         return issue;
     }
 
@@ -122,6 +134,8 @@ public class IssueService
         var originalStatusId = issue.WorkflowStatusId;
         var previousTitle = issue.Title;
         var previousDueDate = issue.DueDate;
+        var previousAssigneeIds = issue.Assignees.Select(x => x.UserId).ToHashSet();
+        var nextAssigneeIds = model.AssigneeIds.Distinct().ToHashSet();
         var descriptionText = MarkdownHtmlRenderer.Normalize(model.DescriptionText);
         issue.Title = model.Title.Trim();
         issue.DescriptionText = descriptionText;
@@ -138,7 +152,7 @@ public class IssueService
         issue.ParentIssueId = parentIssue?.Id;
         issue.ParentIssue = parentIssue;
         issue.Assignees.Clear();
-        issue.Assignees = await BuildAssigneesAsync(model.AssigneeIds, issue, cancellationToken);
+        issue.Assignees = await BuildAssigneesAsync(nextAssigneeIds, issue, cancellationToken);
 
         if (previousDueDate != model.DueDate)
         {
@@ -148,7 +162,7 @@ public class IssueService
         var requestedStatus = await ResolveWorkflowStatusAsync(issue.ProjectId, model.WorkflowStatusId ?? issue.WorkflowStatusId, cancellationToken);
         if (requestedStatus.Id != originalStatusId)
         {
-            await _workflowService.ExecuteTransitionAsync(issue.Id, requestedStatus.Id, model.CreatedById, cancellationToken: cancellationToken);
+            await ExecuteStatusTransitionAsync(issue.Id, requestedStatus.Id, issue.BoardPosition, model.CreatedById, cancellationToken);
         }
         else
         {
@@ -165,17 +179,19 @@ public class IssueService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
+        if (await QueueAssignmentNotificationsAsync(issue, previousAssigneeIds, nextAssigneeIds, model.CreatedById, cancellationToken))
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
         return issue;
     }
 
     public Task<bool> MoveAsync(int issueId, int targetStatusId, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
         => UpdateStatusAsync(issueId, targetStatusId, boardPosition, userId, cancellationToken);
 
-    public async Task<bool> UpdateStatusAsync(int issueId, int targetStatusId, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
-    {
-        var result = await _workflowService.ExecuteTransitionAsync(issueId, targetStatusId, userId, boardPosition, cancellationToken);
-        return result.Succeeded;
-    }
+    public Task<bool> UpdateStatusAsync(int issueId, int targetStatusId, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
+        => ExecuteStatusTransitionAsync(issueId, targetStatusId, boardPosition, userId, cancellationToken);
 
     public async Task<Issue?> UpdateDueDateAsync(int issueId, DateOnly? dueDate, int userId, CancellationToken cancellationToken = default)
     {
@@ -417,6 +433,104 @@ public class IssueService
                 ? $"Due date set to {nextDueDate.Value:yyyy-MM-dd}"
                 : "Due date cleared"
         }, cancellationToken);
+    }
+
+    private async Task<bool> ExecuteStatusTransitionAsync(int issueId, int targetStatusId, decimal? boardPosition, int userId, CancellationToken cancellationToken)
+    {
+        var result = await _workflowService.ExecuteTransitionAsync(issueId, targetStatusId, userId, boardPosition, cancellationToken);
+        if (!result.Succeeded)
+        {
+            return false;
+        }
+
+        var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
+        if (issue is null)
+        {
+            return false;
+        }
+
+        if (await QueueStatusChangeNotificationsAsync(issue, result.PreviousStatus, result.CurrentStatus, userId, cancellationToken))
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        return true;
+    }
+
+    private async Task<bool> QueueAssignmentNotificationsAsync(Issue issue, IEnumerable<int> previousAssigneeIds, IEnumerable<int> nextAssigneeIds, int actorUserId, CancellationToken cancellationToken)
+    {
+        var recipients = nextAssigneeIds
+            .Distinct()
+            .Except(previousAssigneeIds.Distinct())
+            .Where(userId => userId != actorUserId)
+            .ToList();
+        if (recipients.Count == 0)
+        {
+            return false;
+        }
+
+        var actor = await _users.GetByIdAsync(actorUserId, cancellationToken);
+        var actorName = actor?.DisplayName ?? "Someone";
+        foreach (var recipientUserId in recipients)
+        {
+            await _notifications.AddAsync(new Notification
+            {
+                RecipientUserId = recipientUserId,
+                IssueId = issue.Id,
+                ProjectId = issue.ProjectId,
+                Type = NotificationType.IssueAssigned,
+                Title = $"Assigned to {issue.IssueKey}",
+                Body = $"{actorName} assigned you to {issue.IssueKey} - {issue.Title}.",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.UtcNow
+            }, cancellationToken);
+        }
+
+        return true;
+    }
+
+    private async Task<bool> QueueStatusChangeNotificationsAsync(Issue issue, WorkflowStatus? previousStatus, WorkflowStatus? currentStatus, int actorUserId, CancellationToken cancellationToken)
+    {
+        if (currentStatus is null)
+        {
+            return false;
+        }
+
+        var watcherUserIds = (await _watchers.GetByIssueIdAsync(issue.Id, cancellationToken)).Select(x => x.UserId);
+        var assigneeUserIds = issue.Assignees.Select(x => x.UserId);
+        var recipients = watcherUserIds
+            .Concat(assigneeUserIds)
+            .Where(userId => userId != actorUserId)
+            .Distinct()
+            .ToList();
+        if (recipients.Count == 0)
+        {
+            return false;
+        }
+
+        var actor = await _users.GetByIdAsync(actorUserId, cancellationToken);
+        var actorName = actor?.DisplayName ?? "Someone";
+        var transitionText = previousStatus is null
+            ? currentStatus.Name
+            : $"{previousStatus.Name} to {currentStatus.Name}";
+        foreach (var recipientUserId in recipients)
+        {
+            await _notifications.AddAsync(new Notification
+            {
+                RecipientUserId = recipientUserId,
+                IssueId = issue.Id,
+                ProjectId = issue.ProjectId,
+                Type = NotificationType.IssueStatusChanged,
+                Title = $"Status changed: {issue.IssueKey}",
+                Body = $"{actorName} moved {issue.IssueKey} from {transitionText}.",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.UtcNow
+            }, cancellationToken);
+        }
+
+        return true;
     }
 
     private static string? FormatDueDateActivity(DateOnly? dueDate) =>

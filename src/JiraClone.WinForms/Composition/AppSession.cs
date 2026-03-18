@@ -8,12 +8,14 @@ using JiraClone.Application.Components;
 using JiraClone.Application.Issues;
 using JiraClone.Application.Jql;
 using JiraClone.Application.Labels;
+using JiraClone.Application.Notifications;
 using JiraClone.Application.Models;
 using JiraClone.Application.Projects;
 using JiraClone.Application.Roles;
 using JiraClone.Application.Sprints;
 using JiraClone.Application.Users;
 using JiraClone.Application.Versions;
+using JiraClone.Application.Watchers;
 using JiraClone.Application.Workflows;
 using JiraClone.Domain.Entities;
 using ProjectLabel = JiraClone.Domain.Entities.Label;
@@ -73,6 +75,8 @@ public sealed class AppSession : IDisposable
         Labels = new LabelOperations(this);
         Components = new ComponentOperations(this);
         Versions = new VersionOperations(this);
+        Watchers = new WatcherOperations(this);
+        Notifications = new NotificationOperations(this);
         Workflows = new WorkflowOperations(this);
         Comments = new CommentOperations(this);
         Sprints = new SprintOperations(this);
@@ -94,6 +98,8 @@ public sealed class AppSession : IDisposable
     public LabelOperations Labels { get; }
     public ComponentOperations Components { get; }
     public VersionOperations Versions { get; }
+    public WatcherOperations Watchers { get; }
+    public NotificationOperations Notifications { get; }
     public WorkflowOperations Workflows { get; }
     public CommentOperations Comments { get; }
     public SprintOperations Sprints { get; }
@@ -154,8 +160,16 @@ public sealed class AppSession : IDisposable
             new ActivityLogRepository(dbContext),
             CreateWorkflowService(dbContext),
             new WorkflowRepository(dbContext),
+            new WatcherRepository(dbContext),
+            new NotificationRepository(dbContext),
             new UnitOfWork(dbContext),
             CreateLogger<IssueService>());
+
+    internal IWatcherService CreateWatcherService(JiraCloneDbContext dbContext) =>
+        new WatcherService(new WatcherRepository(dbContext), new IssueRepository(dbContext), new UserRepository(dbContext), Authorization, new UnitOfWork(dbContext), CreateLogger<WatcherService>());
+
+    internal INotificationService CreateNotificationService(JiraCloneDbContext dbContext) =>
+        new NotificationService(new NotificationRepository(dbContext), new UnitOfWork(dbContext), CreateLogger<NotificationService>());
 
     internal ILabelService CreateLabelService(JiraCloneDbContext dbContext) =>
         new LabelService(
@@ -192,10 +206,10 @@ public sealed class AppSession : IDisposable
             CreateLogger<VersionService>());
 
     internal CommentService CreateCommentService(JiraCloneDbContext dbContext) =>
-        new(new CommentRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), new UnitOfWork(dbContext), CreateLogger<CommentService>());
+        new(new CommentRepository(dbContext), new IssueRepository(dbContext), new UserRepository(dbContext), new WatcherRepository(dbContext), new NotificationRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), new UnitOfWork(dbContext), CreateLogger<CommentService>());
 
     internal ISprintService CreateSprintService(JiraCloneDbContext dbContext) =>
-        new SprintService(new SprintRepository(dbContext), new IssueRepository(dbContext), new WorkflowRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext), CreateLogger<SprintService>());
+        new SprintService(new SprintRepository(dbContext), new IssueRepository(dbContext), new WorkflowRepository(dbContext), new ProjectRepository(dbContext), new UserRepository(dbContext), new NotificationRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext), CreateLogger<SprintService>());
 
     internal ActivityLogService CreateActivityLogService(JiraCloneDbContext dbContext) =>
         new(new ActivityLogRepository(dbContext), CreateLogger<ActivityLogService>());
@@ -669,7 +683,74 @@ public sealed class AppSession : IDisposable
         }
     }
 
-    public sealed class LabelOperations
+
+    public sealed class WatcherOperations
+    {
+        private readonly AppSession _session;
+
+        internal WatcherOperations(AppSession session) => _session = session;
+
+        public async Task<bool> WatchIssueAsync(int issueId, int userId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWatcherService(dbContext).WatchIssueAsync(issueId, userId, cancellationToken);
+        }
+
+        public async Task<bool> UnwatchIssueAsync(int issueId, int userId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWatcherService(dbContext).UnwatchIssueAsync(issueId, userId, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<User>> GetWatchersAsync(int issueId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWatcherService(dbContext).GetWatchersAsync(issueId, cancellationToken);
+        }
+
+        public async Task<bool> IsWatchingAsync(int issueId, int userId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWatcherService(dbContext).IsWatchingAsync(issueId, userId, cancellationToken);
+        }
+    }
+
+    public sealed class NotificationOperations
+    {
+        private readonly AppSession _session;
+
+        internal NotificationOperations(AppSession session) => _session = session;
+
+        public async Task<IReadOnlyList<NotificationItemDto>> GetUnreadAsync(int userId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateNotificationService(dbContext).GetUnreadAsync(userId, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<NotificationItemDto>> GetRecentAsync(int userId, int take = 20, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateNotificationService(dbContext).GetRecentAsync(userId, take, cancellationToken);
+        }
+
+        public async Task<int> GetUnreadCountAsync(int userId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateNotificationService(dbContext).GetUnreadCountAsync(userId, cancellationToken);
+        }
+
+        public async Task<bool> MarkReadAsync(int notificationId, int userId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateNotificationService(dbContext).MarkReadAsync(notificationId, userId, cancellationToken);
+        }
+
+        public async Task<int> MarkAllReadAsync(int userId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateNotificationService(dbContext).MarkAllReadAsync(userId, cancellationToken);
+        }
+    }    public sealed class LabelOperations
     {
         private readonly AppSession _session;
 
@@ -931,6 +1012,18 @@ public sealed class AppSession : IDisposable
             await using var dbContext = _session.CreateDbContext();
             return await _session.CreateSprintService(dbContext).GetVelocityDataAsync(projectId, lastN, cancellationToken);
         }
+
+        public async Task<IReadOnlyList<CfdDataPointDto>> GetCfdDataAsync(int projectId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateSprintService(dbContext).GetCfdDataAsync(projectId, from, to, cancellationToken);
+        }
+
+        public async Task<SprintReportDto?> GetSprintReportAsync(int sprintId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateSprintService(dbContext).GetSprintReportAsync(sprintId, cancellationToken);
+        }
     }
 
     public sealed class ActivityLogOperations
@@ -977,6 +1070,10 @@ public sealed class AppSession : IDisposable
         }
     }
 }
+
+
+
+
 
 
 

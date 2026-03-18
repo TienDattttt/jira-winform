@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using JiraClone.Application.Abstractions;
 using JiraClone.Application.Common;
 using JiraClone.Application.Issues;
@@ -160,7 +160,17 @@ public class IssueServiceTests
     {
         var workflowService = new Mock<IWorkflowService>();
         workflowService.Setup(x => x.ExecuteTransitionAsync(7, DoneStatusId, 11, 4m, default)).ReturnsAsync(new WorkflowTransitionResult(true, null, null, 4m));
-        var service = CreateService(workflowService: workflowService);
+        var issueRepository = new Mock<IIssueRepository>();
+        issueRepository.Setup(x => x.GetByIdAsync(7, default)).ReturnsAsync(new Issue
+        {
+            Id = 7,
+            ProjectId = 1,
+            IssueKey = "PROJ-7",
+            Title = "Moved issue",
+            WorkflowStatus = new WorkflowStatus { Id = DoneStatusId, Name = "Done", Category = StatusCategory.Done, WorkflowDefinitionId = 1 },
+            Assignees = new List<IssueAssignee>()
+        });
+        var service = CreateService(issueRepository: issueRepository, workflowService: workflowService);
 
         var moved = await service.MoveAsync(7, DoneStatusId, 4m, 11);
 
@@ -280,6 +290,8 @@ public class IssueServiceTests
         Mock<IActivityLogRepository>? activityLogRepository = null,
         Mock<IWorkflowService>? workflowService = null,
         Mock<IWorkflowRepository>? workflowRepository = null,
+        Mock<IWatcherRepository>? watcherRepository = null,
+        Mock<INotificationRepository>? notificationRepository = null,
         Mock<IUnitOfWork>? unitOfWork = null)
     {
         projectRepository ??= new Mock<IProjectRepository>();
@@ -297,6 +309,9 @@ public class IssueServiceTests
             issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, It.IsAny<int>(), default)).ReturnsAsync(1m);
         }
 
+        watcherRepository ??= new Mock<IWatcherRepository>();
+        watcherRepository.Setup(x => x.GetByIssueIdAsync(It.IsAny<int>(), default)).ReturnsAsync(Array.Empty<Watcher>());
+
         workflowService ??= new Mock<IWorkflowService>();
         workflowService.Setup(x => x.ExecuteTransitionAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<decimal?>(), default)).ReturnsAsync(new WorkflowTransitionResult(true, null, null, 1m));
 
@@ -310,6 +325,8 @@ public class IssueServiceTests
             (activityLogRepository ?? new Mock<IActivityLogRepository>()).Object,
             workflowService.Object,
             workflowRepository.Object,
+            watcherRepository.Object,
+            (notificationRepository ?? new Mock<INotificationRepository>()).Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
     }
 
@@ -371,5 +388,10 @@ public class IssueServiceTests
         return issue;
     }
 }
+
+
+
+
+
 
 

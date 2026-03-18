@@ -56,6 +56,9 @@ public class Issue : AggregateRoot
     public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
     public ICollection<ActivityLog> ActivityLogs { get; set; } = new List<ActivityLog>();
 
+    public ICollection<Watcher> Watchers { get; set; } = new List<Watcher>();
+    public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+
     public void MoveTo(int workflowStatusId, decimal boardPosition)
     {
         WorkflowStatusId = workflowStatusId;
@@ -63,3 +66,4 @@ public class Issue : AggregateRoot
         UpdatedAtUtc = DateTime.UtcNow;
     }
 }
+
