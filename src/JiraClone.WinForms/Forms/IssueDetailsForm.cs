@@ -74,6 +74,7 @@ public class IssueDetailsForm : Form
     private readonly FlowLayoutPanel _watcherAvatars = new() { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = false, Margin = new Padding(0), Padding = new Padding(0), BackColor = Color.Transparent };
     private readonly Button _watchButton = JiraControlFactory.CreateSecondaryButton("Watch");
     private readonly Button _delete = JiraControlFactory.CreateSecondaryButton("Delete");
+    private readonly ToolStripMenuItem _deleteIssueMenuItem = new("Delete issue");
     private readonly LinkLabel _parentLink = new() { AutoSize = true, Font = JiraTheme.FontBody, LinkColor = JiraTheme.PrimaryActive, Visible = false };
     private readonly Panel _parentSection = new() { Dock = DockStyle.Top, Height = 40, Visible = false, BackColor = JiraTheme.BgSurface };
     private IssueDetailsDto? _details;
@@ -119,87 +120,65 @@ public class IssueDetailsForm : Form
         _title.Font = JiraTheme.FontH1;
         _title.AutoSize = false;
         _title.Height = 42;
-        _title.Click += (_, _) => BeginTitleEdit();
+        _title.Click += OnTitleClicked;
         _titleEditor.Font = JiraTheme.FontH1;
         _titleEditor.Visible = false;
-        _titleEditor.KeyDown += async (_, e) =>
-        {
-            if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await CommitTitleAsync(); }
-            else if (e.KeyCode == Keys.Escape) CancelTitleEdit();
-        };
-        _titleEditor.Leave += async (_, _) => await CommitTitleAsync();
+        _titleEditor.KeyDown += OnTitleEditorKeyDown;
+        _titleEditor.Leave += OnTitleEditorLeave;
 
-        _descriptionEdit.Click += (_, _) => SetDescriptionMode(false, true);
-        _descriptionPreview.Click += async (_, _) => await ShowDescriptionPreviewAsync();
-        _descriptionEditor.EditorLeave += async (_, _) => await SaveDescriptionAsync();
+        _descriptionEdit.Click += OnDescriptionEditClick;
+        _descriptionPreview.Click += OnDescriptionPreviewClick;
+        _descriptionEditor.EditorLeave += OnDescriptionEditorLeave;
 
         _commentInput.Multiline = true;
         _commentInput.Height = 72;
         _saveComment.AutoSize = false;
         _saveComment.Size = new Size(90, 36);
-        _saveComment.Click += async (_, _) => await AddCommentAsync();
+        _saveComment.Click += OnSaveCommentClick;
         _childIssuesTab.Width = 116;
-        _childIssuesTab.Click += (_, _) => ActivateTab(DetailsTab.ChildIssues);
+        _childIssuesTab.Click += OnChildIssuesTabClick;
         _addExistingIssueButton.AutoSize = false;
         _addExistingIssueButton.Size = new Size(148, 34);
-        _addExistingIssueButton.Click += async (_, _) => await AddExistingChildIssueAsync();
+        _addExistingIssueButton.Click += OnAddExistingIssueButtonClick;
         _createChildIssueButton.AutoSize = false;
         _createChildIssueButton.Size = new Size(136, 34);
-        _createChildIssueButton.Click += async (_, _) => await CreateChildIssueAsync();
-        _parentLink.LinkClicked += (_, e) =>
-        {
-            if (e.Link?.LinkData is int parentIssueId)
-            {
-                using var dialog = new IssueDetailsForm(_session, parentIssueId, _projectId);
-                dialog.ShowDialog(this);
-            }
-        };
+        _createChildIssueButton.Click += OnCreateChildIssueButtonClick;
+        _parentLink.LinkClicked += OnParentLinkClicked;
 
         _status.DisplayMember = nameof(WorkflowStatusOptionDto.Name);
         _status.ValueMember = nameof(WorkflowStatusOptionDto.Id);
         _status.DrawItem += DrawStatus;
-        _status.SelectedIndexChanged += async (_, _) => await SaveIssueAsync();
+        _status.SelectedIndexChanged += OnStatusSelectedIndexChanged;
         _priority.DataSource = Enum.GetValues<IssuePriority>();
         _priority.DrawItem += DrawPriority;
-        _priority.SelectedIndexChanged += async (_, _) => await SaveIssueAsync();
-        _sprint.SelectedIndexChanged += async (_, _) => await SaveIssueAsync();
-        _storyPoints.ValueChanged += async (_, _) => { if (_storyPoints.Focused) await SaveIssueAsync(); };
-        _assignee.Click += async (_, _) => await ShowAssigneePickerAsync();
+        _priority.SelectedIndexChanged += OnPrioritySelectedIndexChanged;
+        _sprint.SelectedIndexChanged += OnSprintSelectedIndexChanged;
+        _storyPoints.ValueChanged += OnStoryPointsValueChanged;
+        _assignee.Click += OnAssigneeClick;
         _editLabels.AutoSize = false;
         _editLabels.Size = new Size(96, 28);
         _editLabels.Margin = new Padding(0, 0, 0, 0);
-        _editLabels.Click += async (_, _) => await ShowLabelPickerAsync();
+        _editLabels.Click += OnEditLabelsClick;
         _component.DisplayMember = nameof(LookupOption.Text);
         _component.ValueMember = nameof(LookupOption.Value);
-        _component.SelectedIndexChanged += async (_, _) => await SaveComponentAsync();
+        _component.SelectedIndexChanged += OnComponentSelectedIndexChanged;
         _fixVersion.DisplayMember = nameof(LookupOption.Text);
         _fixVersion.ValueMember = nameof(LookupOption.Value);
-        _fixVersion.SelectedIndexChanged += async (_, _) => await SaveFixVersionAsync();
+        _fixVersion.SelectedIndexChanged += OnFixVersionSelectedIndexChanged;
         ConfigureDueDateField();
-        _dueDateDisplay.LinkClicked += (_, _) => BeginDueDateEdit();
-        _dueDateDisplay.Click += (_, _) => BeginDueDateEdit();
-        _dueDatePicker.CloseUp += async (_, _) => await CommitDueDateAsync();
-        _dueDatePicker.Leave += async (_, _) => await CommitDueDateAsync();
-        _dueDatePicker.KeyDown += async (_, e) =>
-        {
-            if (e.KeyCode == Keys.Enter)
-            {
-                e.SuppressKeyPress = true;
-                await CommitDueDateAsync();
-            }
-            else if (e.KeyCode == Keys.Escape)
-            {
-                CancelDueDateEdit();
-            }
-        };
+        _dueDateDisplay.LinkClicked += OnDueDateDisplayLinkClicked;
+        _dueDateDisplay.Click += OnDueDateDisplayClick;
+        _dueDatePicker.CloseUp += OnDueDatePickerCloseUp;
+        _dueDatePicker.Leave += OnDueDatePickerLeave;
+        _dueDatePicker.KeyDown += OnDueDatePickerKeyDown;
         _logTime.AutoSize = false;
         ConfigureWatchField();
-        _watchButton.Click += async (_, _) => await ToggleWatchAsync();
+        _watchButton.Click += OnWatchButtonClick;
         _logTime.Size = new Size(100, 36);
-        _logTime.Click += async (_, _) => await LogTimeAsync();
+        _logTime.Click += OnLogTimeClick;
         _delete.AutoSize = false;
         _delete.Size = new Size(88, 34);
-        _delete.Click += async (_, _) => await DeleteIssueAsync();
+        _delete.Click += OnDeleteButtonClick;
 
         _comments.EditRequested = EditCommentAsync;
         _comments.DeleteRequested = DeleteCommentAsync;
@@ -207,19 +186,216 @@ public class IssueDetailsForm : Form
         _attachments.DeleteRequested = DeleteAttachmentAsync;
         _attachmentPicker.UploadRequested = UploadAttachmentAsync;
         ContextMenuStrip = new ContextMenuStrip();
-        ContextMenuStrip.Items.Add("Delete issue", null, async (_, _) => await DeleteIssueAsync());
+        _deleteIssueMenuItem.Click += OnDeleteIssueMenuItemClick;
+        ContextMenuStrip.Items.Add(_deleteIssueMenuItem);
 
         _split.Panel1.Controls.Add(BuildLeft());
         _split.Panel2.Controls.Add(BuildRight());
-        Load += (_, _) => QueueSafeUpdateSplitLayout();
-        Shown += async (_, _) =>
+        Load += OnIssueDetailsLoad;
+        Shown += OnIssueDetailsShown;
+        Resize += OnIssueDetailsResize;
+        _split.SizeChanged += OnSplitSizeChanged;
+    }
+
+    private void OnTitleClicked(object? sender, EventArgs e)
+    {
+        BeginTitleEdit();
+    }
+
+    private async void OnTitleEditorKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Enter)
         {
-            QueueSafeUpdateSplitLayout();
-            await LoadDetailsAsync();
-            QueueSafeUpdateSplitLayout();
-        };
-        Resize += (_, _) => QueueSafeUpdateSplitLayout();
-        _split.SizeChanged += (_, _) => QueueSafeUpdateSplitLayout();
+            e.SuppressKeyPress = true;
+            await CommitTitleAsync();
+            return;
+        }
+
+        if (e.KeyCode == Keys.Escape)
+        {
+            CancelTitleEdit();
+        }
+    }
+
+    private async void OnTitleEditorLeave(object? sender, EventArgs e)
+    {
+        await CommitTitleAsync();
+    }
+
+    private void OnDescriptionEditClick(object? sender, EventArgs e)
+    {
+        SetDescriptionMode(false, true);
+    }
+
+    private async void OnDescriptionPreviewClick(object? sender, EventArgs e)
+    {
+        await ShowDescriptionPreviewAsync();
+    }
+
+    private async void OnDescriptionEditorLeave(object? sender, EventArgs e)
+    {
+        await SaveDescriptionAsync();
+    }
+
+    private async void OnSaveCommentClick(object? sender, EventArgs e)
+    {
+        await AddCommentAsync();
+    }
+
+    private void OnCommentsTabClick(object? sender, EventArgs e)
+    {
+        ActivateTab(DetailsTab.Comments);
+    }
+
+    private void OnHistoryTabClick(object? sender, EventArgs e)
+    {
+        ActivateTab(DetailsTab.History);
+    }
+
+    private void OnChildIssuesTabClick(object? sender, EventArgs e)
+    {
+        ActivateTab(DetailsTab.ChildIssues);
+    }
+
+    private async void OnAddExistingIssueButtonClick(object? sender, EventArgs e)
+    {
+        await AddExistingChildIssueAsync();
+    }
+
+    private async void OnCreateChildIssueButtonClick(object? sender, EventArgs e)
+    {
+        await CreateChildIssueAsync();
+    }
+
+    private void OnParentLinkClicked(object? sender, LinkLabelLinkClickedEventArgs e)
+    {
+        if (e.Link?.LinkData is not int parentIssueId)
+        {
+            return;
+        }
+
+        using var dialog = new IssueDetailsForm(_session, parentIssueId, _projectId);
+        dialog.ShowDialog(this);
+    }
+
+    private async void OnStatusSelectedIndexChanged(object? sender, EventArgs e)
+    {
+        await SaveIssueAsync();
+    }
+
+    private async void OnPrioritySelectedIndexChanged(object? sender, EventArgs e)
+    {
+        await SaveIssueAsync();
+    }
+
+    private async void OnSprintSelectedIndexChanged(object? sender, EventArgs e)
+    {
+        await SaveIssueAsync();
+    }
+
+    private async void OnStoryPointsValueChanged(object? sender, EventArgs e)
+    {
+        if (_storyPoints.Focused)
+        {
+            await SaveIssueAsync();
+        }
+    }
+
+    private async void OnAssigneeClick(object? sender, EventArgs e)
+    {
+        await ShowAssigneePickerAsync();
+    }
+
+    private async void OnEditLabelsClick(object? sender, EventArgs e)
+    {
+        await ShowLabelPickerAsync();
+    }
+
+    private async void OnComponentSelectedIndexChanged(object? sender, EventArgs e)
+    {
+        await SaveComponentAsync();
+    }
+
+    private async void OnFixVersionSelectedIndexChanged(object? sender, EventArgs e)
+    {
+        await SaveFixVersionAsync();
+    }
+
+    private void OnDueDateDisplayLinkClicked(object? sender, LinkLabelLinkClickedEventArgs e)
+    {
+        BeginDueDateEdit();
+    }
+
+    private void OnDueDateDisplayClick(object? sender, EventArgs e)
+    {
+        BeginDueDateEdit();
+    }
+
+    private async void OnDueDatePickerCloseUp(object? sender, EventArgs e)
+    {
+        await CommitDueDateAsync();
+    }
+
+    private async void OnDueDatePickerLeave(object? sender, EventArgs e)
+    {
+        await CommitDueDateAsync();
+    }
+
+    private async void OnDueDatePickerKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Enter)
+        {
+            e.SuppressKeyPress = true;
+            await CommitDueDateAsync();
+            return;
+        }
+
+        if (e.KeyCode == Keys.Escape)
+        {
+            CancelDueDateEdit();
+        }
+    }
+
+    private async void OnWatchButtonClick(object? sender, EventArgs e)
+    {
+        await ToggleWatchAsync();
+    }
+
+    private async void OnLogTimeClick(object? sender, EventArgs e)
+    {
+        await LogTimeAsync();
+    }
+
+    private async void OnDeleteButtonClick(object? sender, EventArgs e)
+    {
+        await DeleteIssueAsync();
+    }
+
+    private async void OnDeleteIssueMenuItemClick(object? sender, EventArgs e)
+    {
+        await DeleteIssueAsync();
+    }
+
+    private void OnIssueDetailsLoad(object? sender, EventArgs e)
+    {
+        QueueSafeUpdateSplitLayout();
+    }
+
+    private async void OnIssueDetailsShown(object? sender, EventArgs e)
+    {
+        QueueSafeUpdateSplitLayout();
+        await LoadDetailsAsync();
+        QueueSafeUpdateSplitLayout();
+    }
+
+    private void OnIssueDetailsResize(object? sender, EventArgs e)
+    {
+        QueueSafeUpdateSplitLayout();
+    }
+
+    private void OnSplitSizeChanged(object? sender, EventArgs e)
+    {
+        QueueSafeUpdateSplitLayout();
     }
 
     private void QueueSafeUpdateSplitLayout()
@@ -404,8 +580,8 @@ public class IssueDetailsForm : Form
         _commentsTab.Location = new Point(0, 0);
         _historyTab.Location = new Point(104, 0);
         _childIssuesTab.Location = new Point(198, 0);
-        _commentsTab.Click += (_, _) => ActivateTab(DetailsTab.Comments);
-        _historyTab.Click += (_, _) => ActivateTab(DetailsTab.History);
+        _commentsTab.Click += OnCommentsTabClick;
+        _historyTab.Click += OnHistoryTabClick;
         _tabIndicator.Location = new Point(0, 32);
         tabs.Controls.Add(_tabIndicator);
         tabs.Controls.Add(_childIssuesTab);
@@ -664,11 +840,13 @@ public class IssueDetailsForm : Form
             Padding = new Padding(0, 4, 0, 4),
             Cursor = Cursors.Hand
         };
-        row.Paint += (_, e) =>
+        void OnRowPaint(object? sender, PaintEventArgs e)
         {
             using var pen = new Pen(JiraTheme.Border);
             e.Graphics.DrawLine(pen, 0, row.Height - 1, row.Width, row.Height - 1);
-        };
+        }
+
+        row.Paint += OnRowPaint;
 
         var badge = JiraBadge.ForType(child.Type);
         badge.Location = new Point(0, 12);
@@ -707,8 +885,13 @@ public class IssueDetailsForm : Form
             dialog.ShowDialog(this);
         }
 
+        void OnTitleLinkClicked(object? sender, LinkLabelLinkClickedEventArgs e)
+        {
+            OpenChild(sender, EventArgs.Empty);
+        }
+
         row.Click += OpenChild;
-        titleLink.LinkClicked += (_, _) => OpenChild(null, EventArgs.Empty);
+        titleLink.LinkClicked += OnTitleLinkClicked;
         foreach (Control nested in new Control[] { badge, meta, status })
         {
             nested.Click += OpenChild;
@@ -1490,6 +1673,52 @@ public class IssueDetailsForm : Form
         catch (Exception ex) { ErrorDialogService.Show(ex); }
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            Load -= OnIssueDetailsLoad;
+            Shown -= OnIssueDetailsShown;
+            Resize -= OnIssueDetailsResize;
+            _split.SizeChanged -= OnSplitSizeChanged;
+            _title.Click -= OnTitleClicked;
+            _titleEditor.KeyDown -= OnTitleEditorKeyDown;
+            _titleEditor.Leave -= OnTitleEditorLeave;
+            _descriptionEdit.Click -= OnDescriptionEditClick;
+            _descriptionPreview.Click -= OnDescriptionPreviewClick;
+            _descriptionEditor.EditorLeave -= OnDescriptionEditorLeave;
+            _saveComment.Click -= OnSaveCommentClick;
+            _commentsTab.Click -= OnCommentsTabClick;
+            _historyTab.Click -= OnHistoryTabClick;
+            _childIssuesTab.Click -= OnChildIssuesTabClick;
+            _addExistingIssueButton.Click -= OnAddExistingIssueButtonClick;
+            _createChildIssueButton.Click -= OnCreateChildIssueButtonClick;
+            _parentLink.LinkClicked -= OnParentLinkClicked;
+            _status.DrawItem -= DrawStatus;
+            _status.SelectedIndexChanged -= OnStatusSelectedIndexChanged;
+            _priority.DrawItem -= DrawPriority;
+            _priority.SelectedIndexChanged -= OnPrioritySelectedIndexChanged;
+            _sprint.SelectedIndexChanged -= OnSprintSelectedIndexChanged;
+            _storyPoints.ValueChanged -= OnStoryPointsValueChanged;
+            _assignee.Click -= OnAssigneeClick;
+            _editLabels.Click -= OnEditLabelsClick;
+            _component.SelectedIndexChanged -= OnComponentSelectedIndexChanged;
+            _fixVersion.SelectedIndexChanged -= OnFixVersionSelectedIndexChanged;
+            _dueDateDisplay.LinkClicked -= OnDueDateDisplayLinkClicked;
+            _dueDateDisplay.Click -= OnDueDateDisplayClick;
+            _dueDatePicker.CloseUp -= OnDueDatePickerCloseUp;
+            _dueDatePicker.Leave -= OnDueDatePickerLeave;
+            _dueDatePicker.KeyDown -= OnDueDatePickerKeyDown;
+            _watchButton.Click -= OnWatchButtonClick;
+            _logTime.Click -= OnLogTimeClick;
+            _delete.Click -= OnDeleteButtonClick;
+            _deleteIssueMenuItem.Click -= OnDeleteIssueMenuItemClick;
+            ContextMenuStrip?.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
     private void DrawStatus(object? sender, DrawItemEventArgs e)
     {
         if (e.Index < 0) return;
@@ -1707,8 +1936,18 @@ public class IssueDetailsForm : Form
             _comment.Dock = DockStyle.Fill;
             var save = JiraControlFactory.CreatePrimaryButton("Save");
             var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
-            save.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };
-            cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+
+            void CloseWithResult(DialogResult result)
+            {
+                DialogResult = result;
+                Close();
+            }
+
+            void OnSaveClick(object? sender, EventArgs e) => CloseWithResult(DialogResult.OK);
+            void OnCancelClick(object? sender, EventArgs e) => CloseWithResult(DialogResult.Cancel);
+
+            save.Click += OnSaveClick;
+            cancel.Click += OnCancelClick;
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 48, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = JiraTheme.BgSurface };
             buttons.Controls.Add(save);
             buttons.Controls.Add(cancel);
@@ -1763,8 +2002,18 @@ public class IssueDetailsForm : Form
 
             var save = JiraControlFactory.CreatePrimaryButton("Apply");
             var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
-            save.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };
-            cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+
+            void CloseWithResult(DialogResult result)
+            {
+                DialogResult = result;
+                Close();
+            }
+
+            void OnSaveClick(object? sender, EventArgs e) => CloseWithResult(DialogResult.OK);
+            void OnCancelClick(object? sender, EventArgs e) => CloseWithResult(DialogResult.Cancel);
+
+            save.Click += OnSaveClick;
+            cancel.Click += OnCancelClick;
 
             var buttons = new FlowLayoutPanel
             {
@@ -1835,8 +2084,18 @@ public class IssueDetailsForm : Form
 
             var save = JiraControlFactory.CreatePrimaryButton("Link issues");
             var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
-            save.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };
-            cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+
+            void CloseWithResult(DialogResult result)
+            {
+                DialogResult = result;
+                Close();
+            }
+
+            void OnSaveClick(object? sender, EventArgs e) => CloseWithResult(DialogResult.OK);
+            void OnCancelClick(object? sender, EventArgs e) => CloseWithResult(DialogResult.Cancel);
+
+            save.Click += OnSaveClick;
+            cancel.Click += OnCancelClick;
 
             var buttons = new FlowLayoutPanel
             {
@@ -1902,8 +2161,18 @@ public class IssueDetailsForm : Form
 
             var save = JiraControlFactory.CreatePrimaryButton("Apply");
             var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
-            save.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };
-            cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+
+            void CloseWithResult(DialogResult result)
+            {
+                DialogResult = result;
+                Close();
+            }
+
+            void OnSaveClick(object? sender, EventArgs e) => CloseWithResult(DialogResult.OK);
+            void OnCancelClick(object? sender, EventArgs e) => CloseWithResult(DialogResult.Cancel);
+
+            save.Click += OnSaveClick;
+            cancel.Click += OnCancelClick;
 
             var buttons = new FlowLayoutPanel
             {
@@ -1936,6 +2205,19 @@ public class IssueDetailsForm : Form
         public IReadOnlyList<int> SelectedUserIds => _assignees.CheckedItems.Cast<User>().Select(x => x.Id).ToList();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using JiraClone.Application.Abstractions;
@@ -6,6 +6,7 @@ using JiraClone.Application.Models;
 using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
+using JiraClone.Domain.Permissions;
 using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -29,6 +30,7 @@ public class ProjectCommandService : IProjectCommandService
     private readonly IIssueRepository _issues;
     private readonly ISprintRepository _sprints;
     private readonly IAuthorizationService _authorization;
+    private readonly IPermissionService _permissionService;
     private readonly IActivityLogRepository _activityLogs;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
@@ -40,6 +42,7 @@ public class ProjectCommandService : IProjectCommandService
         IIssueRepository issues,
         ISprintRepository sprints,
         IAuthorizationService authorization,
+        IPermissionService permissionService,
         IActivityLogRepository activityLogs,
         ICurrentUserContext currentUserContext,
         IUnitOfWork unitOfWork,
@@ -50,6 +53,7 @@ public class ProjectCommandService : IProjectCommandService
         _issues = issues;
         _sprints = sprints;
         _authorization = authorization;
+        _permissionService = permissionService;
         _activityLogs = activityLogs;
         _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
@@ -98,6 +102,7 @@ public class ProjectCommandService : IProjectCommandService
             UpdatedAtUtc = now,
         };
         project.WorkflowDefinitions.Add(workflow);
+        project.PermissionScheme = CreateDefaultPermissionScheme(now);
 
         foreach (var template in DefaultWorkflowStatuses.Select((value, index) => new { value, index }))
         {
@@ -183,7 +188,7 @@ public class ProjectCommandService : IProjectCommandService
 
     public async Task<Project?> UpdateProjectAsync(int projectId, string name, string? description, ProjectCategory category, BoardType boardType, string? url, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
+        await EnsurePermissionAsync(projectId, Permission.ManageProject, cancellationToken);
         var project = await _projects.GetByIdAsync(projectId, cancellationToken);
         if (project is null)
         {
@@ -254,7 +259,7 @@ public class ProjectCommandService : IProjectCommandService
 
     public async Task<bool> ArchiveProjectAsync(int projectId, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(RoleCatalog.Admin);
+        await EnsureProjectAdminAsync(projectId, cancellationToken);
         var project = await _projects.GetByIdAsync(projectId, cancellationToken);
         if (project is null || !project.IsActive)
         {
@@ -271,7 +276,7 @@ public class ProjectCommandService : IProjectCommandService
 
     public async Task<bool> DeleteProjectAsync(int projectId, int userId, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(RoleCatalog.Admin);
+        await EnsureProjectAdminAsync(projectId, cancellationToken);
 
         var currentUserId = _currentUserContext.CurrentUser?.Id;
         if (currentUserId.HasValue && currentUserId.Value != userId)
@@ -359,6 +364,7 @@ public class ProjectCommandService : IProjectCommandService
             DeletedComponentCount = project.Components.Count,
             DeletedVersionCount = project.Versions.Count,
             DeletedWorkflowCount = project.WorkflowDefinitions.Count,
+            DeletedPermissionGrantCount = project.PermissionScheme?.Grants.Count ?? 0,
             DeletedSavedFilterCount = project.SavedFilters.Count,
             DeletedByUserId = userId,
             DeletedAtUtc = now,
@@ -383,7 +389,7 @@ public class ProjectCommandService : IProjectCommandService
 
     public async Task<bool> UpdateMemberRoleAsync(int projectId, int userId, ProjectRole projectRole, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
+        await EnsurePermissionAsync(projectId, Permission.ManageMembers, cancellationToken);
         var project = await _projects.GetByIdAsync(projectId, cancellationToken);
         var membership = project?.Members.FirstOrDefault(x => x.UserId == userId);
         if (membership is null)
@@ -400,7 +406,7 @@ public class ProjectCommandService : IProjectCommandService
 
     public async Task<bool> AddMemberAsync(int projectId, int userId, ProjectRole projectRole, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
+        await EnsurePermissionAsync(projectId, Permission.ManageMembers, cancellationToken);
         var project = await _projects.GetByIdAsync(projectId, cancellationToken);
         var user = await _users.GetByIdAsync(userId, cancellationToken);
         if (project is null || user is null || !user.IsActive || project.Members.Any(x => x.UserId == userId))
@@ -424,7 +430,7 @@ public class ProjectCommandService : IProjectCommandService
 
     public async Task<bool> RemoveMemberAsync(int projectId, int userId, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
+        await EnsurePermissionAsync(projectId, Permission.ManageMembers, cancellationToken);
         var project = await _projects.GetByIdAsync(projectId, cancellationToken);
         var membership = project?.Members.FirstOrDefault(x => x.UserId == userId);
         if (membership is null)
@@ -441,7 +447,7 @@ public class ProjectCommandService : IProjectCommandService
 
     public async Task<bool> UpdateBoardColumnAsync(int projectId, int boardColumnId, string name, int? wipLimit, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
+        await EnsurePermissionAsync(projectId, Permission.ManageBoard, cancellationToken);
         var project = await _projects.GetByIdAsync(projectId, cancellationToken);
         var column = project?.BoardColumns.FirstOrDefault(x => x.Id == boardColumnId);
         if (column is null)
@@ -470,6 +476,63 @@ public class ProjectCommandService : IProjectCommandService
         return true;
     }
 
+    public async Task<bool> UpdatePermissionSchemeAsync(int projectId, string name, IReadOnlyCollection<PermissionGrantInput> grants, CancellationToken cancellationToken = default)
+    {
+        await EnsureProjectAdminAsync(projectId, cancellationToken);
+        var project = await _projects.GetByIdAsync(projectId, cancellationToken);
+        if (project is null)
+        {
+            return false;
+        }
+
+        var normalizedName = string.IsNullOrWhiteSpace(name) ? PermissionDefaults.DefaultSchemeName : name.Trim();
+        var scheme = project.PermissionScheme;
+        if (scheme is null)
+        {
+            scheme = new PermissionScheme
+            {
+                ProjectId = projectId,
+                Name = normalizedName,
+                CreatedAtUtc = DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.UtcNow,
+            };
+            project.PermissionScheme = scheme;
+        }
+        else
+        {
+            scheme.Name = normalizedName;
+            scheme.UpdatedAtUtc = DateTime.UtcNow;
+            scheme.Grants.Clear();
+        }
+
+        foreach (var grant in (grants ?? Array.Empty<PermissionGrantInput>())
+                     .DistinctBy(x => new { x.Permission, x.ProjectRole })
+                     .OrderBy(x => x.Permission)
+                     .ThenBy(x => x.ProjectRole))
+        {
+            scheme.Grants.Add(new PermissionGrant
+            {
+                Permission = grant.Permission,
+                ProjectRole = grant.ProjectRole,
+            });
+        }
+
+        await AddProjectActivityAsync(
+            projectId,
+            ActivityActionType.Updated,
+            nameof(PermissionScheme),
+            null,
+            normalizedName,
+            cancellationToken,
+            metadataJson: JsonSerializer.Serialize(new
+            {
+                SchemeName = normalizedName,
+                Grants = scheme.Grants.Select(x => new { x.Permission, x.ProjectRole }).ToArray()
+            }));
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     private static string NormalizeProjectKey(string? key)
     {
         return (key ?? string.Empty).Trim().ToUpperInvariant();
@@ -489,6 +552,47 @@ public class ProjectCommandService : IProjectCommandService
             ProjectRole = role,
             JoinedAtUtc = joinedAtUtc,
         });
+    }
+
+    private static PermissionScheme CreateDefaultPermissionScheme(DateTime now)
+    {
+        var scheme = new PermissionScheme
+        {
+            Name = PermissionDefaults.DefaultSchemeName,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+        };
+
+        foreach (var grant in PermissionDefaults.GetDefaultGrants())
+        {
+            scheme.Grants.Add(new PermissionGrant
+            {
+                Permission = grant.Permission,
+                ProjectRole = grant.ProjectRole,
+            });
+        }
+
+        return scheme;
+    }
+
+    private async Task EnsurePermissionAsync(int projectId, Permission permission, CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserContext.CurrentUser?.Id ?? throw new InvalidOperationException("No user is currently logged in.");
+        if (!await _permissionService.HasPermissionAsync(currentUserId, projectId, permission, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Current user does not have permission to perform this action.");
+        }
+    }
+
+    private async Task EnsureProjectAdminAsync(int projectId, CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserContext.CurrentUser?.Id ?? throw new InvalidOperationException("No user is currently logged in.");
+        var project = await _projects.GetByIdAsync(projectId, cancellationToken);
+        var role = project?.Members.FirstOrDefault(member => member.UserId == currentUserId)?.ProjectRole;
+        if (role != ProjectRole.Admin)
+        {
+            throw new UnauthorizedAccessException("Current user does not have permission to perform this action.");
+        }
     }
 
     private async Task AddProjectActivityAsync(

@@ -15,4 +15,8 @@ public interface IProjectCommandService
     Task<bool> UpdateMemberRoleAsync(int projectId, int userId, ProjectRole projectRole, CancellationToken cancellationToken = default);
     Task<bool> RemoveMemberAsync(int projectId, int userId, CancellationToken cancellationToken = default);
     Task<bool> UpdateBoardColumnAsync(int projectId, int boardColumnId, string name, int? wipLimit, CancellationToken cancellationToken = default);
+    Task<bool> UpdatePermissionSchemeAsync(int projectId, string name, IReadOnlyCollection<PermissionGrantInput> grants, CancellationToken cancellationToken = default);
 }
+
+
+

@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Dashboard;
 using JiraClone.Application.Issues;
@@ -228,7 +228,7 @@ public sealed class DashboardForm : UserControl
                     return;
                 }
 
-                overview = await GetOverviewAsync(project.Id, cancellationToken);
+                overview = await _session.Dashboard.GetOverviewAsync(project.Id, cancellationToken);
             }, cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -255,18 +255,6 @@ public sealed class DashboardForm : UserControl
         }
     }
 
-    private async Task<DashboardOverviewDto> GetOverviewAsync(int projectId, CancellationToken cancellationToken)
-    {
-        await using var dbContext = _session.CreateDbContext();
-        var query = new DashboardQueryService(
-            _session.CreateBoardQueryService(dbContext),
-            new IssueQueryService(new IssueRepository(dbContext)),
-            new ActivityLogRepository(dbContext),
-            new UserRepository(dbContext),
-            new SprintRepository(dbContext),
-            _session.CurrentUserContext);
-        return await query.GetOverviewAsync(projectId, cancellationToken);
-    }
 
     private void BindOverview()
     {
@@ -1042,4 +1030,5 @@ public sealed class DashboardForm : UserControl
         };
     }
 }
+
 

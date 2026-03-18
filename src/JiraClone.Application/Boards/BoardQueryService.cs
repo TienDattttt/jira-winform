@@ -15,17 +15,23 @@ public class BoardQueryService : IBoardQueryService
     private readonly IIssueRepository _issues;
     private readonly IProjectRepository _projects;
     private readonly IActivityLogRepository _activityLogs;
+    private readonly ICurrentUserContext _currentUserContext;
+    private readonly IPermissionService _permissionService;
     private readonly ILogger<BoardQueryService> _logger;
 
     public BoardQueryService(
         IIssueRepository issues,
         IProjectRepository projects,
         IActivityLogRepository activityLogs,
+        ICurrentUserContext currentUserContext,
+        IPermissionService permissionService,
         ILogger<BoardQueryService>? logger = null)
     {
         _issues = issues;
         _projects = projects;
         _activityLogs = activityLogs;
+        _currentUserContext = currentUserContext;
+        _permissionService = permissionService;
         _logger = logger ?? NullLogger<BoardQueryService>.Instance;
     }
 
@@ -38,6 +44,8 @@ public class BoardQueryService : IBoardQueryService
     public async Task<IReadOnlyList<BoardColumnDto>> GetBoardAsync(int projectId, int? sprintId, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Loading board for project {ProjectId} and sprint {SprintId}.", projectId, sprintId);
+        await EnsurePermissionAsync(projectId, cancellationToken);
+
         var project = await _projects.GetByIdAsync(projectId, cancellationToken);
         if (project is null)
         {
@@ -75,6 +83,8 @@ public class BoardQueryService : IBoardQueryService
     public async Task<TimeSpan?> GetAverageCycleTimeAsync(int projectId, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Calculating average cycle time for project {ProjectId}.", projectId);
+        await EnsurePermissionAsync(projectId, cancellationToken);
+
         var statusChanges = await _activityLogs.GetProjectStatusChangesAsync(projectId, cancellationToken);
         if (statusChanges.Count == 0)
         {
@@ -187,6 +197,15 @@ public class BoardQueryService : IBoardQueryService
         catch (JsonException)
         {
             return null;
+        }
+    }
+
+    private async Task EnsurePermissionAsync(int projectId, CancellationToken cancellationToken)
+    {
+        var userId = _currentUserContext.RequireUserId();
+        if (!await _permissionService.HasPermissionAsync(userId, projectId, Permission.ViewProject, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Current user does not have permission to view this project.");
         }
     }
 

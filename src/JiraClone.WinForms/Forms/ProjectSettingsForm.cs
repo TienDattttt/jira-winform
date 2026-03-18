@@ -1,5 +1,6 @@
-using JiraClone.Application.Roles;
+using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
+using JiraClone.Domain.Permissions;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
@@ -13,6 +14,9 @@ namespace JiraClone.WinForms.Forms;
 
 public class ProjectSettingsForm : UserControl
 {
+
+
+    private ProjectMember? SelectedMember => _members.SelectedItems.Count == 0 ? null : _members.SelectedItems[0].Tag as ProjectMember;
     private readonly AppSession _session;
     private readonly TextBox _name = JiraControlFactory.CreateTextBox();
     private readonly TextBox _description = JiraControlFactory.CreateTextBox();
@@ -24,6 +28,10 @@ public class ProjectSettingsForm : UserControl
     private readonly ListView _labels = CreateListView();
     private readonly ListView _components = CreateListView();
     private readonly ListView _versions = CreateListView();
+    private readonly TextBox _permissionSchemeName = JiraControlFactory.CreateTextBox();
+    private readonly TableLayoutPanel _permissionMatrix = new() { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 5, Padding = new Padding(0), Margin = new Padding(0), BackColor = JiraTheme.BgSurface };
+    private readonly Dictionary<(Permission Permission, ProjectRole Role), CheckBox> _permissionChecks = new();
+    private readonly ProfileSettingsControl _profileSettings;
     private readonly WorkflowSettingsControl _workflowSettings;
     private readonly Button _saveProject = JiraControlFactory.CreatePrimaryButton("Save Project");
     private readonly Button _saveBoardSettings = JiraControlFactory.CreateSecondaryButton("Save Board");
@@ -43,6 +51,7 @@ public class ProjectSettingsForm : UserControl
     private readonly Button _editVersion = JiraControlFactory.CreateSecondaryButton("Edit Version");
     private readonly Button _deleteVersion = JiraControlFactory.CreateSecondaryButton("Delete Version");
     private readonly Button _markVersionReleased = JiraControlFactory.CreateSecondaryButton("Mark Released");
+    private readonly Button _savePermissions = JiraControlFactory.CreatePrimaryButton("Save Permissions");
     private readonly Label _memberCountBadge = CreateBadgeLabel();
     private readonly Label _columnCountBadge = CreateBadgeLabel();
     private readonly Label _labelCountBadge = CreateBadgeLabel();
@@ -60,6 +69,7 @@ public class ProjectSettingsForm : UserControl
     public ProjectSettingsForm(AppSession session)
     {
         _session = session;
+        _profileSettings = new ProfileSettingsControl(_session);
         _workflowSettings = new WorkflowSettingsControl(_session);
         BackColor = JiraTheme.BgPage;
         Font = JiraTheme.FontBody;
@@ -69,6 +79,7 @@ public class ProjectSettingsForm : UserControl
         _url.MinimumSize = new Size(360, 38);
         _category.MinimumSize = new Size(360, 38);
         _boardType.MinimumSize = new Size(260, 38);
+        _permissionSchemeName.MinimumSize = new Size(360, 38);
         _description.Multiline = true;
         _description.Height = 96;
         _description.ScrollBars = ScrollBars.Vertical;
@@ -76,31 +87,52 @@ public class ProjectSettingsForm : UserControl
         _boardType.DataSource = Enum.GetValues<BoardType>();
 
         ConfigureListViews();
+        BuildPermissionMatrix();
         WireActions();
         ConfigureActionButtons();
 
         var tabs = new TabControl { Dock = DockStyle.Fill, Font = JiraTheme.FontBody };
+        tabs.TabPages.Add(BuildProfileTab());
         tabs.TabPages.Add(BuildGeneralTab());
         tabs.TabPages.Add(BuildMembersTab());
         tabs.TabPages.Add(BuildColumnsTab());
         tabs.TabPages.Add(BuildWorkflowTab());
+        tabs.TabPages.Add(BuildPermissionsTab());
         tabs.TabPages.Add(BuildLabelsTab());
         tabs.TabPages.Add(BuildComponentsTab());
         tabs.TabPages.Add(BuildVersionsTab());
 
         Controls.Add(tabs);
         Controls.Add(BuildHeader());
-        Load += async (_, _) => await LoadProjectAsync();
+        Load += async (_, _) =>
+        {
+            await _profileSettings.RefreshProfileAsync();
+            await LoadProjectAsync();
+        };
         UpdateActionState();
     }
 
-    private ProjectMember? SelectedMember => _members.SelectedItems.Count == 0 ? null : _members.SelectedItems[0].Tag as ProjectMember;
-    private BoardColumn? SelectedColumn => _columns.SelectedItems.Count == 0 ? null : _columns.SelectedItems[0].Tag as BoardColumn;
-    private JiraLabelEntity? SelectedProjectLabel => _labels.SelectedItems.Count == 0 ? null : _labels.SelectedItems[0].Tag as JiraLabelEntity;
-    private JiraComponentEntity? SelectedProjectComponent => _components.SelectedItems.Count == 0 ? null : _components.SelectedItems[0].Tag as JiraComponentEntity;
-    private JiraProjectVersionEntity? SelectedProjectVersion => _versions.SelectedItems.Count == 0 ? null : _versions.SelectedItems[0].Tag as JiraProjectVersionEntity;
+    
 
-    public Task RefreshProjectAsync(CancellationToken cancellationToken = default) => LoadProjectAsync(cancellationToken);
+    private BoardColumn? SelectedColumn => _columns.SelectedItems.Count == 0 ? null : _columns.SelectedItems[0].Tag as BoardColumn;
+    
+
+    private JiraLabelEntity? SelectedProjectLabel => _labels.SelectedItems.Count == 0 ? null : _labels.SelectedItems[0].Tag as JiraLabelEntity;
+    
+
+    private JiraComponentEntity? SelectedProjectComponent => _components.SelectedItems.Count == 0 ? null : _components.SelectedItems[0].Tag as JiraComponentEntity;
+    
+
+    private JiraProjectVersionEntity? SelectedProjectVersion => _versions.SelectedItems.Count == 0 ? null : _versions.SelectedItems[0].Tag as JiraProjectVersionEntity;
+    
+
+    public async Task RefreshProjectAsync(CancellationToken cancellationToken = default)
+    {
+        await _profileSettings.RefreshProfileAsync(cancellationToken);
+        await LoadProjectAsync(cancellationToken);
+    }
+
+    
 
     public void SetShellSearch(string value)
     {
@@ -108,6 +140,8 @@ public class ProjectSettingsForm : UserControl
         _workflowSettings.SetShellSearch(_shellSearch);
         BindProjectLists();
     }
+
+    
 
     private void ConfigureListViews()
     {
@@ -149,6 +183,8 @@ public class ProjectSettingsForm : UserControl
         _versions.Resize += (_, _) => ApplyResponsiveColumns();
     }
 
+    
+
     private void WireActions()
     {
         _saveProject.Click += async (_, _) => await SaveProjectAsync();
@@ -167,9 +203,12 @@ public class ProjectSettingsForm : UserControl
         _editVersion.Click += async (_, _) => await EditVersionAsync();
         _deleteVersion.Click += async (_, _) => await DeleteVersionAsync();
         _markVersionReleased.Click += async (_, _) => await MarkVersionReleasedAsync();
+        _savePermissions.Click += async (_, _) => await SavePermissionsAsync();
         _archiveProject.Click += async (_, _) => await ArchiveProjectAsync();
         _deleteProject.Click += async (_, _) => await DeleteProjectAsync();
     }
+
+    
 
     private void ConfigureActionButtons()
     {
@@ -193,7 +232,10 @@ public class ProjectSettingsForm : UserControl
         ConfigureActionButton(_editVersion, 124);
         ConfigureActionButton(_deleteVersion, 132);
         ConfigureActionButton(_markVersionReleased, 132);
+        ConfigureActionButton(_savePermissions, 148);
     }
+
+    
 
     private Control BuildHeader()
     {
@@ -202,7 +244,7 @@ public class ProjectSettingsForm : UserControl
         title.Font = JiraTheme.FontH1;
         title.Location = new Point(0, 0);
 
-        var caption = JiraControlFactory.CreateLabel("Adjust project details, members, board structure, workflows, labels, components, and release versions without leaving the desktop flow.", true);
+        var caption = JiraControlFactory.CreateLabel("Adjust project details, members, board structure, workflows, permissions, labels, components, and release versions without leaving the desktop flow.", true);
         caption.Location = new Point(0, 42);
 
         var badges = new FlowLayoutPanel
@@ -220,6 +262,15 @@ public class ProjectSettingsForm : UserControl
         header.Controls.Add(caption);
         header.Controls.Add(badges);
         return header;
+    }
+
+    
+
+    private TabPage BuildProfileTab()
+    {
+        var page = CreatePage("Profile");
+        page.Controls.Add(WrapSurface(_profileSettings));
+        return page;
     }
 
     private TabPage BuildGeneralTab()
@@ -242,6 +293,11 @@ public class ProjectSettingsForm : UserControl
         return page;
     }
 
+    
+
+    
+
+
     private TabPage BuildMembersTab()
     {
         var page = CreatePage("Members");
@@ -259,6 +315,10 @@ public class ProjectSettingsForm : UserControl
         page.Controls.Add(WrapSurface(content));
         return page;
     }
+
+    
+
+    
 
     private Control BuildBoardSettingsSection()
     {
@@ -297,6 +357,10 @@ public class ProjectSettingsForm : UserControl
         return section;
     }
 
+    
+
+    
+
     private Control BuildBoardColumnsSection()
     {
         var actions = CreateActionBar(_editColumn);
@@ -305,12 +369,78 @@ public class ProjectSettingsForm : UserControl
         return section;
     }
 
+    
+
+    
+
     private TabPage BuildWorkflowTab()
     {
         var page = CreatePage("Workflow");
         page.Controls.Add(WrapSurface(_workflowSettings));
         return page;
     }
+
+    
+
+    
+
+    private TabPage BuildPermissionsTab()
+    {
+        var page = CreatePage("Permissions");
+
+        var summary = JiraControlFactory.CreateLabel("Choose which project roles can create, edit, transition, and manage work in this project. Changes apply immediately to project-scoped service checks.", true);
+        summary.MaximumSize = new Size(860, 0);
+        summary.AutoSize = true;
+
+        var nameLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            BackColor = JiraTheme.BgSurface,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+        };
+        nameLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+        nameLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        nameLayout.Controls.Add(JiraControlFactory.CreateLabel("Scheme name", true), 0, 0);
+        nameLayout.Controls.Add(_permissionSchemeName, 1, 0);
+
+        var matrixHost = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 420,
+            AutoScroll = true,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(0, 12, 0, 0),
+        };
+        matrixHost.Controls.Add(_permissionMatrix);
+
+        var actions = CreateActionBar(_savePermissions);
+        actions.Padding = new Padding(0, 12, 0, 0);
+        actions.Height = 58;
+
+        var content = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = true,
+            Padding = new Padding(24, 24, 24, 24),
+            BackColor = JiraTheme.BgSurface,
+        };
+        content.Controls.Add(summary);
+        content.Controls.Add(nameLayout);
+        content.Controls.Add(matrixHost);
+        content.Controls.Add(actions);
+
+        page.Controls.Add(WrapSurface(content));
+        return page;
+    }
+
+    
+
+    
 
     private TabPage BuildLabelsTab()
     {
@@ -320,6 +450,8 @@ public class ProjectSettingsForm : UserControl
         return page;
     }
 
+    
+
     private TabPage BuildComponentsTab()
     {
         var page = CreatePage("Components");
@@ -328,6 +460,8 @@ public class ProjectSettingsForm : UserControl
         return page;
     }
 
+    
+
     private TabPage BuildVersionsTab()
     {
         var page = CreatePage("Versions");
@@ -335,6 +469,8 @@ public class ProjectSettingsForm : UserControl
         page.Controls.Add(WrapSurface(BuildListSurface(_versions, _versionsEmptyState, actions)));
         return page;
     }
+
+    
 
     private static Control BuildListSurface(Control list, Control emptyState, Control actions)
     {
@@ -345,12 +481,16 @@ public class ProjectSettingsForm : UserControl
         return surface;
     }
 
+    
+
     private static FlowLayoutPanel CreateActionBar(params Control[] controls)
     {
         var actions = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 60, Padding = new Padding(12, 8, 12, 10), BackColor = JiraTheme.BgSurface };
         actions.Controls.AddRange(controls);
         return actions;
     }
+
+    
 
     private static Control WrapSurface(Control inner)
     {
@@ -366,6 +506,8 @@ public class ProjectSettingsForm : UserControl
         host.Controls.Add(surface);
         return host;
     }
+
+    
 
     private async Task LoadProjectAsync(CancellationToken cancellationToken = default)
     {
@@ -394,6 +536,7 @@ public class ProjectSettingsForm : UserControl
             _labelCountBadge.Text = _project.Labels.Count == 1 ? "1 label" : $"{_project.Labels.Count} labels";
             _componentCountBadge.Text = _project.Components.Count == 1 ? "1 component" : $"{_project.Components.Count} components";
             _versionCountBadge.Text = _project.Versions.Count == 1 ? "1 version" : $"{_project.Versions.Count} versions";
+            BindPermissionScheme();
             BindProjectLists();
             UpdateActionState();
             await _workflowSettings.RefreshAsync();
@@ -410,6 +553,8 @@ public class ProjectSettingsForm : UserControl
             _isLoading = false;
         }
     }
+
+    
 
     private void BindProjectLists()
     {
@@ -476,6 +621,7 @@ public class ProjectSettingsForm : UserControl
         _versions.Visible = versions.Count > 0;
     }
 
+
     private void BindMembers(IEnumerable<ProjectMember> members)
     {
         _members.BeginUpdate();
@@ -489,6 +635,8 @@ public class ProjectSettingsForm : UserControl
         }
         _members.EndUpdate();
     }
+
+    
 
     private void BindColumns(IEnumerable<BoardColumn> columns)
     {
@@ -504,6 +652,8 @@ public class ProjectSettingsForm : UserControl
         _columns.EndUpdate();
     }
 
+    
+
     private void BindLabels(IEnumerable<JiraLabelEntity> labels)
     {
         _labels.BeginUpdate();
@@ -516,6 +666,8 @@ public class ProjectSettingsForm : UserControl
         }
         _labels.EndUpdate();
     }
+
+    
 
     private void BindComponents(IEnumerable<JiraComponentEntity> components)
     {
@@ -531,6 +683,8 @@ public class ProjectSettingsForm : UserControl
         _components.EndUpdate();
     }
 
+    
+
     private void BindVersions(IEnumerable<JiraProjectVersionEntity> versions)
     {
         _versions.BeginUpdate();
@@ -543,6 +697,96 @@ public class ProjectSettingsForm : UserControl
             _versions.Items.Add(item);
         }
         _versions.EndUpdate();
+    }
+
+    
+
+    private void BuildPermissionMatrix()
+    {
+        if (_permissionChecks.Count > 0)
+        {
+            return;
+        }
+
+        _permissionMatrix.SuspendLayout();
+        _permissionMatrix.ColumnStyles.Clear();
+        _permissionMatrix.RowStyles.Clear();
+        _permissionMatrix.Controls.Clear();
+        _permissionMatrix.ColumnCount = 1 + Enum.GetValues<ProjectRole>().Length;
+        _permissionMatrix.RowCount = 1 + Enum.GetValues<Permission>().Length;
+        _permissionMatrix.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
+        for (var index = 0; index < Enum.GetValues<ProjectRole>().Length; index++)
+        {
+            _permissionMatrix.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        }
+
+        _permissionMatrix.Controls.Add(CreatePermissionHeader("Permission"), 0, 0);
+        foreach (var role in Enum.GetValues<ProjectRole>())
+        {
+            _permissionMatrix.Controls.Add(CreatePermissionHeader(role.ToString()), (int)role, 0);
+        }
+
+        var row = 1;
+        foreach (var permission in Enum.GetValues<Permission>())
+        {
+            _permissionMatrix.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _permissionMatrix.Controls.Add(CreatePermissionHeader(FormatPermission(permission), false), 0, row);
+            foreach (var role in Enum.GetValues<ProjectRole>())
+            {
+                var checkbox = new CheckBox
+                {
+                    AutoSize = true,
+                    Margin = new Padding(24, 8, 24, 8),
+                    BackColor = JiraTheme.BgSurface,
+                    ForeColor = JiraTheme.TextPrimary,
+                };
+                _permissionChecks[(permission, role)] = checkbox;
+                _permissionMatrix.Controls.Add(checkbox, (int)role, row);
+            }
+
+            row++;
+        }
+
+        _permissionMatrix.ResumeLayout();
+    }
+
+    private void BindPermissionScheme()
+    {
+        if (_project is null)
+        {
+            return;
+        }
+
+        _permissionSchemeName.Text = string.IsNullOrWhiteSpace(_project.PermissionScheme?.Name)
+            ? PermissionDefaults.DefaultSchemeName
+            : _project.PermissionScheme!.Name;
+
+        var grants = (_project.PermissionScheme?.Grants?.Count ?? 0) > 0
+            ? _project.PermissionScheme!.Grants.Select(x => (x.Permission, x.ProjectRole)).ToHashSet()
+            : PermissionDefaults.GetDefaultGrants().Select(x => (x.Permission, x.ProjectRole)).ToHashSet();
+
+        foreach (var entry in _permissionChecks)
+        {
+            entry.Value.Checked = grants.Contains(entry.Key);
+        }
+
+    }
+    private static Label CreatePermissionHeader(string text, bool emphasize = true)
+    {
+        var label = JiraControlFactory.CreateLabel(text, true);
+        label.AutoSize = false;
+        label.TextAlign = ContentAlignment.MiddleLeft;
+        label.Width = 200;
+        label.Height = 32;
+        label.Font = emphasize ? new Font(JiraTheme.FontBody, FontStyle.Bold) : JiraTheme.FontBody;
+        return label;
+    }
+
+    private static string FormatPermission(Permission permission)
+    {
+        return string.Concat(permission.ToString().Select((character, index) => index > 0 && char.IsUpper(character)
+            ? $" {character}"
+            : character.ToString()));
     }
 
     private void ApplyResponsiveColumns()
@@ -850,7 +1094,7 @@ public class ProjectSettingsForm : UserControl
         }
     }
 
-    private async Task DeleteVersionAsync()
+        private async Task DeleteVersionAsync()
     {
         if (SelectedProjectVersion is not { } version) return;
         if (MessageBox.Show(this, $"Delete version '{version.Name}'?", "Delete Version", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
@@ -863,11 +1107,15 @@ public class ProjectSettingsForm : UserControl
         {
             ErrorDialogService.Show(exception);
         }
-    }
 
+    }
     private async Task MarkVersionReleasedAsync()
     {
-        if (SelectedProjectVersion is not { } version || version.IsReleased) return;
+        if (SelectedProjectVersion is not { } version || version.IsReleased)
+        {
+            return;
+        }
+
         try
         {
             await _session.Versions.MarkReleasedAsync(version.Id, version.ReleaseDate ?? DateTime.Today);
@@ -877,6 +1125,39 @@ public class ProjectSettingsForm : UserControl
         {
             ErrorDialogService.Show(exception);
         }
+
+    }
+    private async Task SavePermissionsAsync()
+    {
+        if (_project is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var grants = _permissionChecks
+                .Where(entry => entry.Value.Checked)
+                .Select(entry => new PermissionGrantInput(entry.Key.Permission, entry.Key.Role))
+                .ToArray();
+            await _session.ProjectCommands.UpdatePermissionSchemeAsync(_project.Id, _permissionSchemeName.Text, grants);
+            await LoadProjectAsync();
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+
+    }
+    private ProjectMember? GetCurrentMembership()
+    {
+        var currentUserId = _session.CurrentUserContext.CurrentUser?.Id;
+        if (_project is null || !currentUserId.HasValue)
+        {
+            return null;
+        }
+
+        return _project.Members.FirstOrDefault(member => member.UserId == currentUserId.Value);
     }
 
     private IReadOnlyList<User> GetLeadCandidates()
@@ -943,12 +1224,12 @@ public class ProjectSettingsForm : UserControl
         button.MinimumSize = new Size(width, 36);
     }
 
-    private void UpdateActionState()
+        private void UpdateActionState()
     {
-        var canManage = _session.Authorization.IsInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
+        var membership = GetCurrentMembership();
         var hasProject = _project is not null;
-
-        var isAdmin = _session.Authorization.IsInRole(RoleCatalog.Admin);
+        var canManage = membership?.ProjectRole is ProjectRole.Admin or ProjectRole.ProjectManager;
+        var isAdmin = membership?.ProjectRole == ProjectRole.Admin;
 
         _saveProject.Enabled = canManage && hasProject;
         _archiveProject.Enabled = isAdmin && hasProject;
@@ -973,6 +1254,13 @@ public class ProjectSettingsForm : UserControl
         _editVersion.Enabled = canManage && SelectedProjectVersion is not null;
         _deleteVersion.Enabled = canManage && SelectedProjectVersion is not null;
         _markVersionReleased.Enabled = canManage && SelectedProjectVersion is { IsReleased: false };
+
+        _permissionSchemeName.Enabled = isAdmin && hasProject;
+        _savePermissions.Enabled = isAdmin && hasProject;
+        foreach (var checkbox in _permissionChecks.Values)
+        {
+            checkbox.Enabled = isAdmin && hasProject;
+        }
     }
 
     private sealed class DeleteProjectDialog : Form
@@ -1350,6 +1638,41 @@ public class ProjectSettingsForm : UserControl
         public bool IsReleased => _released.Checked;
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

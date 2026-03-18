@@ -1,4 +1,4 @@
-using JiraClone.Domain.Entities;
+﻿using JiraClone.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace JiraClone.Persistence;
@@ -32,6 +32,8 @@ public class JiraCloneDbContext : DbContext
     public DbSet<WorkflowTransition> WorkflowTransitions => Set<WorkflowTransition>();
 
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<PermissionGrant> PermissionGrants => Set<PermissionGrant>();
+    public DbSet<PermissionScheme> PermissionSchemes => Set<PermissionScheme>();
     public DbSet<Watcher> Watchers => Set<Watcher>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -41,6 +43,7 @@ public class JiraCloneDbContext : DbContext
         base.OnModelCreating(modelBuilder);
     }
 }
+
 
 
 

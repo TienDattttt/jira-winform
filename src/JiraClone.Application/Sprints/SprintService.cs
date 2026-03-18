@@ -16,8 +16,8 @@ public class SprintService : ISprintService
     private readonly IWorkflowRepository _workflows;
     private readonly IProjectRepository _projects;
     private readonly IUserRepository _users;
-    private readonly INotificationRepository _notifications;
-    private readonly IAuthorizationService _authorization;
+    private readonly INotificationService _notificationService;
+    private readonly IPermissionService _permissionService;
     private readonly IActivityLogRepository _activityLogs;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
@@ -29,8 +29,8 @@ public class SprintService : ISprintService
         IWorkflowRepository workflows,
         IProjectRepository projects,
         IUserRepository users,
-        INotificationRepository notifications,
-        IAuthorizationService authorization,
+        INotificationService notificationService,
+        IPermissionService permissionService,
         IActivityLogRepository activityLogs,
         ICurrentUserContext currentUserContext,
         IUnitOfWork unitOfWork,
@@ -41,34 +41,37 @@ public class SprintService : ISprintService
         _workflows = workflows;
         _projects = projects;
         _users = users;
-        _notifications = notifications;
-        _authorization = authorization;
+        _notificationService = notificationService;
+        _permissionService = permissionService;
         _activityLogs = activityLogs;
         _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
         _logger = logger ?? NullLogger<SprintService>.Instance;
     }
 
-        public Task<IReadOnlyList<Sprint>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Sprint>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default)
     {
+        await EnsurePermissionAsync(projectId, Permission.ViewProject, cancellationToken);
         _logger.LogDebug("Loading sprints for project {ProjectId}.", projectId);
-        return _sprints.GetByProjectIdAsync(projectId, cancellationToken);
+        return await _sprints.GetByProjectIdAsync(projectId, cancellationToken);
     }
 
-    public Task<Sprint?> GetActiveByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+    public async Task<Sprint?> GetActiveByProjectAsync(int projectId, CancellationToken cancellationToken = default)
     {
+        await EnsurePermissionAsync(projectId, Permission.ViewProject, cancellationToken);
         _logger.LogDebug("Loading active sprint for project {ProjectId}.", projectId);
-        return _sprints.GetActiveByProjectIdAsync(projectId, cancellationToken);
+        return await _sprints.GetActiveByProjectIdAsync(projectId, cancellationToken);
     }
 
-    public Task<IReadOnlyList<Issue>> GetAssignableIssuesAsync(int projectId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Issue>> GetAssignableIssuesAsync(int projectId, CancellationToken cancellationToken = default)
     {
+        await EnsurePermissionAsync(projectId, Permission.ViewProject, cancellationToken);
         _logger.LogDebug("Loading assignable issues for project {ProjectId}.", projectId);
-        return _issues.GetProjectIssuesAsync(projectId, cancellationToken);
+        return await _issues.GetProjectIssuesAsync(projectId, cancellationToken);
     }
     public async Task<Sprint> CreateAsync(int projectId, string name, string? goal, DateOnly? startDate, DateOnly? endDate, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager);
+        await EnsurePermissionAsync(projectId, Permission.ManageSprints, cancellationToken);
         var sprint = new Sprint
         {
             ProjectId = projectId,
@@ -86,12 +89,13 @@ public class SprintService : ISprintService
 
     public async Task<bool> AssignIssuesAsync(int sprintId, IReadOnlyCollection<int> issueIds, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager);
         var sprint = await _sprints.GetByIdAsync(sprintId, cancellationToken);
         if (sprint is null || issueIds.Count == 0)
         {
             return false;
         }
+
+        await EnsurePermissionAsync(sprint.ProjectId, Permission.ManageSprints, cancellationToken);
 
         var actorUserId = GetActorUserId();
         foreach (var issueId in issueIds.Distinct())
@@ -124,12 +128,13 @@ public class SprintService : ISprintService
 
     public async Task<bool> StartSprintAsync(int sprintId, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager);
         var sprint = await _sprints.GetByIdAsync(sprintId, cancellationToken);
         if (sprint is null || sprint.State == SprintState.Active)
         {
             return false;
         }
+
+        await EnsurePermissionAsync(sprint.ProjectId, Permission.ManageSprints, cancellationToken);
 
         var activeSprint = await _sprints.GetActiveByProjectIdAsync(sprint.ProjectId, cancellationToken);
         if (activeSprint is not null && activeSprint.Id != sprintId)
@@ -163,12 +168,13 @@ public class SprintService : ISprintService
 
     public async Task<bool> CloseSprintAsync(int sprintId, int? moveToSprintId, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager);
         var sprint = await _sprints.GetByIdAsync(sprintId, cancellationToken);
         if (sprint is null || sprint.State != SprintState.Active)
         {
             return false;
         }
+
+        await EnsurePermissionAsync(sprint.ProjectId, Permission.ManageSprints, cancellationToken);
 
         if (moveToSprintId.HasValue && moveToSprintId.Value == sprintId)
         {
@@ -256,6 +262,8 @@ public class SprintService : ISprintService
             return null;
         }
 
+        await EnsurePermissionAsync(sprint.ProjectId, Permission.ViewProject, cancellationToken);
+
         var issues = await _issues.GetProjectIssuesAsync(sprint.ProjectId, cancellationToken);
         var activities = await _activityLogs.GetProjectActivityAsync(sprint.ProjectId, int.MaxValue, cancellationToken);
         var sprintIssues = BuildSprintIssueSet(sprint, issues, activities);
@@ -325,6 +333,8 @@ public class SprintService : ISprintService
 
     public async Task<VelocityReportDto> GetVelocityDataAsync(int projectId, int lastN = 6, CancellationToken cancellationToken = default)
     {
+        await EnsurePermissionAsync(projectId, Permission.ViewProject, cancellationToken);
+
         var sprintCount = Math.Max(1, lastN);
         var sprints = (await _sprints.GetByProjectIdAsync(projectId, cancellationToken))
             .Where(x => x.State == SprintState.Closed)
@@ -379,6 +389,8 @@ public class SprintService : ISprintService
 
     public async Task<IReadOnlyList<CfdDataPointDto>> GetCfdDataAsync(int projectId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
     {
+        await EnsurePermissionAsync(projectId, Permission.ViewProject, cancellationToken);
+
         var issues = await _issues.GetProjectIssuesAsync(projectId, cancellationToken);
         var workflow = await _workflows.GetDefaultByProjectAsync(projectId, cancellationToken);
         var statusActivities = await _activityLogs.GetProjectStatusChangesAsync(projectId, cancellationToken);
@@ -547,6 +559,8 @@ public class SprintService : ISprintService
         {
             return null;
         }
+
+        await EnsurePermissionAsync(sprint.ProjectId, Permission.ViewProject, cancellationToken);
 
         var issues = await _issues.GetProjectIssuesAsync(sprint.ProjectId, cancellationToken);
         var activities = await _activityLogs.GetProjectActivityAsync(sprint.ProjectId, int.MaxValue, cancellationToken);
@@ -935,17 +949,23 @@ public class SprintService : ISprintService
 
         foreach (var member in await _users.GetProjectUsersAsync(sprint.ProjectId, cancellationToken))
         {
-            await _notifications.AddAsync(new Notification
-            {
-                RecipientUserId = member.Id,
-                ProjectId = sprint.ProjectId,
-                Type = notificationType,
-                Title = title,
-                Body = body,
-                IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow,
-                UpdatedAtUtc = DateTime.UtcNow
-            }, cancellationToken);
+            await _notificationService.CreateNotificationAsync(
+                member.Id,
+                notificationType,
+                title,
+                body,
+                null,
+                sprint.ProjectId,
+                cancellationToken);
+        }
+    }
+
+    private async Task EnsurePermissionAsync(int projectId, Permission permission, CancellationToken cancellationToken)
+    {
+        var userId = _currentUserContext.RequireUserId();
+        if (!await _permissionService.HasPermissionAsync(userId, projectId, permission, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Current user does not have permission to perform this action.");
         }
     }
 
@@ -971,6 +991,15 @@ public class SprintService : ISprintService
         string NewStatusName,
         StatusCategory NewCategory);
 }
+
+
+
+
+
+
+
+
+
 
 
 

@@ -16,6 +16,7 @@ public class IssueConfiguration : IEntityTypeConfiguration<Issue>
         builder.HasIndex(x => x.UpdatedAtUtc);
         builder.HasIndex(x => x.ParentIssueId);
         builder.HasIndex(x => x.FixVersionId);
+        builder.HasIndex(x => new { x.ProjectId, x.StartDate, x.DueDate });
         builder.Property(x => x.IssueKey).HasMaxLength(40).IsRequired();
         builder.Property(x => x.Title).HasMaxLength(200).IsRequired();
         builder.Property(x => x.BoardPosition).HasColumnType("decimal(18,4)");

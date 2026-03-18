@@ -27,6 +27,8 @@ public class BoardForm : UserControl
     private readonly Panel _toastPanel = new();
     private readonly Label _toastLabel = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly System.Windows.Forms.Timer _toastTimer = new() { Interval = 2600 };
+    private readonly Panel _topBar = new();
+    private readonly FlowLayoutPanel _filterBar = new();
     private readonly FlowLayoutPanel _boardColumnsPanel = new()
     {
         Dock = DockStyle.Top,
@@ -92,11 +94,11 @@ public class BoardForm : UserControl
 
         _startSprintButton.AutoSize = false;
         _startSprintButton.Size = new Size(144, 38);
-        _startSprintButton.Click += async (_, _) => await StartSprintAsync();
+        _startSprintButton.Click += OnStartSprintButtonClick;
 
         _boardModeButton.AutoSize = false;
         _boardModeButton.Size = new Size(148, 38);
-        _boardModeButton.Click += async (_, _) => await ToggleBoardModeAsync();
+        _boardModeButton.Click += OnBoardModeButtonClick;
 
         _searchFilter.Width = 260;
         _searchFilter.PlaceholderText = "Search issues";
@@ -111,12 +113,12 @@ public class BoardForm : UserControl
         _groupByEpicButton.Margin = new Padding(0, 0, 12, 0);
         _clearFiltersButton.Margin = new Padding(0);
 
-        _assigneeFilter.SelectedIndexChanged += (_, _) => ApplyFilters();
-        _priorityFilter.SelectedIndexChanged += (_, _) => ApplyFilters();
-        _typeFilter.SelectedIndexChanged += (_, _) => ApplyFilters();
-        _searchFilter.TextChanged += (_, _) => ApplyFilters();
-        _groupByEpicButton.Click += (_, _) => ToggleGroupByEpic();
-        _clearFiltersButton.Click += (_, _) => ClearFilters();
+        _assigneeFilter.SelectedIndexChanged += OnFilterChanged;
+        _priorityFilter.SelectedIndexChanged += OnFilterChanged;
+        _typeFilter.SelectedIndexChanged += OnFilterChanged;
+        _searchFilter.TextChanged += OnFilterChanged;
+        _groupByEpicButton.Click += OnGroupByEpicButtonClick;
+        _clearFiltersButton.Click += OnClearFiltersButtonClick;
 
         ConfigureToast();
         UpdateGroupByEpicButton();
@@ -131,12 +133,8 @@ public class BoardForm : UserControl
         Controls.Add(BuildFilterBar());
         Controls.Add(BuildTopBar());
 
-        Load += async (_, _) => await LoadBoardAsync();
-        Resize += (_, _) =>
-        {
-            UpdateColumnHeights();
-            PositionToast();
-        };
+        Load += OnBoardLoad;
+        Resize += OnBoardResize;
     }
 
     public Task RefreshBoardAsync(CancellationToken cancellationToken = default) => LoadBoardAsync(cancellationToken);
@@ -165,32 +163,17 @@ public class BoardForm : UserControl
         _toastLabel.ForeColor = JiraTheme.TextPrimary;
 
         _toastPanel.Controls.Add(_toastLabel);
-        _toastPanel.Paint += (_, e) =>
-        {
-            using var accentBrush = new SolidBrush(_toastAccentColor);
-            using var borderPen = new Pen(JiraTheme.Border);
-            e.Graphics.FillRectangle(accentBrush, 0, 0, 4, _toastPanel.Height);
-            e.Graphics.DrawRectangle(borderPen, 0, 0, _toastPanel.Width - 1, _toastPanel.Height - 1);
-        };
-
-        _toastTimer.Tick += (_, _) => HideToast();
+        _toastPanel.Paint += OnToastPanelPaint;
+        _toastTimer.Tick += OnToastTimerTick;
     }
 
     private Control BuildTopBar()
     {
-        var topBar = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 80,
-            BackColor = JiraTheme.BgSurface,
-            Padding = new Padding(16, 10, 16, 10),
-        };
-
-        topBar.Paint += (_, e) =>
-        {
-            using var pen = new Pen(JiraTheme.Border);
-            e.Graphics.DrawLine(pen, 0, topBar.Height - 1, topBar.Width, topBar.Height - 1);
-        };
+        _topBar.Dock = DockStyle.Top;
+        _topBar.Height = 80;
+        _topBar.BackColor = JiraTheme.BgSurface;
+        _topBar.Padding = new Padding(16, 10, 16, 10);
+        _topBar.Paint += OnTopBarPaint;
 
         var right = new Panel
         {
@@ -221,9 +204,10 @@ public class BoardForm : UserControl
         _sprintTitleLabel.Location = new Point(0, 0);
         _sprintDateLabel.Location = new Point(0, 34);
 
-        topBar.Controls.Add(right);
-        topBar.Controls.Add(left);
-        return topBar;
+        _topBar.Controls.Clear();
+        _topBar.Controls.Add(right);
+        _topBar.Controls.Add(left);
+        return _topBar;
     }
 
     private Control BuildFilterBar()
@@ -236,27 +220,21 @@ public class BoardForm : UserControl
             Padding = new Padding(16, 10, 16, 10),
         };
 
-        var filterBar = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = JiraTheme.BgSurface,
-            Padding = new Padding(12, 6, 12, 6),
-            WrapContents = false,
-            Margin = new Padding(0),
-        };
-        filterBar.Paint += (_, e) =>
-        {
-            using var pen = new Pen(JiraTheme.Border);
-            e.Graphics.DrawRectangle(pen, 0, 0, filterBar.Width - 1, filterBar.Height - 1);
-        };
+        _filterBar.Dock = DockStyle.Fill;
+        _filterBar.BackColor = JiraTheme.BgSurface;
+        _filterBar.Padding = new Padding(12, 6, 12, 6);
+        _filterBar.WrapContents = false;
+        _filterBar.Margin = new Padding(0);
+        _filterBar.Paint += OnFilterBarPaint;
 
-        filterBar.Controls.Add(_assigneeFilter);
-        filterBar.Controls.Add(_priorityFilter);
-        filterBar.Controls.Add(_typeFilter);
-        filterBar.Controls.Add(_searchFilter);
-        filterBar.Controls.Add(_groupByEpicButton);
-        filterBar.Controls.Add(_clearFiltersButton);
-        host.Controls.Add(filterBar);
+        _filterBar.Controls.Clear();
+        _filterBar.Controls.Add(_assigneeFilter);
+        _filterBar.Controls.Add(_priorityFilter);
+        _filterBar.Controls.Add(_typeFilter);
+        _filterBar.Controls.Add(_searchFilter);
+        _filterBar.Controls.Add(_groupByEpicButton);
+        _filterBar.Controls.Add(_clearFiltersButton);
+        host.Controls.Add(_filterBar);
         return host;
     }
 
@@ -536,11 +514,7 @@ public class BoardForm : UserControl
         _swimlanesPanel.SuspendLayout();
         try
         {
-            foreach (Control control in _swimlanesPanel.Controls)
-            {
-                control.Dispose();
-            }
-
+            DetachAndDisposeSwimlanes();
             _swimlanesPanel.Controls.Clear();
             foreach (var lane in lanes)
             {
@@ -549,10 +523,7 @@ public class BoardForm : UserControl
                     Width = Math.Max(320, lane.Columns.Count * 312)
                 };
                 control.Bind(lane, animatedIssueId, !_activeSprintOnly);
-                control.IssueSelected += async (_, issueId) => await OpenIssueDetailsAsync(issueId);
-                control.EpicSelected += async (_, epicId) => await OpenIssueDetailsAsync(epicId, openChildIssues: true);
-                control.IssueMoveRequested += async (_, args) => await MoveIssueAsync(args);
-                control.CollapseChanged += (_, args) => OnLaneCollapseChanged(args);
+                AttachSwimlaneControl(control);
                 _swimlanesPanel.Controls.Add(control);
             }
         }
@@ -742,15 +713,56 @@ public class BoardForm : UserControl
             Margin = new Padding(0, 0, 16, 0),
             Height = Math.Max(200, _boardScrollPanel.ClientSize.Height - 8),
         };
-        control.IssueSelected += async (_, issueId) => await OpenIssueDetailsAsync(issueId);
-        control.CreateIssueRequested += async (_, issueStatusId) => await CreateIssueAsync(issueStatusId);
-        control.IssueMoveRequested += async (_, args) => await MoveIssueAsync(args);
-        control.WipLimitWarningRequested += OnWipLimitWarningRequested;
+        AttachColumnControl(control);
         _columnControls[statusId] = control;
         _boardColumnsPanel.Controls.Add(control);
         return control;
     }
 
+    private void AttachColumnControl(BoardColumnControl control)
+    {
+        control.IssueSelected += OnColumnIssueSelected;
+        control.CreateIssueRequested += OnColumnCreateIssueRequested;
+        control.IssueMoveRequested += OnColumnIssueMoveRequested;
+        control.WipLimitWarningRequested += OnWipLimitWarningRequested;
+    }
+
+    private void DetachColumnControl(BoardColumnControl control)
+    {
+        control.IssueSelected -= OnColumnIssueSelected;
+        control.CreateIssueRequested -= OnColumnCreateIssueRequested;
+        control.IssueMoveRequested -= OnColumnIssueMoveRequested;
+        control.WipLimitWarningRequested -= OnWipLimitWarningRequested;
+    }
+
+    private void AttachSwimlaneControl(EpicSwimlaneControl control)
+    {
+        control.IssueSelected += OnSwimlaneIssueSelected;
+        control.EpicSelected += OnSwimlaneEpicSelected;
+        control.IssueMoveRequested += OnSwimlaneIssueMoveRequested;
+        control.CollapseChanged += OnSwimlaneCollapseChanged;
+    }
+
+    private void DetachSwimlaneControl(EpicSwimlaneControl control)
+    {
+        control.IssueSelected -= OnSwimlaneIssueSelected;
+        control.EpicSelected -= OnSwimlaneEpicSelected;
+        control.IssueMoveRequested -= OnSwimlaneIssueMoveRequested;
+        control.CollapseChanged -= OnSwimlaneCollapseChanged;
+    }
+
+    private void DetachAndDisposeSwimlanes()
+    {
+        foreach (Control control in _swimlanesPanel.Controls)
+        {
+            if (control is EpicSwimlaneControl swimlane)
+            {
+                DetachSwimlaneControl(swimlane);
+            }
+
+            control.Dispose();
+        }
+    }
     private void OnWipLimitWarningRequested(object? sender, BoardColumnWipLimitEventArgs args)
     {
         ShowWarningToast($"WIP limit reached in {args.StatusName} ({args.CurrentCount}/{args.Limit}). Drop to override.");
@@ -891,11 +903,8 @@ public class BoardForm : UserControl
                 ? first.BoardPosition - 1m
                 : 1m;
 
-            var moved = await _session.RunSerializedAsync(async () =>
-            {
-                await using var dbContext = _session.CreateDbContext();
-                return await _session.CreateIssueService(dbContext).UpdateStatusAsync(args.IssueId, args.TargetStatusId, boardPosition, currentUserId);
-            });
+            var moved = await _session.RunSerializedAsync(() =>
+                _session.Issues.MoveAsync(args.IssueId, args.TargetStatusId, boardPosition, currentUserId));
 
             if (!moved)
             {
@@ -1035,6 +1044,101 @@ public class BoardForm : UserControl
         base.Dispose(disposing);
     }
 
+    private async void OnBoardLoad(object? sender, EventArgs e)
+    {
+        await LoadBoardAsync();
+    }
+
+    private void OnBoardResize(object? sender, EventArgs e)
+    {
+        UpdateColumnHeights();
+        PositionToast();
+    }
+
+    private async void OnStartSprintButtonClick(object? sender, EventArgs e)
+    {
+        await StartSprintAsync();
+    }
+
+    private async void OnBoardModeButtonClick(object? sender, EventArgs e)
+    {
+        await ToggleBoardModeAsync();
+    }
+
+    private void OnFilterChanged(object? sender, EventArgs e)
+    {
+        ApplyFilters();
+    }
+
+    private void OnGroupByEpicButtonClick(object? sender, EventArgs e)
+    {
+        ToggleGroupByEpic();
+    }
+
+    private void OnClearFiltersButtonClick(object? sender, EventArgs e)
+    {
+        ClearFilters();
+    }
+
+    private void OnToastPanelPaint(object? sender, PaintEventArgs e)
+    {
+        using var accentBrush = new SolidBrush(_toastAccentColor);
+        using var borderPen = new Pen(JiraTheme.Border);
+        e.Graphics.FillRectangle(accentBrush, 0, 0, 4, _toastPanel.Height);
+        e.Graphics.DrawRectangle(borderPen, 0, 0, _toastPanel.Width - 1, _toastPanel.Height - 1);
+    }
+
+    private void OnToastTimerTick(object? sender, EventArgs e)
+    {
+        HideToast();
+    }
+
+    private void OnTopBarPaint(object? sender, PaintEventArgs e)
+    {
+        using var pen = new Pen(JiraTheme.Border);
+        e.Graphics.DrawLine(pen, 0, _topBar.Height - 1, _topBar.Width, _topBar.Height - 1);
+    }
+
+    private void OnFilterBarPaint(object? sender, PaintEventArgs e)
+    {
+        using var pen = new Pen(JiraTheme.Border);
+        e.Graphics.DrawRectangle(pen, 0, 0, _filterBar.Width - 1, _filterBar.Height - 1);
+    }
+
+    private async void OnSwimlaneIssueSelected(object? sender, int issueId)
+    {
+        await OpenIssueDetailsAsync(issueId);
+    }
+
+    private async void OnSwimlaneEpicSelected(object? sender, int epicId)
+    {
+        await OpenIssueDetailsAsync(epicId, openChildIssues: true);
+    }
+
+    private async void OnSwimlaneIssueMoveRequested(object? sender, IssueMoveRequestedEventArgs args)
+    {
+        await MoveIssueAsync(args);
+    }
+
+    private void OnSwimlaneCollapseChanged(object? sender, EpicSwimlaneCollapseChangedEventArgs args)
+    {
+        OnLaneCollapseChanged(args);
+    }
+
+    private async void OnColumnIssueSelected(object? sender, int issueId)
+    {
+        await OpenIssueDetailsAsync(issueId);
+    }
+
+    private async void OnColumnCreateIssueRequested(object? sender, int issueStatusId)
+    {
+        await CreateIssueAsync(issueStatusId);
+    }
+
+    private async void OnColumnIssueMoveRequested(object? sender, IssueMoveRequestedEventArgs args)
+    {
+        await MoveIssueAsync(args);
+    }
     private static Color ParseColor(string? value, Color fallback)
     {
         try
@@ -1049,6 +1153,13 @@ public class BoardForm : UserControl
 
     private const string NoEpicLaneKey = "no-epic";
 }
+
+
+
+
+
+
+
 
 
 

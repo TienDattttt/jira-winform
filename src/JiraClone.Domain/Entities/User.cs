@@ -9,8 +9,11 @@ public class User : AggregateRoot
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string PasswordSalt { get; set; } = string.Empty;
+    public string? LastRefreshToken { get; set; }
+    public DateTime? SessionExpiresAtUtc { get; set; }
     public string? AvatarPath { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool EmailNotificationsEnabled { get; set; } = true;
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
     public ICollection<ProjectMember> ProjectMemberships { get; set; } = new List<ProjectMember>();
     public ICollection<Component> LedComponents { get; set; } = new List<Component>();

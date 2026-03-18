@@ -25,6 +25,8 @@ public class BoardQueryServiceTests
                 new BoardColumn { Id = 11, ProjectId = 7, Name = "In Progress", WorkflowStatusId = 2, WorkflowStatus = inProgressStatus, DisplayOrder = 2, WipLimit = 3 }
             ]
         };
+        project.Members.Add(new ProjectMember { ProjectId = 7, UserId = 99, ProjectRole = ProjectRole.Developer });
+
         var issues = new List<Issue>
         {
             CreateIssue(1, "JIRA-1", "Backlog issue", backlogStatus, 1m),
@@ -35,10 +37,20 @@ public class BoardQueryServiceTests
         var issueRepository = new Mock<IIssueRepository>();
         var projectRepository = new Mock<IProjectRepository>();
         var activityLogs = new Mock<IActivityLogRepository>();
+        var currentUserContext = new Mock<ICurrentUserContext>();
+        var permissionService = new Mock<IPermissionService>();
+
         issueRepository.Setup(x => x.GetBoardIssuesAsync(7, null, default)).ReturnsAsync(issues);
         projectRepository.Setup(x => x.GetByIdAsync(7, default)).ReturnsAsync(project);
+        currentUserContext.Setup(x => x.RequireUserId()).Returns(99);
+        permissionService.Setup(x => x.HasPermissionAsync(99, 7, Permission.ViewProject, default)).ReturnsAsync(true);
 
-        var service = new BoardQueryService(issueRepository.Object, projectRepository.Object, activityLogs.Object);
+        var service = new BoardQueryService(
+            issueRepository.Object,
+            projectRepository.Object,
+            activityLogs.Object,
+            currentUserContext.Object,
+            permissionService.Object);
 
         var board = await service.GetBoardAsync(7, sprintId: null);
 
@@ -54,6 +66,11 @@ public class BoardQueryServiceTests
         var issueRepository = new Mock<IIssueRepository>();
         var projectRepository = new Mock<IProjectRepository>();
         var activityLogs = new Mock<IActivityLogRepository>();
+        var currentUserContext = new Mock<ICurrentUserContext>();
+        var permissionService = new Mock<IPermissionService>();
+
+        currentUserContext.Setup(x => x.RequireUserId()).Returns(99);
+        permissionService.Setup(x => x.HasPermissionAsync(99, 7, Permission.ViewProject, default)).ReturnsAsync(true);
         activityLogs.Setup(x => x.GetProjectStatusChangesAsync(7, default)).ReturnsAsync(
         [
             CreateStatusChange(1, 1, new DateTime(2026, 3, 1, 8, 0, 0, DateTimeKind.Utc), StatusCategory.ToDo, StatusCategory.InProgress),
@@ -62,7 +79,12 @@ public class BoardQueryServiceTests
             CreateStatusChange(4, 2, new DateTime(2026, 3, 5, 9, 0, 0, DateTimeKind.Utc), StatusCategory.InProgress, StatusCategory.Done)
         ]);
 
-        var service = new BoardQueryService(issueRepository.Object, projectRepository.Object, activityLogs.Object);
+        var service = new BoardQueryService(
+            issueRepository.Object,
+            projectRepository.Object,
+            activityLogs.Object,
+            currentUserContext.Object,
+            permissionService.Object);
 
         var average = await service.GetAverageCycleTimeAsync(7);
 
@@ -108,5 +130,3 @@ public class BoardQueryServiceTests
         };
     }
 }
-
-

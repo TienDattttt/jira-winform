@@ -17,12 +17,12 @@ public class IssueService
     private readonly IProjectRepository _projects;
     private readonly ICommentRepository _comments;
     private readonly IAttachmentRepository _attachments;
-    private readonly IAuthorizationService _authorization;
+    private readonly IPermissionService _permissionService;
     private readonly IActivityLogRepository _activityLogs;
     private readonly IWorkflowService _workflowService;
     private readonly IWorkflowRepository _workflows;
     private readonly IWatcherRepository _watchers;
-    private readonly INotificationRepository _notifications;
+    private readonly INotificationService _notificationService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<IssueService> _logger;
 
@@ -32,12 +32,12 @@ public class IssueService
         IProjectRepository projects,
         ICommentRepository comments,
         IAttachmentRepository attachments,
-        IAuthorizationService authorization,
+        IPermissionService permissionService,
         IActivityLogRepository activityLogs,
         IWorkflowService workflowService,
         IWorkflowRepository workflows,
         IWatcherRepository watchers,
-        INotificationRepository notifications,
+        INotificationService notificationService,
         IUnitOfWork unitOfWork,
         ILogger<IssueService>? logger = null)
     {
@@ -46,19 +46,19 @@ public class IssueService
         _projects = projects;
         _comments = comments;
         _attachments = attachments;
-        _authorization = authorization;
+        _permissionService = permissionService;
         _activityLogs = activityLogs;
         _workflowService = workflowService;
         _workflows = workflows;
         _watchers = watchers;
-        _notifications = notifications;
+        _notificationService = notificationService;
         _unitOfWork = unitOfWork;
         _logger = logger ?? NullLogger<IssueService>.Instance;
     }
 
     public async Task<Issue> CreateAsync(IssueEditModel model, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
+        await EnsurePermissionAsync(model.CreatedById, model.ProjectId, Permission.CreateIssue, cancellationToken);
         ValidateModel(model);
 
         var project = await _projects.GetByIdAsync(model.ProjectId, cancellationToken);
@@ -107,17 +107,13 @@ public class IssueService
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        if (await QueueAssignmentNotificationsAsync(issue, [], model.AssigneeIds, model.CreatedById, cancellationToken))
-        {
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-        }
+        await QueueAssignmentNotificationsAsync(issue, [], model.AssigneeIds, model.CreatedById, cancellationToken);
 
         return issue;
     }
 
     public async Task<Issue?> UpdateAsync(IssueEditModel model, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
         if (model.Id is null)
         {
             throw new ValidationException("Issue id is required.");
@@ -129,6 +125,8 @@ public class IssueService
         {
             throw new NotFoundException($"Issue with id {model.Id.Value} was not found.");
         }
+
+        await EnsurePermissionAsync(model.CreatedById, issue.ProjectId, Permission.EditIssue, cancellationToken);
 
         var parentIssue = await ValidateParentRelationshipAsync(issue.ProjectId, model.Type, model.ParentIssueId, issue.Id, cancellationToken);
         var originalStatusId = issue.WorkflowStatusId;
@@ -179,10 +177,7 @@ public class IssueService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        if (await QueueAssignmentNotificationsAsync(issue, previousAssigneeIds, nextAssigneeIds, model.CreatedById, cancellationToken))
-        {
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-        }
+        await QueueAssignmentNotificationsAsync(issue, previousAssigneeIds, nextAssigneeIds, model.CreatedById, cancellationToken);
 
         return issue;
     }
@@ -195,44 +190,80 @@ public class IssueService
 
     public async Task<Issue?> UpdateDueDateAsync(int issueId, DateOnly? dueDate, int userId, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
-
         var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
         if (issue is null)
         {
             return null;
         }
-
+        await EnsurePermissionAsync(userId, issue.ProjectId, Permission.EditIssue, cancellationToken);
         if (issue.DueDate == dueDate)
         {
             return issue;
         }
-
         var previousDueDate = issue.DueDate;
         issue.DueDate = dueDate;
         issue.UpdatedAtUtc = DateTime.UtcNow;
-
         await AddDueDateActivityAsync(issue, previousDueDate, dueDate, userId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-
         _logger.LogInformation(
             "Updated due date for issue {IssueId} from {PreviousDueDate} to {NextDueDate}.",
             issueId,
             previousDueDate,
             dueDate);
-
         return issue;
     }
-
-    public async Task<Issue?> UpdateParentAsync(int issueId, int? parentIssueId, int userId, CancellationToken cancellationToken = default)
+    public async Task<Issue?> UpdateScheduleAsync(int issueId, DateOnly? startDate, DateOnly? dueDate, int userId, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
-
+        if (startDate.HasValue && dueDate.HasValue && startDate.Value > dueDate.Value)
+        {
+            throw new ValidationException("Start date must be on or before the due date.");
+        }
         var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
         if (issue is null)
         {
             return null;
         }
+        await EnsurePermissionAsync(userId, issue.ProjectId, Permission.EditIssue, cancellationToken);
+        if (issue.Type != IssueType.Epic)
+        {
+            throw new ValidationException("Roadmap scheduling is only available for epic issues.");
+        }
+        if (issue.StartDate == startDate && issue.DueDate == dueDate)
+        {
+            return issue;
+        }
+        var previousStartDate = issue.StartDate;
+        var previousDueDate = issue.DueDate;
+        issue.StartDate = startDate;
+        issue.DueDate = dueDate;
+        issue.UpdatedAtUtc = DateTime.UtcNow;
+        if (previousStartDate != startDate)
+        {
+            await AddStartDateActivityAsync(issue, previousStartDate, startDate, userId, cancellationToken);
+        }
+        if (previousDueDate != dueDate)
+        {
+            await AddDueDateActivityAsync(issue, previousDueDate, dueDate, userId, cancellationToken);
+        }
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation(
+            "Updated roadmap schedule for epic {IssueId} from {PreviousStartDate}/{PreviousDueDate} to {NextStartDate}/{NextDueDate}.",
+            issueId,
+            previousStartDate,
+            previousDueDate,
+            startDate,
+            dueDate);
+        return issue;
+    }
+    public async Task<Issue?> UpdateParentAsync(int issueId, int? parentIssueId, int userId, CancellationToken cancellationToken = default)
+    {
+        var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
+        if (issue is null)
+        {
+            return null;
+        }
+
+        await EnsurePermissionAsync(userId, issue.ProjectId, Permission.EditIssue, cancellationToken);
 
         if (issue.ParentIssueId == parentIssueId)
         {
@@ -277,12 +308,13 @@ public class IssueService
 
     public async Task<bool> DeleteAsync(int issueId, int? userId = null, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
         var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
         if (issue is null)
         {
             return false;
         }
+
+        await EnsurePermissionAsync(userId ?? issue.CreatedById, issue.ProjectId, Permission.DeleteIssue, cancellationToken);
 
         await _activityLogs.AddAsync(new ActivityLogEntity
         {
@@ -419,6 +451,21 @@ public class IssueService
         return result;
     }
 
+    private async Task AddStartDateActivityAsync(Issue issue, DateOnly? previousStartDate, DateOnly? nextStartDate, int userId, CancellationToken cancellationToken)
+    {
+        await _activityLogs.AddAsync(new ActivityLogEntity
+        {
+            ProjectId = issue.ProjectId,
+            IssueId = issue.Id,
+            UserId = userId,
+            ActionType = ActivityActionType.Updated,
+            FieldName = "Start date",
+            OldValue = FormatDateOnlyActivity(previousStartDate),
+            NewValue = nextStartDate.HasValue
+                ? $"Start date set to {nextStartDate.Value:yyyy-MM-dd}"
+                : "Start date cleared"
+        }, cancellationToken);
+    }
     private async Task AddDueDateActivityAsync(Issue issue, DateOnly? previousDueDate, DateOnly? nextDueDate, int userId, CancellationToken cancellationToken)
     {
         await _activityLogs.AddAsync(new ActivityLogEntity
@@ -428,33 +475,45 @@ public class IssueService
             UserId = userId,
             ActionType = ActivityActionType.Updated,
             FieldName = "Due date",
-            OldValue = FormatDueDateActivity(previousDueDate),
+            OldValue = FormatDateOnlyActivity(previousDueDate),
             NewValue = nextDueDate.HasValue
                 ? $"Due date set to {nextDueDate.Value:yyyy-MM-dd}"
                 : "Due date cleared"
         }, cancellationToken);
     }
-
     private async Task<bool> ExecuteStatusTransitionAsync(int issueId, int targetStatusId, decimal? boardPosition, int userId, CancellationToken cancellationToken)
     {
-        var result = await _workflowService.ExecuteTransitionAsync(issueId, targetStatusId, userId, boardPosition, cancellationToken);
-        if (!result.Succeeded)
-        {
-            return false;
-        }
-
         var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
         if (issue is null)
         {
             return false;
         }
 
-        if (await QueueStatusChangeNotificationsAsync(issue, result.PreviousStatus, result.CurrentStatus, userId, cancellationToken))
+        await EnsurePermissionAsync(userId, issue.ProjectId, Permission.TransitionIssue, cancellationToken);
+
+        var result = await _workflowService.ExecuteTransitionAsync(issueId, targetStatusId, userId, boardPosition, cancellationToken);
+        if (!result.Succeeded)
         {
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return false;
         }
 
+        issue = await _issues.GetByIdAsync(issueId, cancellationToken);
+        if (issue is null)
+        {
+            return false;
+        }
+
+        await QueueStatusChangeNotificationsAsync(issue, result.PreviousStatus, result.CurrentStatus, userId, cancellationToken);
+
         return true;
+    }
+
+    private async Task EnsurePermissionAsync(int userId, int projectId, Permission permission, CancellationToken cancellationToken)
+    {
+        if (!await _permissionService.HasPermissionAsync(userId, projectId, permission, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("Current user does not have permission to perform this action.");
+        }
     }
 
     private async Task<bool> QueueAssignmentNotificationsAsync(Issue issue, IEnumerable<int> previousAssigneeIds, IEnumerable<int> nextAssigneeIds, int actorUserId, CancellationToken cancellationToken)
@@ -473,18 +532,14 @@ public class IssueService
         var actorName = actor?.DisplayName ?? "Someone";
         foreach (var recipientUserId in recipients)
         {
-            await _notifications.AddAsync(new Notification
-            {
-                RecipientUserId = recipientUserId,
-                IssueId = issue.Id,
-                ProjectId = issue.ProjectId,
-                Type = NotificationType.IssueAssigned,
-                Title = $"Assigned to {issue.IssueKey}",
-                Body = $"{actorName} assigned you to {issue.IssueKey} - {issue.Title}.",
-                IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow,
-                UpdatedAtUtc = DateTime.UtcNow
-            }, cancellationToken);
+            await _notificationService.CreateNotificationAsync(
+                recipientUserId,
+                NotificationType.IssueAssigned,
+                $"Assigned to {issue.IssueKey}",
+                $"{actorName} assigned you to {issue.IssueKey} - {issue.Title}.",
+                issue.Id,
+                issue.ProjectId,
+                cancellationToken);
         }
 
         return true;
@@ -516,23 +571,25 @@ public class IssueService
             : $"{previousStatus.Name} to {currentStatus.Name}";
         foreach (var recipientUserId in recipients)
         {
-            await _notifications.AddAsync(new Notification
-            {
-                RecipientUserId = recipientUserId,
-                IssueId = issue.Id,
-                ProjectId = issue.ProjectId,
-                Type = NotificationType.IssueStatusChanged,
-                Title = $"Status changed: {issue.IssueKey}",
-                Body = $"{actorName} moved {issue.IssueKey} from {transitionText}.",
-                IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow,
-                UpdatedAtUtc = DateTime.UtcNow
-            }, cancellationToken);
+            await _notificationService.CreateNotificationAsync(
+                recipientUserId,
+                NotificationType.IssueStatusChanged,
+                $"Status changed: {issue.IssueKey}",
+                $"{actorName} moved {issue.IssueKey} from {transitionText}.",
+                issue.Id,
+                issue.ProjectId,
+                cancellationToken);
         }
 
         return true;
     }
 
-    private static string? FormatDueDateActivity(DateOnly? dueDate) =>
-        dueDate.HasValue ? dueDate.Value.ToString("yyyy-MM-dd") : null;
+    private static string? FormatDateOnlyActivity(DateOnly? value) =>
+        value.HasValue ? value.Value.ToString("yyyy-MM-dd") : null;
 }
+
+
+
+
+
+

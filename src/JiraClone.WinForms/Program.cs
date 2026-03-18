@@ -1,6 +1,32 @@
+using JiraClone.Application.ActivityLog;
+using JiraClone.Application.Abstractions;
+using JiraClone.Application.Attachments;
+using JiraClone.Application.Auth;
+using JiraClone.Application.Boards;
+using JiraClone.Application.Comments;
+using JiraClone.Application.Components;
+using JiraClone.Application.Dashboard;
+using JiraClone.Application.Issues;
+using JiraClone.Application.Jql;
+using JiraClone.Application.Labels;
+using JiraClone.Application.Notifications;
+using JiraClone.Application.Permissions;
+using JiraClone.Application.Projects;
+using JiraClone.Application.Roadmap;
+using JiraClone.Application.Roles;
+using JiraClone.Application.Sprints;
+using JiraClone.Application.Users;
+using JiraClone.Application.Versions;
+using JiraClone.Application.Watchers;
+using JiraClone.Application.Workflows;
+using JiraClone.Infrastructure.Email;
+using JiraClone.Infrastructure.Security;
+using JiraClone.Infrastructure.Session;
+using JiraClone.Infrastructure.Storage;
+using JiraClone.Persistence;
+using JiraClone.Persistence.Repositories;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Forms;
-using JiraClone.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +76,11 @@ internal static class Program
                 : 25;
             var maxAttachmentSizeBytes = maxAttachmentSizeMb * 1024L * 1024L;
 
+            var sessionFilePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "JiraDesktop",
+                "session.dat");
+
             var services = new ServiceCollection();
             services.AddSingleton<IConfiguration>(configuration);
             services.AddLogging(builder =>
@@ -64,19 +95,90 @@ internal static class Program
                 options.EnableSensitiveDataLogging();
 #endif
             });
+            services.AddScoped(provider => provider.GetRequiredService<IDbContextFactory<JiraCloneDbContext>>().CreateDbContext());
 
-            using var serviceProvider = services.BuildServiceProvider();
+            services.AddSingleton<CurrentUserContext>();
+            services.AddSingleton<ICurrentUserContext>(provider => provider.GetRequiredService<CurrentUserContext>());
+            services.AddSingleton<AuthorizationService>();
+            services.AddSingleton<IAuthorizationService>(provider => provider.GetRequiredService<AuthorizationService>());
+            services.AddSingleton<IPasswordHasher, Sha256PasswordHasher>();
+            services.AddSingleton<FileShareAttachmentService>(provider =>
+                new FileShareAttachmentService(
+                    attachmentRootPath,
+                    maxAttachmentSizeBytes,
+                    provider.GetRequiredService<ILogger<FileShareAttachmentService>>()));
+            services.AddSingleton<IAttachmentService>(provider => provider.GetRequiredService<FileShareAttachmentService>());
+
+            var emailOptions = new EmailOptions
+            {
+                SmtpHost = configuration["Email:SmtpHost"] ?? string.Empty,
+                SmtpPort = int.TryParse(configuration["Email:SmtpPort"], out var parsedSmtpPort) ? parsedSmtpPort : 587,
+                UseSsl = !bool.TryParse(configuration["Email:UseSsl"], out var parsedUseSsl) || parsedUseSsl,
+                FromAddress = configuration["Email:FromAddress"] ?? string.Empty,
+                FromName = configuration["Email:FromName"] ?? "Jira Desktop",
+                UserName = configuration["Email:UserName"],
+                Password = configuration["Email:Password"]
+            };
+            services.AddSingleton(emailOptions);
+            services.AddSingleton<IEmailService, MailKitEmailService>();
+            services.AddSingleton<INotificationEmailTemplateRenderer, NotificationEmailTemplateRenderer>();
+
+            services.AddSingleton(new SessionPersistenceOptions { SessionFilePath = sessionFilePath });
+            services.AddSingleton<ISessionPersistenceService, DpapiSessionPersistenceService>();
+
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddScoped<IActivityLogRepository, ActivityLogRepository>();
+            services.AddScoped<IAttachmentRepository, AttachmentRepository>();
+            services.AddScoped<ICommentRepository, CommentRepository>();
+            services.AddScoped<IComponentRepository, ComponentRepository>();
+            services.AddScoped<IIssueRepository, IssueRepository>();
+            services.AddScoped<ILabelRepository, LabelRepository>();
+            services.AddScoped<INotificationRepository, NotificationRepository>();
+            services.AddScoped<IProjectRepository, ProjectRepository>();
+            services.AddScoped<IProjectVersionRepository, ProjectVersionRepository>();
+            services.AddScoped<ISavedFilterRepository, SavedFilterRepository>();
+            services.AddScoped<ISprintRepository, SprintRepository>();
+            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IWatcherRepository, WatcherRepository>();
+            services.AddScoped<IWorkflowRepository, WorkflowRepository>();
+
+            services.AddScoped<AuthenticationService>();
+            services.AddScoped<ProjectQueryService>();
+            services.AddScoped<IProjectCommandService, ProjectCommandService>();
+            services.AddScoped<IPermissionService, PermissionService>();
+            services.AddScoped<IBoardQueryService, BoardQueryService>();
+            services.AddScoped<UserQueryService>();
+            services.AddScoped<UserCommandService>();
+            services.AddScoped<IWorkflowService, WorkflowService>();
+            services.AddScoped<IJqlService, JqlService>();
+            services.AddScoped<ISavedFilterService, SavedFilterService>();
+            services.AddScoped<IssueService>();
+            services.AddScoped<IWatcherService, WatcherService>();
+            services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<ILabelService, LabelService>();
+            services.AddScoped<IComponentService, ComponentService>();
+            services.AddScoped<IVersionService, VersionService>();
+            services.AddScoped<CommentService>();
+            services.AddScoped<ISprintService, SprintService>();
+            services.AddScoped<ActivityLogService>();
+            services.AddScoped<AttachmentFacade>();
+            services.AddScoped<IIssueQueryService, IssueQueryService>();
+            services.AddScoped<DashboardQueryService>();
+            services.AddScoped<IRoadmapService, RoadmapService>();
+
+            services.AddSingleton<AppSession>();
+
+            using var serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateOnBuild = true,
+                ValidateScopes = true
+            });
             var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
             var startupLogger = loggerFactory.CreateLogger("Startup");
             startupLogger.LogInformation("Starting Jira Clone in {EnvironmentName} mode.", environmentName);
 
-            using var session = new AppSession(
-                serviceProvider.GetRequiredService<IDbContextFactory<JiraCloneDbContext>>(),
-                loggerFactory,
-                attachmentRootPath,
-                maxAttachmentSizeBytes);
-
-            System.Windows.Forms.Application.Run(new LoginForm(session));
+            var startupForm = CreateStartupForm(serviceProvider, startupLogger);
+            System.Windows.Forms.Application.Run(startupForm);
         }
         catch (Exception exception)
         {
@@ -92,4 +194,69 @@ internal static class Program
             Log.CloseAndFlush();
         }
     }
+
+    private static Form CreateStartupForm(IServiceProvider serviceProvider, Microsoft.Extensions.Logging.ILogger startupLogger)
+    {
+        var session = serviceProvider.GetRequiredService<AppSession>();
+        var sessionPersistence = serviceProvider.GetRequiredService<ISessionPersistenceService>();
+
+        if (TryRestoreSession(session, sessionPersistence, startupLogger))
+        {
+            var displayName = session.CurrentUserContext.CurrentUser?.DisplayName
+                ?? session.CurrentUserContext.CurrentUser?.UserName
+                ?? "User";
+            return new MainForm(session, displayName, sessionPersistence);
+        }
+
+        return new LoginForm(session, sessionPersistence);
+    }
+
+    private static bool TryRestoreSession(AppSession session, ISessionPersistenceService sessionPersistence, Microsoft.Extensions.Logging.ILogger startupLogger)
+    {
+        var persistedSession = sessionPersistence.LoadAsync().GetAwaiter().GetResult();
+        if (persistedSession is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (persistedSession.ExpiresAtUtc <= DateTime.UtcNow)
+            {
+                startupLogger.LogInformation("Persisted session expired for user {UserId} at {ExpiresAtUtc}.", persistedSession.UserId, persistedSession.ExpiresAtUtc);
+                session.Authentication.ClearPersistentSessionAsync(persistedSession.UserId).GetAwaiter().GetResult();
+                sessionPersistence.ClearAsync().GetAwaiter().GetResult();
+                return false;
+            }
+
+            var restored = session.Authentication.ValidateRefreshTokenAsync(persistedSession.UserId, persistedSession.RefreshToken).GetAwaiter().GetResult();
+            if (!restored)
+            {
+                startupLogger.LogWarning("Persisted session validation failed for user {UserId}.", persistedSession.UserId);
+                sessionPersistence.ClearAsync().GetAwaiter().GetResult();
+                return false;
+            }
+
+            session.InitializeActiveProjectAsync().GetAwaiter().GetResult();
+            startupLogger.LogInformation("Persisted session restored for user {UserId}.", persistedSession.UserId);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            startupLogger.LogWarning(exception, "Unable to restore persisted session for user {UserId}.", persistedSession.UserId);
+            try
+            {
+                session.Authentication.ClearPersistentSessionAsync(persistedSession.UserId).GetAwaiter().GetResult();
+            }
+            catch (Exception clearException)
+            {
+                startupLogger.LogWarning(clearException, "Unable to clear server-side persisted session state for user {UserId} after restore failure.", persistedSession.UserId);
+            }
+
+            session.CurrentUserContext.Clear();
+            sessionPersistence.ClearAsync().GetAwaiter().GetResult();
+            return false;
+        }
+    }
 }
+

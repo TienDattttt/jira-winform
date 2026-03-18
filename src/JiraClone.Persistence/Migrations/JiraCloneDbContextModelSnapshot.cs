@@ -455,6 +455,9 @@ namespace JiraClone.Persistence.Migrations
                     b.Property<int?>("SprintId")
                         .HasColumnType("int");
 
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date");
+
                     b.Property<int?>("StoryPoints")
                         .HasColumnType("int");
 
@@ -498,6 +501,8 @@ namespace JiraClone.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("ProjectId", "SprintId", "WorkflowStatusId");
+
+                    b.HasIndex("ProjectId", "StartDate", "DueDate");
 
                     b.HasIndex("ProjectId", "WorkflowStatusId", "BoardPosition");
 
@@ -838,6 +843,262 @@ namespace JiraClone.Persistence.Migrations
                     b.HasIndex("RecipientUserId", "IsRead", "CreatedAtUtc");
 
                     b.ToTable("Notifications", (string)null);
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.PermissionGrant", b =>
+                {
+                    b.Property<int>("PermissionSchemeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Permission")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectRole")
+                        .HasColumnType("int");
+
+                    b.HasKey("PermissionSchemeId", "Permission", "ProjectRole");
+
+                    b.ToTable("PermissionGrants", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 9,
+                            ProjectRole = 1
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 9,
+                            ProjectRole = 2
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 1,
+                            ProjectRole = 2
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 2,
+                            ProjectRole = 2
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 3,
+                            ProjectRole = 2
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 4,
+                            ProjectRole = 2
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 10,
+                            ProjectRole = 2
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 11,
+                            ProjectRole = 2
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 12,
+                            ProjectRole = 2
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 9,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 1,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 2,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 3,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 4,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 5,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 6,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 7,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 8,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 10,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 11,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 12,
+                            ProjectRole = 3
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 9,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 1,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 2,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 3,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 4,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 5,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 6,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 7,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 8,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 10,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 11,
+                            ProjectRole = 4
+                        },
+                        new
+                        {
+                            PermissionSchemeId = 1,
+                            Permission = 12,
+                            ProjectRole = 4
+                        });
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.PermissionScheme", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId")
+                        .IsUnique();
+
+                    b.ToTable("PermissionSchemes", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Default Permission Scheme",
+                            ProjectId = 1,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.Project", b =>
@@ -1222,8 +1483,17 @@ namespace JiraClone.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<bool>("EmailNotificationsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<string>("LastRefreshToken")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -1234,6 +1504,9 @@ namespace JiraClone.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
+
+                    b.Property<DateTime?>("SessionExpiresAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
@@ -1260,6 +1533,7 @@ namespace JiraClone.Persistence.Migrations
                             CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             DisplayName = "Admin User",
                             Email = "admin@jiraclone.local",
+                            EmailNotificationsEnabled = true,
                             IsActive = true,
                             PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
                             PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
@@ -1272,6 +1546,7 @@ namespace JiraClone.Persistence.Migrations
                             CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             DisplayName = "Gaben",
                             Email = "gaben@jiraclone.local",
+                            EmailNotificationsEnabled = true,
                             IsActive = true,
                             PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
                             PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
@@ -1284,6 +1559,7 @@ namespace JiraClone.Persistence.Migrations
                             CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             DisplayName = "Yoda",
                             Email = "yoda@jiraclone.local",
+                            EmailNotificationsEnabled = true,
                             IsActive = true,
                             PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
                             PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
@@ -2087,6 +2363,28 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("RecipientUser");
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.PermissionGrant", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.PermissionScheme", "PermissionScheme")
+                        .WithMany("Grants")
+                        .HasForeignKey("PermissionSchemeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PermissionScheme");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.PermissionScheme", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.Project", "Project")
+                        .WithOne("PermissionScheme")
+                        .HasForeignKey("JiraClone.Domain.Entities.PermissionScheme", "ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.ProjectMember", b =>
                 {
                     b.HasOne("JiraClone.Domain.Entities.Project", "Project")
@@ -2280,6 +2578,11 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("IssueLabels");
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.PermissionScheme", b =>
+                {
+                    b.Navigation("Grants");
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.Project", b =>
                 {
                     b.Navigation("BoardColumns");
@@ -2293,6 +2596,8 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("Members");
 
                     b.Navigation("Notifications");
+
+                    b.Navigation("PermissionScheme");
 
                     b.Navigation("SavedFilters");
 

@@ -1,4 +1,4 @@
-﻿using JiraClone.Application.Abstractions;
+using JiraClone.Application.Abstractions;
 using JiraClone.Application.Sprints;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
@@ -219,23 +219,32 @@ public class SprintServiceTests
         Mock<IWorkflowRepository>? workflowRepository = null,
         Mock<IProjectRepository>? projectRepository = null,
         Mock<IUserRepository>? userRepository = null,
-        Mock<INotificationRepository>? notificationRepository = null,
+        Mock<INotificationService>? notificationService = null,
         Mock<IActivityLogRepository>? activityLogRepository = null,
-        Mock<IAuthorizationService>? authorization = null,
+        Mock<IPermissionService>? permissionService = null,
         Mock<ICurrentUserContext>? currentUserContext = null,
         Mock<IUnitOfWork>? unitOfWork = null)
     {
         currentUserContext ??= new Mock<ICurrentUserContext>();
         currentUserContext.Setup(x => x.CurrentUser).Returns(new User { Id = 99, UserName = "admin", DisplayName = "Admin User", Email = "admin@example.com" });
+        currentUserContext.Setup(x => x.RequireUserId()).Returns(99);
+
         workflowRepository ??= new Mock<IWorkflowRepository>();
         workflowRepository.Setup(x => x.GetDefaultByProjectAsync(1, default)).ReturnsAsync(CreateWorkflowDefinition());
+
         projectRepository ??= new Mock<IProjectRepository>();
         projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
+
         userRepository ??= new Mock<IUserRepository>();
         userRepository.Setup(x => x.GetProjectUsersAsync(1, default)).ReturnsAsync(new[]
         {
             new User { Id = 99, UserName = "admin", DisplayName = "Admin User", Email = "admin@example.com" }
         });
+
+        permissionService ??= new Mock<IPermissionService>();
+        permissionService
+            .Setup(x => x.HasPermissionAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<Permission>(), default))
+            .ReturnsAsync(true);
 
         return new SprintService(
             (sprintRepository ?? new Mock<ISprintRepository>()).Object,
@@ -243,8 +252,8 @@ public class SprintServiceTests
             workflowRepository.Object,
             projectRepository.Object,
             userRepository.Object,
-            (notificationRepository ?? new Mock<INotificationRepository>()).Object,
-            (authorization ?? new Mock<IAuthorizationService>()).Object,
+            (notificationService ?? new Mock<INotificationService>()).Object,
+            permissionService.Object,
             (activityLogRepository ?? new Mock<IActivityLogRepository>()).Object,
             currentUserContext.Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
@@ -333,3 +342,5 @@ public class SprintServiceTests
         };
     }
 }
+
+

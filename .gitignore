@@ -13,3 +13,7 @@
 **/bin
 **/obj
 **/*.user
+
+# local app secrets
+**/appsettings.Development.json
+

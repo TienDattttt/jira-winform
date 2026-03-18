@@ -1,4 +1,4 @@
-using JiraClone.Application.Abstractions;
+﻿using JiraClone.Application.Abstractions;
 using JiraClone.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 

@@ -17,7 +17,7 @@ public class CommentService
     private readonly IIssueRepository _issues;
     private readonly IUserRepository _users;
     private readonly IWatcherRepository _watchers;
-    private readonly INotificationRepository _notifications;
+    private readonly INotificationService _notificationService;
     private readonly IAuthorizationService _authorization;
     private readonly IActivityLogRepository _activityLogs;
     private readonly IUnitOfWork _unitOfWork;
@@ -28,7 +28,7 @@ public class CommentService
         IIssueRepository issues,
         IUserRepository users,
         IWatcherRepository watchers,
-        INotificationRepository notifications,
+        INotificationService notificationService,
         IAuthorizationService authorization,
         IActivityLogRepository activityLogs,
         IUnitOfWork unitOfWork,
@@ -38,7 +38,7 @@ public class CommentService
         _issues = issues;
         _users = users;
         _watchers = watchers;
-        _notifications = notifications;
+        _notificationService = notificationService;
         _authorization = authorization;
         _activityLogs = activityLogs;
         _unitOfWork = unitOfWork;
@@ -74,18 +74,14 @@ public class CommentService
         var mentionedUserIds = await ResolveMentionedUserIdsAsync(projectId, normalizedBody, userId, cancellationToken);
         foreach (var recipientUserId in mentionedUserIds)
         {
-            await _notifications.AddAsync(new Notification
-            {
-                RecipientUserId = recipientUserId,
-                IssueId = issue.Id,
-                ProjectId = issue.ProjectId,
-                Type = NotificationType.CommentMentioned,
-                Title = $"Mentioned on {issue.IssueKey}",
-                Body = $"{actorName} mentioned you in a comment on {issue.IssueKey} - {issue.Title}.",
-                IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow,
-                UpdatedAtUtc = DateTime.UtcNow
-            }, cancellationToken);
+            await _notificationService.CreateNotificationAsync(
+                recipientUserId,
+                NotificationType.CommentMentioned,
+                $"Mentioned on {issue.IssueKey}",
+                $"{actorName} mentioned you in a comment on {issue.IssueKey} - {issue.Title}.",
+                issue.Id,
+                issue.ProjectId,
+                cancellationToken);
         }
 
         var watcherRecipientIds = (await _watchers.GetByIssueIdAsync(issueId, cancellationToken))
@@ -95,18 +91,14 @@ public class CommentService
             .ToList();
         foreach (var recipientUserId in watcherRecipientIds)
         {
-            await _notifications.AddAsync(new Notification
-            {
-                RecipientUserId = recipientUserId,
-                IssueId = issue.Id,
-                ProjectId = issue.ProjectId,
-                Type = NotificationType.CommentAdded,
-                Title = $"New comment: {issue.IssueKey}",
-                Body = $"{actorName} commented on {issue.IssueKey}: {BuildExcerpt(normalizedBody)}",
-                IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow,
-                UpdatedAtUtc = DateTime.UtcNow
-            }, cancellationToken);
+            await _notificationService.CreateNotificationAsync(
+                recipientUserId,
+                NotificationType.CommentAdded,
+                $"New comment: {issue.IssueKey}",
+                $"{actorName} commented on {issue.IssueKey}: {BuildExcerpt(normalizedBody)}",
+                issue.Id,
+                issue.ProjectId,
+                cancellationToken);
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -190,3 +182,4 @@ public class CommentService
         return trimmed.Length <= 140 ? trimmed : $"{trimmed[..137]}...";
     }
 }
+

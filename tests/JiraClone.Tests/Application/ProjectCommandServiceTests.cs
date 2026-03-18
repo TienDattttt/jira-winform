@@ -88,7 +88,7 @@ public class ProjectCommandServiceTests
     [Fact]
     public async Task ArchiveProjectAsync_ActiveProject_DisablesProjectAndSavesChanges()
     {
-        var project = new Project { Id = 1, Key = "PROJ", Name = "Project", IsActive = true };
+        var project = new Project { Id = 1, Key = "PROJ", Name = "Project", IsActive = true, Members = [new ProjectMember { ProjectId = 1, UserId = 99, ProjectRole = ProjectRole.Admin }] };
         var projects = new Mock<IProjectRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
         projects.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(project);
@@ -104,9 +104,10 @@ public class ProjectCommandServiceTests
     [Fact]
     public async Task DeleteProjectAsync_ActiveSprint_ThrowsValidationException()
     {
-        var project = new Project { Id = 1, Key = "PROJ", Name = "Project" };
+        var project = new Project { Id = 1, Key = "PROJ", Name = "Project", Members = [new ProjectMember { ProjectId = 1, UserId = 99, ProjectRole = ProjectRole.Admin }] };
         var projects = new Mock<IProjectRepository>();
         var sprints = new Mock<ISprintRepository>();
+        projects.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(project);
         projects.Setup(x => x.GetDeleteSnapshotAsync(1, default)).ReturnsAsync(project);
         sprints.Setup(x => x.GetAllByProjectIdAsync(1, default)).ReturnsAsync([
             new Sprint { Id = 8, ProjectId = 1, Name = "Sprint 1", State = SprintState.Active }
@@ -152,6 +153,7 @@ public class ProjectCommandServiceTests
         var activityLogs = new Mock<IActivityLogRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
 
+        projects.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(project);
         projects.Setup(x => x.GetDeleteSnapshotAsync(1, default)).ReturnsAsync(project);
         projects.Setup(x => x.DeleteAsync(project, default)).Returns(Task.CompletedTask);
         issues.Setup(x => x.GetAllByProjectIdAsync(1, default)).ReturnsAsync([issue]);
@@ -174,7 +176,7 @@ public class ProjectCommandServiceTests
     [Fact]
     public async Task AddMemberAsync_NewMember_AddsMembershipAndSavesChanges()
     {
-        var project = new Project { Id = 1, Key = "PROJ", Name = "Project" };
+        var project = new Project { Id = 1, Key = "PROJ", Name = "Project", Members = [new ProjectMember { ProjectId = 1, UserId = 99, ProjectRole = ProjectRole.Admin }] };
         var user = new User { Id = 5, UserName = "dev1", DisplayName = "Dev One", Email = "dev1@example.com" };
         var projects = new Mock<IProjectRepository>();
         var users = new Mock<IUserRepository>();
@@ -186,8 +188,8 @@ public class ProjectCommandServiceTests
         var added = await service.AddMemberAsync(1, 5, ProjectRole.Developer);
 
         Assert.True(added);
-        Assert.Single(project.Members);
-        Assert.Equal(5, project.Members.Single().UserId);
+        Assert.Equal(2, project.Members.Count);
+        Assert.Contains(project.Members, member => member.UserId == 5 && member.ProjectRole == ProjectRole.Developer);
         unitOfWork.Verify(x => x.SaveChangesAsync(default), Times.Once);
     }
 
@@ -232,6 +234,7 @@ public class ProjectCommandServiceTests
         Mock<IIssueRepository>? issues = null,
         Mock<ISprintRepository>? sprints = null,
         Mock<IAuthorizationService>? authorization = null,
+        Mock<IPermissionService>? permissionService = null,
         Mock<IActivityLogRepository>? activityLogs = null,
         User? currentUser = null,
         Mock<ICurrentUserContext>? currentUserContext = null,
@@ -239,6 +242,7 @@ public class ProjectCommandServiceTests
     {
         currentUserContext ??= new Mock<ICurrentUserContext>();
         currentUserContext.Setup(x => x.CurrentUser).Returns(currentUser ?? new User { Id = 99, UserName = "admin", DisplayName = "Admin User", Email = "admin@example.com", IsActive = true });
+        currentUserContext.Setup(x => x.RequireUserId()).Returns((currentUser ?? new User { Id = 99, UserName = "admin", DisplayName = "Admin User", Email = "admin@example.com", IsActive = true }).Id);
 
         users ??= new Mock<IUserRepository>();
         users.Setup(x => x.GetRolesAsync(default)).ReturnsAsync([
@@ -247,15 +251,25 @@ public class ProjectCommandServiceTests
             new Role { Id = 3, Name = RoleCatalog.Developer },
             new Role { Id = 4, Name = RoleCatalog.Viewer }]);
 
+        permissionService ??= new Mock<IPermissionService>();
+        permissionService
+            .Setup(x => x.HasPermissionAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<Permission>(), default))
+            .ReturnsAsync(true);
+
         return new ProjectCommandService(
             (projects ?? new Mock<IProjectRepository>()).Object,
             users.Object,
             (issues ?? new Mock<IIssueRepository>()).Object,
             (sprints ?? new Mock<ISprintRepository>()).Object,
             (authorization ?? new Mock<IAuthorizationService>()).Object,
+            permissionService.Object,
             (activityLogs ?? new Mock<IActivityLogRepository>()).Object,
             currentUserContext.Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
     }
 }
+
+
+
+
 

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using JiraClone.Application.Abstractions;
 using JiraClone.Application.Users;
 using JiraClone.Domain.Entities;
@@ -19,11 +20,11 @@ public class UserCommandServiceTests
         users.Setup(x => x.GetRolesAsync(default)).ReturnsAsync([new Role { Id = 1, Name = "Developer" }]);
         users.Setup(x => x.AddAsync(It.IsAny<User>(), default)).Callback<User, CancellationToken>((user, _) => user.Id = 42).Returns(Task.CompletedTask);
         projects.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
-        hasher.Setup(x => x.Hash("secret")).Returns(("hash", "salt"));
+        hasher.Setup(x => x.Hash("Secret123")).Returns(("hash", "salt"));
         var service = CreateService(users, projects, hasher, activityLogs: activityLogs);
 
         // Act
-        var user = await service.CreateAsync(1, "dev1", "Dev One", "dev1@example.com", "secret", ProjectRole.Developer, ["Developer"]);
+        var user = await service.CreateAsync(1, "dev1", "Dev One", "dev1@example.com", "Secret123", ProjectRole.Developer, ["Developer"]);
 
         // Assert
         Assert.Equal(42, user.Id);
@@ -67,11 +68,11 @@ public class UserCommandServiceTests
         var hasher = new Mock<IPasswordHasher>();
         var unitOfWork = new Mock<IUnitOfWork>();
         users.Setup(x => x.GetByIdAsync(7, default)).ReturnsAsync(user);
-        hasher.Setup(x => x.Hash("new-secret")).Returns(("hashed", "salted"));
+        hasher.Setup(x => x.Hash("NewSecret123")).Returns(("hashed", "salted"));
         var service = CreateService(users: users, passwordHasher: hasher, unitOfWork: unitOfWork);
 
         // Act
-        var reset = await service.ResetPasswordAsync(7, "new-secret");
+        var reset = await service.ResetPasswordAsync(7, "NewSecret123");
 
         // Assert
         Assert.True(reset);
@@ -90,13 +91,32 @@ public class UserCommandServiceTests
         var service = CreateService(users: users, unitOfWork: unitOfWork);
 
         // Act
-        var reset = await service.ResetPasswordAsync(7, "new-secret");
+        var reset = await service.ResetPasswordAsync(7, "NewSecret123");
 
         // Assert
         Assert.False(reset);
         unitOfWork.Verify(x => x.SaveChangesAsync(default), Times.Never);
     }
 
+    [Fact]
+    public async Task CreateAsync_WeakPassword_ThrowsValidationException()
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            service.CreateAsync(1, "dev1", "Dev One", "dev1@example.com", "weakpass", ProjectRole.Developer, ["Developer"]));
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_WeakPassword_ThrowsValidationException()
+    {
+        var user = new User { Id = 7, UserName = "dev1", DisplayName = "Dev One", Email = "dev1@example.com" };
+        var users = new Mock<IUserRepository>();
+        users.Setup(x => x.GetByIdAsync(7, default)).ReturnsAsync(user);
+        var service = CreateService(users: users);
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.ResetPasswordAsync(7, "weakpass"));
+    }
     private static UserCommandService CreateService(
         Mock<IUserRepository>? users = null,
         Mock<IProjectRepository>? projects = null,
@@ -119,3 +139,5 @@ public class UserCommandServiceTests
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
     }
 }
+
+

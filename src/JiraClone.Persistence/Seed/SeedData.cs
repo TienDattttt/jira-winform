@@ -1,5 +1,6 @@
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
+using JiraClone.Domain.Permissions;
 using Microsoft.EntityFrameworkCore;
 
 namespace JiraClone.Persistence.Seed;
@@ -26,6 +27,7 @@ public static class SeedData
                 PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
                 PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
                 IsActive = true,
+                EmailNotificationsEnabled = true,
                 CreatedAtUtc = createdAt,
                 UpdatedAtUtc = createdAt
             },
@@ -38,6 +40,7 @@ public static class SeedData
                 PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
                 PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
                 IsActive = true,
+                EmailNotificationsEnabled = true,
                 CreatedAtUtc = createdAt,
                 UpdatedAtUtc = createdAt
             },
@@ -50,6 +53,7 @@ public static class SeedData
                 PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
                 PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
                 IsActive = true,
+                EmailNotificationsEnabled = true,
                 CreatedAtUtc = createdAt,
                 UpdatedAtUtc = createdAt
             });
@@ -71,6 +75,25 @@ public static class SeedData
             CreatedAtUtc = createdAt,
             UpdatedAtUtc = createdAt
         });
+
+        modelBuilder.Entity<PermissionScheme>().HasData(new PermissionScheme
+        {
+            Id = 1,
+            ProjectId = 1,
+            Name = PermissionDefaults.DefaultSchemeName,
+            CreatedAtUtc = createdAt,
+            UpdatedAtUtc = createdAt
+        });
+
+        modelBuilder.Entity<PermissionGrant>().HasData(
+            PermissionDefaults.GetDefaultGrants()
+                .Select(grant => new
+                {
+                    PermissionSchemeId = 1,
+                    grant.Permission,
+                    grant.ProjectRole,
+                })
+                .ToArray());
 
         modelBuilder.Entity<ProjectMember>().HasData(
             new { ProjectId = 1, UserId = 1, ProjectRole = ProjectRole.Admin, JoinedAtUtc = createdAt },
@@ -293,4 +316,7 @@ public static class SeedData
         _ => "Status"
     };
 }
+
+
+
 

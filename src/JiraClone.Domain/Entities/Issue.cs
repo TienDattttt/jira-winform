@@ -40,6 +40,7 @@ public class Issue : AggregateRoot
         }
     }
 
+    public DateOnly? StartDate { get; set; }
     public DateOnly? DueDate { get; set; }
     public decimal BoardPosition { get; set; } = 1;
     public bool IsDeleted { get; set; }

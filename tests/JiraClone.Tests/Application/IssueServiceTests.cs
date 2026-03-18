@@ -286,12 +286,12 @@ public class IssueServiceTests
         Mock<IProjectRepository>? projectRepository = null,
         Mock<ICommentRepository>? commentRepository = null,
         Mock<IAttachmentRepository>? attachmentRepository = null,
-        Mock<IAuthorizationService>? authorization = null,
+        Mock<IPermissionService>? permissionService = null,
         Mock<IActivityLogRepository>? activityLogRepository = null,
         Mock<IWorkflowService>? workflowService = null,
         Mock<IWorkflowRepository>? workflowRepository = null,
         Mock<IWatcherRepository>? watcherRepository = null,
-        Mock<INotificationRepository>? notificationRepository = null,
+        Mock<INotificationService>? notificationService = null,
         Mock<IUnitOfWork>? unitOfWork = null)
     {
         projectRepository ??= new Mock<IProjectRepository>();
@@ -309,6 +309,11 @@ public class IssueServiceTests
             issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, It.IsAny<int>(), default)).ReturnsAsync(1m);
         }
 
+        permissionService ??= new Mock<IPermissionService>();
+        permissionService
+            .Setup(x => x.HasPermissionAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<Permission>(), default))
+            .ReturnsAsync(true);
+
         watcherRepository ??= new Mock<IWatcherRepository>();
         watcherRepository.Setup(x => x.GetByIssueIdAsync(It.IsAny<int>(), default)).ReturnsAsync(Array.Empty<Watcher>());
 
@@ -321,12 +326,12 @@ public class IssueServiceTests
             projectRepository.Object,
             (commentRepository ?? new Mock<ICommentRepository>()).Object,
             (attachmentRepository ?? new Mock<IAttachmentRepository>()).Object,
-            (authorization ?? new Mock<IAuthorizationService>()).Object,
+            permissionService.Object,
             (activityLogRepository ?? new Mock<IActivityLogRepository>()).Object,
             workflowService.Object,
             workflowRepository.Object,
             watcherRepository.Object,
-            (notificationRepository ?? new Mock<INotificationRepository>()).Object,
+            (notificationService ?? new Mock<INotificationService>()).Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
     }
 
@@ -388,6 +393,7 @@ public class IssueServiceTests
         return issue;
     }
 }
+
 
 
 

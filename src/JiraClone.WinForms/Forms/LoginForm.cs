@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using JiraClone.Infrastructure.Session;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Theme;
@@ -9,9 +10,11 @@ namespace JiraClone.WinForms.Forms;
 public class LoginForm : Form
 {
     private readonly AppSession _session;
+    private readonly ISessionPersistenceService _sessionPersistence;
     private readonly ShadowPanel _cardPanel;
     private readonly TextBox _emailTextBox;
     private readonly TextBox _passwordTextBox;
+    private readonly CheckBox _rememberMeCheckBox;
     private readonly Label _errorLabel;
     private readonly Button _loginButton;
     private readonly Button _showPasswordButton;
@@ -22,9 +25,10 @@ public class LoginForm : Form
     private bool _dragging;
     private readonly HashSet<Control> _draggableControls = [];
 
-    public LoginForm(AppSession session)
+    public LoginForm(AppSession session, ISessionPersistenceService sessionPersistence)
     {
         _session = session;
+        _sessionPersistence = sessionPersistence;
 
         Text = "Jira Clone Login";
         FormBorderStyle = FormBorderStyle.None;
@@ -38,7 +42,7 @@ public class LoginForm : Form
 
         _cardPanel = new ShadowPanel
         {
-            Size = new Size(480, 580),
+            Size = new Size(480, 612),
             BackColor = Color.Transparent,
             Anchor = AnchorStyles.None,
         };
@@ -53,6 +57,17 @@ public class LoginForm : Form
         _passwordTextBox.Dock = DockStyle.Fill;
         _passwordTextBox.UseSystemPasswordChar = true;
         _passwordTextBox.Text = string.Empty;
+
+        _rememberMeCheckBox = new CheckBox
+        {
+            AutoSize = true,
+            Text = "Remember me for 30 days",
+            Checked = true,
+            ForeColor = JiraTheme.TextPrimary,
+            BackColor = JiraTheme.BgSurface,
+            Font = JiraTheme.FontBody,
+            Margin = new Padding(0, 4, 0, 0)
+        };
 
         _showPasswordButton = new Button
         {
@@ -75,7 +90,7 @@ public class LoginForm : Form
         _errorLabel = JiraControlFactory.CreateLabel(string.Empty, true);
         _errorLabel.ForeColor = JiraTheme.Danger;
         _errorLabel.AutoSize = false;
-        _errorLabel.Height = 36;
+        _errorLabel.Height = 42;
         _errorLabel.Dock = DockStyle.Top;
         _errorLabel.TextAlign = ContentAlignment.MiddleLeft;
         _errorLabel.Visible = false;
@@ -131,7 +146,7 @@ public class LoginForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 10,
+            RowCount = 11,
             BackColor = JiraTheme.BgSurface,
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
@@ -141,7 +156,8 @@ public class LoginForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -174,6 +190,7 @@ public class LoginForm : Form
         passwordLabel.Dock = DockStyle.Fill;
         passwordLabel.TextAlign = ContentAlignment.BottomLeft;
         var passwordHost = BuildPasswordHost();
+        var rememberHost = BuildRememberMeHost();
 
         layout.Controls.Add(logoHost, 0, 0);
         layout.Controls.Add(title, 0, 1);
@@ -182,8 +199,9 @@ public class LoginForm : Form
         layout.Controls.Add(emailHost, 0, 4);
         layout.Controls.Add(passwordLabel, 0, 5);
         layout.Controls.Add(passwordHost, 0, 6);
-        layout.Controls.Add(_errorLabel, 0, 7);
-        layout.Controls.Add(_loginButton, 0, 8);
+        layout.Controls.Add(rememberHost, 0, 7);
+        layout.Controls.Add(_errorLabel, 0, 8);
+        layout.Controls.Add(_loginButton, 0, 9);
 
         content.Controls.Add(layout);
         _cardPanel.Controls.Add(content);
@@ -216,11 +234,25 @@ public class LoginForm : Form
         return host;
     }
 
+    private Control BuildRememberMeHost()
+    {
+        var host = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+        };
+        host.Controls.Add(_rememberMeCheckBox);
+        _rememberMeCheckBox.Location = new Point(0, 4);
+        return host;
+    }
 
     private void PositionChrome()
     {
         _closeButton.Location = new Point(ClientSize.Width - _closeButton.Width - 16, 16);
     }
+
     private void CenterCard()
     {
         _cardPanel.Location = new Point(
@@ -319,8 +351,10 @@ public class LoginForm : Form
                 return;
             }
 
+            await ApplyRememberMePreferenceAsync(result.User.Id);
+
             Hide();
-            using var mainForm = new MainForm(_session, result.User.DisplayName);
+            using var mainForm = new MainForm(_session, result.User.DisplayName, _sessionPersistence);
             mainForm.ShowDialog(this);
             Close();
         }
@@ -334,12 +368,60 @@ public class LoginForm : Form
         }
     }
 
+    private async Task ApplyRememberMePreferenceAsync(int userId)
+    {
+        if (_rememberMeCheckBox.Checked)
+        {
+            try
+            {
+                var sessionData = await _session.Authentication.CreatePersistentSessionAsync(userId);
+                await _sessionPersistence.SaveAsync(sessionData);
+                return;
+            }
+            catch (Exception exception)
+            {
+                try
+                {
+                    await _session.Authentication.ClearPersistentSessionAsync(userId);
+                }
+                catch
+                {
+                }
+
+                ShowRememberMeWarning("Logged in, but remember me could not be enabled.", exception.Message);
+                return;
+            }
+        }
+
+        try
+        {
+            await _session.Authentication.ClearPersistentSessionAsync(userId);
+        }
+        catch (Exception exception)
+        {
+            ShowRememberMeWarning("Logged in, but a previous remembered session could not be cleared.", exception.Message);
+        }
+
+        await _sessionPersistence.ClearAsync();
+    }
+
+    private void ShowRememberMeWarning(string title, string details)
+    {
+        MessageBox.Show(
+            this,
+            $"{title}\n\n{details}",
+            "Remember Me",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
+    }
+
     private void SetBusyState(bool isBusy)
     {
         UseWaitCursor = isBusy;
         _loginButton.Enabled = !isBusy;
         _emailTextBox.Enabled = !isBusy;
         _passwordTextBox.Enabled = !isBusy;
+        _rememberMeCheckBox.Enabled = !isBusy;
         _showPasswordButton.Enabled = !isBusy;
     }
 
@@ -384,7 +466,6 @@ public class LoginForm : Form
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
             using var fill = new SolidBrush(JiraTheme.Primary);
-            using var textBrush = new SolidBrush(Color.White);
             e.Graphics.FillEllipse(fill, ClientRectangle);
 
             var textBounds = ClientRectangle;
@@ -431,12 +512,5 @@ public class LoginForm : Form
             e.Graphics.FillPath(brush, path);
             e.Graphics.DrawPath(border, path);
         }
-
-
     }
 }
-
-
-
-
-

@@ -1,4 +1,6 @@
+using System.ComponentModel.DataAnnotations;
 using JiraClone.Application.Abstractions;
+using JiraClone.Application.Auth;
 using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
@@ -63,6 +65,7 @@ public class UserCommandService
     {
         _logger.LogInformation("Creating user {UserName} in project {ProjectId}.", userName, projectId);
         _authorization.EnsureInRole(RoleCatalog.Admin);
+        AuthenticationService.EnsurePasswordValid(password);
 
         var (hash, salt) = _passwordHasher.Hash(password);
         var user = new User
@@ -130,6 +133,12 @@ public class UserCommandService
         user.DisplayName = displayName.Trim();
         user.Email = email.Trim();
         user.IsActive = isActive;
+        if (!isActive)
+        {
+            user.LastRefreshToken = null;
+            user.SessionExpiresAtUtc = null;
+        }
+
         user.UpdatedAtUtc = DateTime.UtcNow;
 
         user.UserRoles.Clear();
@@ -169,13 +178,64 @@ public class UserCommandService
             return false;
         }
 
+        AuthenticationService.EnsurePasswordValid(newPassword);
         var (hash, salt) = _passwordHasher.Hash(newPassword);
         user.PasswordHash = hash;
         user.PasswordSalt = salt;
+        user.LastRefreshToken = null;
+        user.SessionExpiresAtUtc = null;
         user.UpdatedAtUtc = DateTime.UtcNow;
         await AddUserActivityAsync(GetAuditProjectId(user), ActivityActionType.Updated, nameof(User.PasswordHash), "***", "***", cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async Task<User?> UpdateEmailNotificationsPreferenceAsync(int userId, bool isEnabled, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating email notification preference for user {UserId} to {IsEnabled}.", userId, isEnabled);
+        var currentUser = _currentUserContext.CurrentUser
+            ?? throw new InvalidOperationException("No user is currently logged in.");
+
+        if (currentUser.Id != userId)
+        {
+            _authorization.EnsureInRole(RoleCatalog.Admin);
+        }
+
+        var user = await _users.GetByIdAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            _logger.LogWarning("User {UserId} was not found while updating email notification preference.", userId);
+            return null;
+        }
+
+        if (user.EmailNotificationsEnabled == isEnabled)
+        {
+            if (currentUser.Id == user.Id)
+            {
+                _currentUserContext.Set(user);
+            }
+
+            return user;
+        }
+
+        var oldValue = user.EmailNotificationsEnabled.ToString();
+        user.EmailNotificationsEnabled = isEnabled;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+        await AddUserActivityAsync(
+            GetAuditProjectId(user),
+            ActivityActionType.Updated,
+            nameof(User.EmailNotificationsEnabled),
+            oldValue,
+            isEnabled.ToString(),
+            cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (currentUser.Id == user.Id)
+        {
+            _currentUserContext.Set(user);
+        }
+
+        return user;
     }
 
     public Task<User?> DeactivateAsync(int userId, CancellationToken cancellationToken = default)
@@ -201,6 +261,12 @@ public class UserCommandService
         }
 
         user.IsActive = isActive;
+        if (!isActive)
+        {
+            user.LastRefreshToken = null;
+            user.SessionExpiresAtUtc = null;
+        }
+
         user.UpdatedAtUtc = DateTime.UtcNow;
         await AddUserActivityAsync(GetAuditProjectId(user), ActivityActionType.Updated, nameof(User.IsActive), (!isActive).ToString(), isActive.ToString(), cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

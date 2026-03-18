@@ -1,3 +1,4 @@
+using JiraClone.Application.Auth;
 using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
@@ -371,13 +372,13 @@ public class UserManagementForm : UserControl
                 return;
             }
 
-            var password = Microsoft.VisualBasic.Interaction.InputBox("Enter the new password", "Reset Password", "ChangeMe123!");
-            if (string.IsNullOrWhiteSpace(password))
+            using var dialog = new ResetPasswordDialog();
+            if (dialog.ShowDialog(this) != DialogResult.OK)
             {
                 return;
             }
 
-            await _session.UserCommands.ResetPasswordAsync(SelectedUser.Id, password);
+            await _session.UserCommands.ResetPasswordAsync(SelectedUser.Id, dialog.NewPassword);
             MessageBox.Show(this, "Password has been reset.", "User Management", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception exception)
@@ -423,22 +424,32 @@ public class UserManagementForm : UserControl
         private readonly TextBox _displayName = JiraControlFactory.CreateTextBox();
         private readonly TextBox _email = JiraControlFactory.CreateTextBox();
         private readonly TextBox _password = JiraControlFactory.CreateTextBox();
+        private readonly Label _passwordError = JiraControlFactory.CreateLabel(string.Empty, true);
         private readonly ComboBox _projectRole = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody };
         private readonly CheckedListBox _roles = new() { Dock = DockStyle.Fill, Height = 120, BorderStyle = BorderStyle.None, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody };
         private readonly CheckBox _isActive = new() { Text = "Active", Checked = true, AutoSize = true, Font = JiraTheme.FontBody, ForeColor = JiraTheme.TextPrimary };
+        private readonly Button _saveButton = JiraControlFactory.CreatePrimaryButton("Save");
+        private readonly bool _isCreateMode;
 
         public UserEditorDialog(IReadOnlyList<Role> roles, User? user, ProjectRole projectRole = ProjectRole.Developer)
         {
-            Text = user is null ? "Create User" : "Edit User";
+            _isCreateMode = user is null;
+            Text = _isCreateMode ? "Create User" : "Edit User";
             AutoScaleMode = AutoScaleMode.Font;
             Width = 560;
-            Height = 470;
+            Height = _isCreateMode ? 520 : 470;
             MinimumSize = new Size(560, 470);
             StartPosition = FormStartPosition.CenterParent;
             BackColor = JiraTheme.BgSurface;
             Font = JiraTheme.FontBody;
 
             _password.UseSystemPasswordChar = true;
+            _password.PlaceholderText = "Leave blank to use ChangeMe123!";
+            _password.TextChanged += (_, _) => UpdatePasswordValidation();
+            _passwordError.ForeColor = JiraTheme.Red600;
+            _passwordError.MaximumSize = new Size(320, 0);
+            _passwordError.Visible = false;
+
             _projectRole.DataSource = Enum.GetValues<ProjectRole>();
             _projectRole.SelectedItem = projectRole;
             foreach (var role in roles)
@@ -459,28 +470,47 @@ public class UserManagementForm : UserControl
                 _isActive.Checked = user.IsActive;
             }
 
-            var save = JiraControlFactory.CreatePrimaryButton("Save");
+            _saveButton.Click += (_, _) =>
+            {
+                if (_saveButton.Enabled)
+                {
+                    DialogResult = DialogResult.OK;
+                    Close();
+                }
+            };
+
             var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
-            save.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };
             cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
 
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 58, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = JiraTheme.BgSurface };
-            buttons.Controls.Add(save);
+            buttons.Controls.Add(_saveButton);
             buttons.Controls.Add(cancel);
 
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(16), BackColor = JiraTheme.BgSurface, AutoScroll = true, RowCount = 7 };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(16), BackColor = JiraTheme.BgSurface, AutoScroll = true, RowCount = _isCreateMode ? 8 : 6 };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            AddRow(layout, 0, "User Name", _userName);
-            AddRow(layout, 1, "Display Name", _displayName);
-            AddRow(layout, 2, "Email", _email);
-            AddRow(layout, 3, "Password", _password);
-            AddRow(layout, 4, "Project Role", _projectRole);
-            AddRow(layout, 5, "Roles", _roles);
-            layout.Controls.Add(_isActive, 1, 6);
+
+            var row = 0;
+            AddRow(layout, row++, "User Name", _userName);
+            AddRow(layout, row++, "Display Name", _displayName);
+            AddRow(layout, row++, "Email", _email);
+
+            if (_isCreateMode)
+            {
+                AddRow(layout, row++, "Password", _password);
+                layout.Controls.Add(_passwordError, 1, row++);
+            }
+
+            AddRow(layout, row++, "Project Role", _projectRole);
+            AddRow(layout, row++, "Roles", _roles);
+            layout.Controls.Add(_isActive, 1, row);
 
             Controls.Add(layout);
             Controls.Add(buttons);
+
+            AcceptButton = _saveButton;
+            CancelButton = cancel;
+            UpdatePasswordValidation();
         }
 
         public string UserName => _userName.Text;
@@ -491,6 +521,21 @@ public class UserManagementForm : UserControl
         public IReadOnlyCollection<string> SelectedRoles => _roles.CheckedItems.Cast<string>().ToArray();
         public bool IsActive => _isActive.Checked;
 
+        private void UpdatePasswordValidation()
+        {
+            if (!_isCreateMode)
+            {
+                _passwordError.Visible = false;
+                _saveButton.Enabled = true;
+                return;
+            }
+
+            var error = AuthenticationService.GetPasswordValidationError(Password);
+            _passwordError.Text = error ?? string.Empty;
+            _passwordError.Visible = !string.IsNullOrWhiteSpace(error);
+            _saveButton.Enabled = string.IsNullOrWhiteSpace(error);
+        }
+
         private static void AddRow(TableLayoutPanel layout, int row, string label, Control control)
         {
             layout.Controls.Add(JiraControlFactory.CreateLabel(label, true), 0, row);
@@ -498,5 +543,3 @@ public class UserManagementForm : UserControl
         }
     }
 }
-
-

@@ -14,6 +14,9 @@ public class UserEntity : SchemaEntityBase
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string PasswordSalt { get; set; } = string.Empty;
+    public string? LastRefreshToken { get; set; }
+    public DateTime? SessionExpiresAtUtc { get; set; }
+    public bool EmailNotificationsEnabled { get; set; }
     public string? AvatarPath { get; set; }
     public bool IsActive { get; set; } = true;
     public ICollection<UserRoleEntity> UserRoles { get; set; } = new List<UserRoleEntity>();

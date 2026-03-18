@@ -16,6 +16,9 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.Email).HasMaxLength(200).IsRequired();
         builder.Property(x => x.PasswordHash).HasMaxLength(512).IsRequired();
         builder.Property(x => x.PasswordSalt).HasMaxLength(512).IsRequired();
+        builder.Property(x => x.LastRefreshToken).HasMaxLength(64);
+        builder.Property(x => x.SessionExpiresAtUtc);
         builder.Property(x => x.AvatarPath).HasMaxLength(500);
+        builder.Property(x => x.EmailNotificationsEnabled).HasDefaultValue(true);
     }
 }

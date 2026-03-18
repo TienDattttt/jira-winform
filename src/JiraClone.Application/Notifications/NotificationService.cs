@@ -10,12 +10,30 @@ namespace JiraClone.Application.Notifications;
 public class NotificationService : INotificationService
 {
     private readonly INotificationRepository _notifications;
+    private readonly IUserRepository _users;
+    private readonly IIssueRepository _issues;
+    private readonly IProjectRepository _projects;
+    private readonly INotificationEmailTemplateRenderer _templateRenderer;
+    private readonly IEmailService _emailService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<NotificationService> _logger;
 
-    public NotificationService(INotificationRepository notifications, IUnitOfWork unitOfWork, ILogger<NotificationService>? logger = null)
+    public NotificationService(
+        INotificationRepository notifications,
+        IUserRepository users,
+        IIssueRepository issues,
+        IProjectRepository projects,
+        INotificationEmailTemplateRenderer templateRenderer,
+        IEmailService emailService,
+        IUnitOfWork unitOfWork,
+        ILogger<NotificationService>? logger = null)
     {
         _notifications = notifications;
+        _users = users;
+        _issues = issues;
+        _projects = projects;
+        _templateRenderer = templateRenderer;
+        _emailService = emailService;
         _unitOfWork = unitOfWork;
         _logger = logger ?? NullLogger<NotificationService>.Instance;
     }
@@ -38,6 +56,19 @@ public class NotificationService : INotificationService
         await _notifications.AddAsync(notification, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Created notification {NotificationType} for user {UserId}.", type, recipientUserId);
+
+        var emailRequest = await BuildEmailRequestAsync(notification, cancellationToken);
+        if (emailRequest is not null)
+        {
+            _ = _emailService
+                .SendAsync(emailRequest.ToEmail, emailRequest.ToName, emailRequest.Subject, emailRequest.HtmlBody, CancellationToken.None)
+                .ContinueWith(
+                    task => _logger.LogError(task.Exception, "Email send failed for notification {NotificationId}.", notification.Id),
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted,
+                    TaskScheduler.Default);
+        }
+
         return Map(notification);
     }
 
@@ -90,6 +121,70 @@ public class NotificationService : INotificationService
         return changed;
     }
 
+    private async Task<EmailDeliveryRequest?> BuildEmailRequestAsync(Notification notification, CancellationToken cancellationToken)
+    {
+        var recipient = await _users.GetByIdAsync(notification.RecipientUserId, cancellationToken);
+        if (recipient is null ||
+            !recipient.IsActive ||
+            !recipient.EmailNotificationsEnabled ||
+            string.IsNullOrWhiteSpace(recipient.Email))
+        {
+            return null;
+        }
+
+        Issue? issue = null;
+        if (notification.IssueId.HasValue)
+        {
+            issue = await _issues.GetByIdAsync(notification.IssueId.Value, cancellationToken);
+        }
+
+        Project? project = null;
+        if (notification.ProjectId.HasValue)
+        {
+            project = await _projects.GetByIdAsync(notification.ProjectId.Value, cancellationToken);
+        }
+
+        if (project is null && issue is not null)
+        {
+            project = await _projects.GetByIdAsync(issue.ProjectId, cancellationToken);
+        }
+
+        var templateModel = new NotificationEmailTemplateModel(
+            notification.Type,
+            string.IsNullOrWhiteSpace(recipient.DisplayName) ? recipient.UserName : recipient.DisplayName,
+            notification.Title,
+            notification.Body,
+            issue?.IssueKey,
+            issue?.Title,
+            project?.Name,
+            ExtractSprintName(notification));
+
+        return new EmailDeliveryRequest(
+            recipient.Email,
+            string.IsNullOrWhiteSpace(recipient.DisplayName) ? recipient.UserName : recipient.DisplayName,
+            notification.Title,
+            _templateRenderer.Render(templateModel));
+    }
+
+    private static string? ExtractSprintName(Notification notification)
+    {
+        const string startedPrefix = "Sprint started:";
+        const string completedPrefix = "Sprint completed:";
+        if (notification.Title.StartsWith(startedPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return notification.Title[startedPrefix.Length..].Trim();
+        }
+
+        if (notification.Title.StartsWith(completedPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return notification.Title[completedPrefix.Length..].Trim();
+        }
+
+        return notification.Title;
+    }
+
     private static NotificationItemDto Map(Notification notification) =>
         new(notification.Id, notification.RecipientUserId, notification.IssueId, notification.ProjectId, notification.Type, notification.Title, notification.Body, notification.IsRead, notification.CreatedAtUtc);
+
+    private sealed record EmailDeliveryRequest(string ToEmail, string ToName, string Subject, string HtmlBody);
 }

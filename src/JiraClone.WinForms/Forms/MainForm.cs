@@ -3,6 +3,7 @@ using System.Drawing.Text;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
+using JiraClone.Infrastructure.Session;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
 using JiraClone.WinForms.Services;
@@ -13,6 +14,7 @@ namespace JiraClone.WinForms.Forms;
 public class MainForm : Form
 {
     private readonly AppSession _session;
+    private readonly ISessionPersistenceService _sessionPersistence;
     private readonly string _displayName;
     private readonly Panel _contentPanel = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgPage };
     private readonly Label _breadcrumbLabel = new() { AutoSize = true, Font = JiraTheme.FontSmall, ForeColor = JiraTheme.TextSecondary };
@@ -21,6 +23,7 @@ public class MainForm : Form
     private readonly SidebarNavItem _dashboardItem = new(NavKind.Dashboard, "Dashboard");
     private readonly SidebarNavItem _boardItem = new(NavKind.Board, "Board");
     private readonly SidebarNavItem _backlogItem = new(NavKind.Backlog, "Backlog");
+    private readonly SidebarNavItem _roadmapItem = new(NavKind.Roadmap, "Roadmap");
     private readonly SidebarNavItem _sprintsItem = new(NavKind.Sprints, "Sprints");
     private readonly SidebarNavItem _issuesItem = new(NavKind.Issues, "Issues");
     private readonly SidebarNavItem _reportsItem = new(NavKind.Reports, "Reports");
@@ -47,9 +50,10 @@ public class MainForm : Form
     private int _notificationPollInFlight;
     private bool _isUiBusy;
 
-    public MainForm(AppSession session, string displayName)
+    public MainForm(AppSession session, string displayName, ISessionPersistenceService sessionPersistence)
     {
         _session = session;
+        _sessionPersistence = sessionPersistence;
         _displayName = session.CurrentUserContext.CurrentUser?.DisplayName ?? displayName;
         _projectSwitcher = new ProjectSwitcherControl(session);
 
@@ -124,6 +128,7 @@ public class MainForm : Form
             _dashboardItem.Click -= OnDashboardItemClick;
             _boardItem.Click -= OnBoardItemClick;
             _backlogItem.Click -= OnBacklogItemClick;
+            _roadmapItem.Click -= OnRoadmapItemClick;
             _sprintsItem.Click -= OnSprintsItemClick;
             _issuesItem.Click -= OnIssuesItemClick;
             _reportsItem.Click -= OnReportsItemClick;
@@ -195,7 +200,7 @@ public class MainForm : Form
             Padding = new Padding(0, 14, 0, 0),
             BackColor = JiraTheme.BgSidebar,
         };
-        navStack.Controls.AddRange([_projectsItem, _dashboardItem, _boardItem, _backlogItem, _sprintsItem, _issuesItem, _reportsItem, _settingsItem]);
+        navStack.Controls.AddRange([_projectsItem, _dashboardItem, _boardItem, _backlogItem, _roadmapItem, _sprintsItem, _issuesItem, _reportsItem, _settingsItem]);
 
         var bottomSection = new Panel
         {
@@ -563,6 +568,7 @@ public class MainForm : Form
         _dashboardItem.Click += OnDashboardItemClick;
         _boardItem.Click += OnBoardItemClick;
         _backlogItem.Click += OnBacklogItemClick;
+        _roadmapItem.Click += OnRoadmapItemClick;
         _sprintsItem.Click += OnSprintsItemClick;
         _issuesItem.Click += OnIssuesItemClick;
         _reportsItem.Click += OnReportsItemClick;
@@ -705,6 +711,9 @@ public class MainForm : Form
             case BoardForm boardForm:
                 await boardForm.RefreshBoardAsync(cancellationToken);
                 break;
+            case RoadmapForm roadmapForm:
+                await roadmapForm.RefreshRoadmapAsync(cancellationToken);
+                break;
             case IssueNavigatorForm issueNavigator:
                 await issueNavigator.RefreshIssuesAsync(cancellationToken);
                 break;
@@ -736,6 +745,9 @@ public class MainForm : Form
             case BoardForm boardForm:
                 boardForm.SetShellSearch(_searchBox.Text);
                 break;
+            case RoadmapForm roadmapForm:
+                roadmapForm.SetShellSearch(_searchBox.Text);
+                break;
             case IssueNavigatorForm issueNavigator:
                 issueNavigator.SetShellSearch(_searchBox.Text);
                 break;
@@ -766,9 +778,9 @@ public class MainForm : Form
         ApplyShellSearch();
     }
 
-    private void OnLogoutButtonClick(object? sender, EventArgs e)
+    private async void OnLogoutButtonClick(object? sender, EventArgs e)
     {
-        Logout();
+        await LogoutAsync();
     }
 
     private async void OnCreateIssueButtonClick(object? sender, EventArgs e)
@@ -799,6 +811,11 @@ public class MainForm : Form
     private void OnBacklogItemClick(object? sender, EventArgs e)
     {
         NavigateTo(_backlogItem, () => new BoardForm(_session, activeSprintOnly: false));
+    }
+
+    private void OnRoadmapItemClick(object? sender, EventArgs e)
+    {
+        NavigateTo(_roadmapItem, () => new RoadmapForm(_session));
     }
 
     private void OnSprintsItemClick(object? sender, EventArgs e)
@@ -885,16 +902,33 @@ public class MainForm : Form
         UpdateProjectChrome();
     }
 
-    private void Logout()
+    private async Task LogoutAsync()
     {
         if (MessageBox.Show(this, "Log out from Jira Clone?", "Logout", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
             return;
         }
 
-        _session.CurrentUserContext.Clear();
-        System.Windows.Forms.Application.Restart();
-        Close();
+        try
+        {
+            if (_session.CurrentUserContext.CurrentUser is { Id: var userId })
+            {
+                await _session.Authentication.ClearPersistentSessionAsync(userId);
+            }
+            else
+            {
+                _session.CurrentUserContext.Clear();
+            }
+
+            await _sessionPersistence.ClearAsync();
+            _session.CurrentUserContext.Clear();
+            System.Windows.Forms.Application.Restart();
+            Close();
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
     }
 
     private static string BuildInitials(string name)
@@ -918,6 +952,7 @@ public class MainForm : Form
         Dashboard,
         Board,
         Backlog,
+        Roadmap,
         Sprints,
         Issues,
         Reports,
@@ -1006,6 +1041,15 @@ public class MainForm : Form
                     graphics.DrawLine(pen, bounds.X, middleY - 7, bounds.Right, middleY - 7);
                     graphics.DrawLine(pen, bounds.X, middleY, bounds.Right, middleY);
                     graphics.DrawLine(pen, bounds.X, middleY + 7, bounds.Right, middleY + 7);
+                    break;
+                case NavKind.Roadmap:
+                    graphics.DrawLine(pen, bounds.X + 1, bounds.Bottom - 5, bounds.Right - 1, bounds.Bottom - 5);
+                    graphics.DrawLine(pen, bounds.X + 4, bounds.Y + 5, bounds.X + 4, bounds.Bottom - 5);
+                    graphics.DrawLine(pen, bounds.X + 10, bounds.Y + 8, bounds.X + 10, bounds.Bottom - 5);
+                    graphics.DrawLine(pen, bounds.X + 16, bounds.Y + 2, bounds.X + 16, bounds.Bottom - 5);
+                    graphics.FillEllipse(fill, bounds.X + 3, bounds.Y + 4, 3, 3);
+                    graphics.FillEllipse(fill, bounds.X + 9, bounds.Y + 7, 3, 3);
+                    graphics.FillEllipse(fill, bounds.X + 15, bounds.Y + 1, 3, 3);
                     break;
                 case NavKind.Sprints:
                     graphics.DrawLine(pen, bounds.X + 1, bounds.Y + 4, bounds.Right - 2, middleY);
@@ -1451,6 +1495,7 @@ public class MainForm : Form
         private sealed record IssueSummaryRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
     }
 }
+
 
 
 
