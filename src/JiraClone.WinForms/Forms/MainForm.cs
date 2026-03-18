@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
@@ -18,6 +18,7 @@ public class MainForm : Form
     private readonly Label _breadcrumbLabel = new() { AutoSize = true, Font = JiraTheme.FontSmall, ForeColor = JiraTheme.TextSecondary };
     private readonly TextBox _searchBox = JiraControlFactory.CreateTextBox();
     private readonly SidebarNavItem _projectsItem = new(NavKind.Projects, "Projects");
+    private readonly SidebarNavItem _dashboardItem = new(NavKind.Dashboard, "Dashboard");
     private readonly SidebarNavItem _boardItem = new(NavKind.Board, "Board");
     private readonly SidebarNavItem _backlogItem = new(NavKind.Backlog, "Backlog");
     private readonly SidebarNavItem _sprintsItem = new(NavKind.Sprints, "Sprints");
@@ -30,10 +31,13 @@ public class MainForm : Form
     private readonly Label _sidebarUserLabel;
     private readonly Button _logoutButton;
     private readonly Button _createIssueButton;
+    private readonly Button _cancelButton;
 
     private string _projectName = "Project";
     private SidebarNavItem? _activeNavItem;
     private Control? _activeContent;
+    private CancellationTokenSource? _uiOperationCts;
+    private bool _isUiBusy;
 
     public MainForm(AppSession session, string displayName)
     {
@@ -52,7 +56,7 @@ public class MainForm : Form
         _searchBox.Width = 300;
         _searchBox.MinimumSize = new Size(220, 38);
         _searchBox.PlaceholderText = "Search projects";
-        _searchBox.TextChanged += (_, _) => ApplyShellSearch();
+        _searchBox.TextChanged += OnSearchBoxTextChanged;
 
         var initials = BuildInitials(_displayName);
         _sidebarAvatar = new InitialsAvatar(initials, 32) { BackCircleColor = JiraTheme.Blue600 };
@@ -67,24 +71,49 @@ public class MainForm : Form
         _logoutButton.Width = 124;
         _logoutButton.Height = 40;
         _logoutButton.MinimumSize = new Size(124, 36);
-        _logoutButton.Click += (_, _) => Logout();
+        _logoutButton.Click += OnLogoutButtonClick;
         _createIssueButton = JiraControlFactory.CreatePrimaryButton("Create");
         _createIssueButton.AutoSize = false;
         _createIssueButton.Size = new Size(108, 38);
-        _createIssueButton.Click += async (_, _) => await CreateIssueAsync();
+        _createIssueButton.Click += OnCreateIssueButtonClick;
+        _cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
+        _cancelButton.AutoSize = false;
+        _cancelButton.Size = new Size(96, 38);
+        _cancelButton.Visible = false;
+        _cancelButton.Enabled = false;
+        _cancelButton.Click += OnCancelButtonClick;
 
         BuildLayout();
         WireNavigation();
         _session.ProjectChanged += HandleSessionProjectChanged;
 
-        Shown += async (_, _) => await LoadProjectContextAsync();
+        Shown += OnMainFormShown;
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            CancelActiveUiOperation();
+            _uiOperationCts?.Dispose();
             _session.ProjectChanged -= HandleSessionProjectChanged;
+            _searchBox.TextChanged -= OnSearchBoxTextChanged;
+            _logoutButton.Click -= OnLogoutButtonClick;
+            _createIssueButton.Click -= OnCreateIssueButtonClick;
+            _cancelButton.Click -= OnCancelButtonClick;
+            Shown -= OnMainFormShown;
+            _projectsItem.Click -= OnProjectsItemClick;
+            _dashboardItem.Click -= OnDashboardItemClick;
+            _boardItem.Click -= OnBoardItemClick;
+            _backlogItem.Click -= OnBacklogItemClick;
+            _sprintsItem.Click -= OnSprintsItemClick;
+            _issuesItem.Click -= OnIssuesItemClick;
+            _reportsItem.Click -= OnReportsItemClick;
+            _settingsItem.Click -= OnSettingsItemClick;
+            if (_activeContent is ProjectListForm projectListForm)
+            {
+                projectListForm.ProjectOpened -= HandleProjectListOpened;
+            }
         }
 
         base.Dispose(disposing);
@@ -145,7 +174,7 @@ public class MainForm : Form
             Padding = new Padding(0, 14, 0, 0),
             BackColor = JiraTheme.BgSidebar,
         };
-        navStack.Controls.AddRange([_projectsItem, _boardItem, _backlogItem, _sprintsItem, _issuesItem, _reportsItem, _settingsItem]);
+        navStack.Controls.AddRange([_projectsItem, _dashboardItem, _boardItem, _backlogItem, _sprintsItem, _issuesItem, _reportsItem, _settingsItem]);
 
         var bottomSection = new Panel
         {
@@ -212,15 +241,17 @@ public class MainForm : Form
             e.Graphics.DrawLine(pen, 0, navbar.Height - 1, navbar.Width, navbar.Height - 1);
         };
 
-        var rightPanel = new Panel { Dock = DockStyle.Right, Width = 560, BackColor = JiraTheme.BgSurface };
+        var rightPanel = new Panel { Dock = DockStyle.Right, Width = 680, BackColor = JiraTheme.BgSurface };
         rightPanel.Controls.Add(_navbarAvatar);
         rightPanel.Controls.Add(_searchBox);
         rightPanel.Controls.Add(_createIssueButton);
+        rightPanel.Controls.Add(_cancelButton);
         rightPanel.Resize += (_, _) =>
         {
             _navbarAvatar.Location = new Point(rightPanel.Width - _navbarAvatar.Width, 1);
             _searchBox.Location = new Point(rightPanel.Width - _navbarAvatar.Width - _searchBox.Width - 16, 0);
             _createIssueButton.Location = new Point(_searchBox.Left - _createIssueButton.Width - 12, 0);
+            _cancelButton.Location = new Point(_createIssueButton.Left - _cancelButton.Width - 12, 0);
         };
 
         var leftPanel = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
@@ -234,19 +265,20 @@ public class MainForm : Form
 
     private void WireNavigation()
     {
-        _projectsItem.Click += (_, _) => NavigateTo(_projectsItem, CreateProjectListControl);
-        _boardItem.Click += (_, _) => NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
-        _backlogItem.Click += (_, _) => NavigateTo(_backlogItem, () => new BoardForm(_session, activeSprintOnly: false));
-        _sprintsItem.Click += (_, _) => NavigateTo(_sprintsItem, () => new SprintManagementForm(_session));
-        _issuesItem.Click += (_, _) => NavigateTo(_issuesItem, () => new IssueNavigatorForm(_session));
-        _reportsItem.Click += (_, _) => NavigateTo(_reportsItem, () => new ReportsForm(_session));
-        _settingsItem.Click += (_, _) => NavigateTo(_settingsItem, () => new ProjectSettingsForm(_session));
+        _projectsItem.Click += OnProjectsItemClick;
+        _dashboardItem.Click += OnDashboardItemClick;
+        _boardItem.Click += OnBoardItemClick;
+        _backlogItem.Click += OnBacklogItemClick;
+        _sprintsItem.Click += OnSprintsItemClick;
+        _issuesItem.Click += OnIssuesItemClick;
+        _reportsItem.Click += OnReportsItemClick;
+        _settingsItem.Click += OnSettingsItemClick;
     }
 
     private ProjectListForm CreateProjectListControl()
     {
         var control = new ProjectListForm(_session);
-        control.ProjectOpened += (_, _) => NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
+        control.ProjectOpened += HandleProjectListOpened;
         return control;
     }
 
@@ -255,6 +287,11 @@ public class MainForm : Form
         _activeNavItem?.SetActive(false);
         _activeNavItem = navItem;
         _activeNavItem.SetActive(true);
+
+        if (_activeContent is ProjectListForm existingProjectList)
+        {
+            existingProjectList.ProjectOpened -= HandleProjectListOpened;
+        }
 
         if (_activeContent is not null)
         {
@@ -269,25 +306,19 @@ public class MainForm : Form
         ApplyShellSearch();
     }
 
-    private async Task LoadProjectContextAsync()
+    private async Task LoadProjectContextAsync(CancellationToken cancellationToken = default)
     {
-        try
-        {
-            await _session.InitializeActiveProjectAsync();
-            UpdateProjectChrome();
+        await _session.InitializeActiveProjectAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        UpdateProjectChrome();
 
-            if (_session.ActiveProject is null)
-            {
-                NavigateTo(_projectsItem, CreateProjectListControl);
-                return;
-            }
-
-            NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
-        }
-        catch (Exception exception)
+        if (_session.ActiveProject is null)
         {
-            ErrorDialogService.Show(exception);
+            NavigateTo(_projectsItem, CreateProjectListControl);
+            return;
         }
+
+        NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
     }
 
     private async void HandleSessionProjectChanged(object? sender, AppSession.ProjectChangedEventArgs eventArgs)
@@ -297,7 +328,7 @@ public class MainForm : Form
             return;
         }
 
-        try
+        await RunCancelableUiOperationAsync(async cancellationToken =>
         {
             UpdateProjectChrome();
             if (_session.ActiveProject is null && _activeNavItem?.Kind != NavKind.Projects)
@@ -308,19 +339,15 @@ public class MainForm : Form
 
             if (_activeContent is not null)
             {
-                await RefreshActiveContentAsync();
+                await RefreshActiveContentAsync(cancellationToken);
             }
-        }
-        catch (Exception exception)
-        {
-            ErrorDialogService.Show(exception);
-        }
+        });
     }
 
     private void UpdateProjectChrome()
     {
         _projectName = _session.ActiveProject?.Name ?? "Projects";
-        _createIssueButton.Enabled = _session.ActiveProject is not null;
+        _createIssueButton.Enabled = _session.ActiveProject is not null && !_isUiBusy;
         _searchBox.PlaceholderText = GetSearchPlaceholder();
         _breadcrumbLabel.Text = BuildBreadcrumb();
     }
@@ -365,7 +392,7 @@ public class MainForm : Form
             using var dialog = new IssueEditorForm(_session, project.Id, null);
             if (dialog.ShowDialog(this) == DialogResult.OK)
             {
-                await RefreshActiveContentAsync();
+                await RunCancelableUiOperationAsync(RefreshActiveContentAsync);
             }
         }
         catch (Exception exception)
@@ -374,30 +401,33 @@ public class MainForm : Form
         }
     }
 
-    private async Task RefreshActiveContentAsync()
+    private async Task RefreshActiveContentAsync(CancellationToken cancellationToken = default)
     {
         switch (_activeContent)
         {
+            case DashboardForm dashboardForm:
+                await dashboardForm.RefreshDashboardAsync(cancellationToken);
+                break;
             case BoardForm boardForm:
-                await boardForm.RefreshBoardAsync();
+                await boardForm.RefreshBoardAsync(cancellationToken);
                 break;
             case IssueNavigatorForm issueNavigator:
-                await issueNavigator.RefreshIssuesAsync();
+                await issueNavigator.RefreshIssuesAsync(cancellationToken);
                 break;
             case SprintManagementForm sprintManagementForm:
-                await sprintManagementForm.RefreshSprintsAsync();
+                await sprintManagementForm.RefreshSprintsAsync(cancellationToken);
                 break;
             case UserManagementForm userManagementForm:
-                await userManagementForm.RefreshUsersAsync();
+                await userManagementForm.RefreshUsersAsync(cancellationToken);
                 break;
             case ReportsForm reportsForm:
-                await reportsForm.RefreshReportsAsync();
+                await reportsForm.RefreshReportsAsync(cancellationToken);
                 break;
             case ProjectSettingsForm projectSettingsForm:
-                await projectSettingsForm.RefreshProjectAsync();
+                await projectSettingsForm.RefreshProjectAsync(cancellationToken);
                 break;
             case ProjectListForm projectListForm:
-                await projectListForm.RefreshProjectsAsync();
+                await projectListForm.RefreshProjectsAsync(cancellationToken);
                 break;
         }
     }
@@ -406,6 +436,9 @@ public class MainForm : Form
     {
         switch (_activeContent)
         {
+            case DashboardForm dashboardForm:
+                dashboardForm.SetShellSearch(_searchBox.Text);
+                break;
             case BoardForm boardForm:
                 boardForm.SetShellSearch(_searchBox.Text);
                 break;
@@ -428,6 +461,134 @@ public class MainForm : Form
                 projectListForm.SetShellSearch(_searchBox.Text);
                 break;
         }
+    }
+    private async void OnMainFormShown(object? sender, EventArgs e)
+    {
+        await RunCancelableUiOperationAsync(LoadProjectContextAsync);
+    }
+
+    private void OnSearchBoxTextChanged(object? sender, EventArgs e)
+    {
+        ApplyShellSearch();
+    }
+
+    private void OnLogoutButtonClick(object? sender, EventArgs e)
+    {
+        Logout();
+    }
+
+    private async void OnCreateIssueButtonClick(object? sender, EventArgs e)
+    {
+        await CreateIssueAsync();
+    }
+
+    private void OnCancelButtonClick(object? sender, EventArgs e)
+    {
+        CancelActiveUiOperation();
+    }
+
+    private void OnDashboardItemClick(object? sender, EventArgs e)
+    {
+        NavigateTo(_dashboardItem, () => new DashboardForm(_session));
+    }
+
+    private void OnProjectsItemClick(object? sender, EventArgs e)
+    {
+        NavigateTo(_projectsItem, CreateProjectListControl);
+    }
+
+    private void OnBoardItemClick(object? sender, EventArgs e)
+    {
+        NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
+    }
+
+    private void OnBacklogItemClick(object? sender, EventArgs e)
+    {
+        NavigateTo(_backlogItem, () => new BoardForm(_session, activeSprintOnly: false));
+    }
+
+    private void OnSprintsItemClick(object? sender, EventArgs e)
+    {
+        NavigateTo(_sprintsItem, () => new SprintManagementForm(_session));
+    }
+
+    private void OnIssuesItemClick(object? sender, EventArgs e)
+    {
+        NavigateTo(_issuesItem, () => new IssueNavigatorForm(_session));
+    }
+
+    private void OnReportsItemClick(object? sender, EventArgs e)
+    {
+        NavigateTo(_reportsItem, () => new ReportsForm(_session));
+    }
+
+    private void OnSettingsItemClick(object? sender, EventArgs e)
+    {
+        NavigateTo(_settingsItem, () => new ProjectSettingsForm(_session));
+    }
+
+    private void HandleProjectListOpened(object? sender, EventArgs e)
+    {
+        NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
+    }
+
+    private async Task RunCancelableUiOperationAsync(Func<CancellationToken, Task> operation)
+    {
+        var operationCts = BeginUiOperation();
+        try
+        {
+            await operation(operationCts.Token);
+        }
+        catch (OperationCanceledException) when (operationCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+        finally
+        {
+            EndUiOperation(operationCts);
+        }
+    }
+
+    private CancellationTokenSource BeginUiOperation()
+    {
+        CancelActiveUiOperation();
+        _uiOperationCts?.Dispose();
+        _uiOperationCts = new CancellationTokenSource();
+        SetUiBusy(true);
+        return _uiOperationCts;
+    }
+
+    private void EndUiOperation(CancellationTokenSource operationCts)
+    {
+        if (!ReferenceEquals(_uiOperationCts, operationCts))
+        {
+            operationCts.Dispose();
+            return;
+        }
+
+        _uiOperationCts.Dispose();
+        _uiOperationCts = null;
+        SetUiBusy(false);
+    }
+
+    private void CancelActiveUiOperation()
+    {
+        if (_uiOperationCts is { IsCancellationRequested: false })
+        {
+            _uiOperationCts.Cancel();
+        }
+    }
+
+    private void SetUiBusy(bool isBusy)
+    {
+        _isUiBusy = isBusy;
+        _cancelButton.Visible = isBusy;
+        _cancelButton.Enabled = isBusy;
+        _cancelButton.BringToFront();
+        UpdateProjectChrome();
     }
 
     private void Logout()
@@ -460,6 +621,7 @@ public class MainForm : Form
     private enum NavKind
     {
         Projects,
+        Dashboard,
         Board,
         Backlog,
         Sprints,
@@ -531,6 +693,14 @@ public class MainForm : Form
                     graphics.DrawLine(pen, bounds.X + 4, bounds.Y + 6, bounds.X + 7, bounds.Y + 2);
                     graphics.DrawLine(pen, bounds.X + 7, bounds.Y + 2, bounds.X + 12, bounds.Y + 2);
                     graphics.DrawLine(pen, bounds.X + 12, bounds.Y + 2, bounds.X + 14, bounds.Y + 6);
+                    break;
+                case NavKind.Dashboard:
+                    graphics.DrawRectangle(pen, bounds.X + 1, bounds.Y + 4, 15, 13);
+                    graphics.DrawLine(pen, bounds.X + 1, bounds.Y + 9, bounds.X + 16, bounds.Y + 9);
+                    graphics.DrawLine(pen, bounds.X + 7, bounds.Y + 4, bounds.X + 7, bounds.Y + 17);
+                    graphics.FillEllipse(fill, bounds.X + 3, bounds.Y + 6, 2, 2);
+                    graphics.FillEllipse(fill, bounds.X + 9, bounds.Y + 11, 2, 2);
+                    graphics.FillEllipse(fill, bounds.X + 13, bounds.Y + 7, 2, 2);
                     break;
                 case NavKind.Board:
                     graphics.DrawRectangle(pen, bounds.X, bounds.Y + 2, 7, 7);
@@ -987,6 +1157,13 @@ public class MainForm : Form
         private sealed record IssueSummaryRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
     }
 }
+
+
+
+
+
+
+
 
 
 

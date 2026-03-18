@@ -3,6 +3,7 @@ using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
 using JiraClone.Application.Models;
+using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Theme;
 
@@ -15,6 +16,7 @@ public class IssueCardControl : UserControl
     private const int DragThreshold = 6;
 
     private readonly System.Windows.Forms.Timer _entranceTimer = new() { Interval = 15 };
+    private readonly HashSet<Control> _hookedControls = [];
     private bool _hovered;
     private bool _dragging;
     private Point _mouseDownPos;
@@ -36,8 +38,8 @@ public class IssueCardControl : UserControl
 
         HookClicks(this);
         _entranceTimer.Tick += OnEntranceTimerTick;
-        MouseEnter += (_, _) => SetHover(true);
-        MouseLeave += (_, _) => SetHover(false);
+        MouseEnter += OnCardMouseEnter;
+        MouseLeave += OnCardMouseLeave;
         MouseDown += OnCardMouseDown;
         MouseMove += OnCardMouseMove;
     }
@@ -45,7 +47,6 @@ public class IssueCardControl : UserControl
     public IssueSummaryDto Issue { get; }
 
     public event EventHandler<int>? IssueSelected;
-    public event EventHandler<IssueMoveRequestedEventArgs>? IssueMoveRequested;
 
     public override Size GetPreferredSize(Size proposedSize)
     {
@@ -57,7 +58,8 @@ public class IssueCardControl : UserControl
             new Size(Math.Max(100, textAreaWidth), 0),
             TextFormatFlags.WordBreak | TextFormatFlags.Left | TextFormatFlags.NoPadding);
 
-        var height = Math.Max(JiraTheme.CardMinHeight, Padding.Top + measured.Height + 42 + Padding.Bottom);
+        var dueDateHeight = Issue.DueDate.HasValue ? 20 : 0;
+        var height = Math.Max(JiraTheme.CardMinHeight, Padding.Top + measured.Height + 42 + dueDateHeight + Padding.Bottom);
         return new Size(width, height);
     }
 
@@ -123,7 +125,8 @@ public class IssueCardControl : UserControl
             contentTop += 18;
         }
 
-        var titleBounds = new Rectangle(Padding.Left, contentTop, Width - Padding.Horizontal - 12, Height - Padding.Vertical - 42 - (contentTop - Padding.Top - 2));
+        var dueDateHeight = Issue.DueDate.HasValue ? 20 : 0;
+        var titleBounds = new Rectangle(Padding.Left, contentTop, Width - Padding.Horizontal - 12, Height - Padding.Vertical - 42 - dueDateHeight - (contentTop - Padding.Top - 2));
         var titleHeight = TextRenderer.MeasureText(
             Issue.Title,
             JiraTheme.FontBody,
@@ -137,7 +140,24 @@ public class IssueCardControl : UserControl
             isPlaceholder ? JiraTheme.TextSecondary : JiraTheme.TextPrimary,
             TextFormatFlags.WordBreak | TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.EndEllipsis);
 
-        var bottomY = Math.Max(Padding.Top + titleHeight + 8, Height - Padding.Bottom - 24);
+        var bottomY = Math.Max(Padding.Top + titleHeight + 8 + dueDateHeight, Height - Padding.Bottom - 24);
+        if (Issue.DueDate is DateOnly dueDate)
+        {
+            var dueDateBounds = new Rectangle(Padding.Left + 16, bottomY - 20, Width - Padding.Horizontal - 20, 18);
+            var dueDateColor = isPlaceholder
+                ? JiraTheme.TextSecondary
+                : IsDueDateOverdue() ? JiraTheme.Red600 : JiraTheme.TextSecondary;
+            using var calendarIcon = JiraIcons.GetCalendarIcon(dueDateColor, 12);
+            e.Graphics.DrawImage(calendarIcon, Padding.Left, bottomY - 17, 12, 12);
+            TextRenderer.DrawText(
+                e.Graphics,
+                FormatDueDate(dueDate),
+                JiraTheme.FontCaption,
+                dueDateBounds,
+                dueDateColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+
         using var typeIcon = JiraIcons.GetIssueTypeIcon(Issue.Type, 16);
         e.Graphics.DrawImage(typeIcon, Padding.Left, bottomY + 2, 16, 16);
 
@@ -211,20 +231,47 @@ public class IssueCardControl : UserControl
 
     private void HookClicks(Control control)
     {
-        control.Click += (_, _) => IssueSelected?.Invoke(this, Issue.Id);
+        if (!_hookedControls.Add(control))
+        {
+            return;
+        }
+
+        control.Click += OnHookedControlClick;
+        control.ControlAdded += OnHookedControlAdded;
 
         foreach (Control child in control.Controls)
         {
             HookClicks(child);
         }
+    }
 
-        control.ControlAdded += (_, args) =>
+    private void UnhookClicks(Control control)
+    {
+        if (!_hookedControls.Remove(control))
         {
-            if (args.Control is not null)
-            {
-                HookClicks(args.Control);
-            }
-        };
+            return;
+        }
+
+        control.Click -= OnHookedControlClick;
+        control.ControlAdded -= OnHookedControlAdded;
+
+        foreach (Control child in control.Controls)
+        {
+            UnhookClicks(child);
+        }
+    }
+
+    private void OnHookedControlClick(object? sender, EventArgs e)
+    {
+        IssueSelected?.Invoke(this, Issue.Id);
+    }
+
+    private void OnHookedControlAdded(object? sender, ControlEventArgs e)
+    {
+        if (e.Control is not null)
+        {
+            HookClicks(e.Control);
+        }
     }
 
     private string BuildInitials()
@@ -239,6 +286,13 @@ public class IssueCardControl : UserControl
         return initials.Length == 0 ? "?" : new string(initials);
     }
 
+    private bool IsDueDateOverdue() =>
+        Issue.DueDate.HasValue
+        && Issue.DueDate.Value < DateOnly.FromDateTime(DateTime.Today)
+        && Issue.StatusCategory != StatusCategory.Done;
+
+    private static string FormatDueDate(DateOnly dueDate) => dueDate.ToString("dd MMM");
+
     private static Color ParseColor(string? value, Color fallback)
     {
         try
@@ -249,6 +303,16 @@ public class IssueCardControl : UserControl
         {
             return fallback;
         }
+    }
+
+    private void OnCardMouseEnter(object? sender, EventArgs e)
+    {
+        SetHover(true);
+    }
+
+    private void OnCardMouseLeave(object? sender, EventArgs e)
+    {
+        SetHover(false);
     }
 
     private void OnCardMouseDown(object? sender, MouseEventArgs e)
@@ -390,6 +454,15 @@ public class IssueCardControl : UserControl
     {
         if (disposing)
         {
+            MouseEnter -= OnCardMouseEnter;
+            MouseLeave -= OnCardMouseLeave;
+            MouseDown -= OnCardMouseDown;
+            MouseMove -= OnCardMouseMove;
+            GiveFeedback -= OnGiveFeedback;
+            UnhookClicks(this);
+            _entranceTimer.Stop();
+            _entranceTimer.Tick -= OnEntranceTimerTick;
+            ContextMenuStrip?.Dispose();
             _entranceTimer.Dispose();
             _ghostCursor?.Dispose();
             _ghostBitmap?.Dispose();

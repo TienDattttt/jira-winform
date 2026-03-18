@@ -151,6 +151,7 @@ public static class SeedData
             EndDate = new DateOnly(2026, 3, 24),
             State = SprintState.Active,
             ClosedAtUtc = (DateTime?)null,
+            IsDeleted = false,
             CreatedAtUtc = createdAt,
             UpdatedAtUtc = createdAt
         });
@@ -292,3 +293,4 @@ public static class SeedData
         _ => "Status"
     };
 }
+

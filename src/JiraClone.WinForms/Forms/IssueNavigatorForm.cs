@@ -91,7 +91,7 @@ public sealed class IssueNavigatorForm : UserControl
         Load += async (_, _) => await RefreshIssuesAsync();
     }
 
-    public async Task RefreshIssuesAsync()
+    public async Task RefreshIssuesAsync(CancellationToken cancellationToken = default)
     {
         if (_loading)
         {
@@ -108,16 +108,17 @@ public sealed class IssueNavigatorForm : UserControl
 
             await _session.RunSerializedAsync(async () =>
             {
-                project = await _session.Projects.GetActiveProjectAsync();
+                project = await _session.Projects.GetActiveProjectAsync(cancellationToken);
                 if (project is null)
                 {
                     return;
                 }
 
-                sprints = await _session.Sprints.GetByProjectAsync(project.Id);
-                savedFilters = await _session.SavedFilters.GetByProjectAsync(project.Id, currentUserId);
-            });
+                sprints = await _session.Sprints.GetByProjectAsync(project.Id, cancellationToken);
+                savedFilters = await _session.SavedFilters.GetByProjectAsync(project.Id, currentUserId, cancellationToken);
+            }, cancellationToken);
 
+            cancellationToken.ThrowIfCancellationRequested();
             _project = project;
             _sprints = sprints;
             _savedFilterModels = savedFilters;
@@ -136,7 +137,10 @@ public sealed class IssueNavigatorForm : UserControl
 
             _projectId = project.Id;
             _subtitleLabel.Text = $"Browse issues in {project.Name} with advanced JQL search.";
-            await ExecuteCurrentQueryAsync();
+            await ExecuteCurrentQueryAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -363,7 +367,7 @@ public sealed class IssueNavigatorForm : UserControl
         }
     }
 
-    private async Task ExecuteCurrentQueryAsync()
+    private async Task ExecuteCurrentQueryAsync(CancellationToken cancellationToken = default)
     {
         if (_projectId == 0)
         {
@@ -379,8 +383,12 @@ public sealed class IssueNavigatorForm : UserControl
                 return;
             }
 
-            _issues = await _session.Jql.ExecuteQueryAsync(query, _projectId);
+            _issues = await _session.Jql.ExecuteQueryAsync(query, _projectId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             BindIssues();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -732,4 +740,5 @@ public sealed class IssueNavigatorForm : UserControl
         public string FilterName => _name.Text.Trim();
     }
 }
+
 

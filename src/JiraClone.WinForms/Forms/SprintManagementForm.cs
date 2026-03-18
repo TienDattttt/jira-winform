@@ -78,7 +78,7 @@ public class SprintManagementForm : UserControl
 
     private Sprint? SelectedSprint => _listView.SelectedItems.Count == 0 ? null : _listView.SelectedItems[0].Tag as Sprint;
 
-    public Task RefreshSprintsAsync() => LoadSprintsAsync();
+    public Task RefreshSprintsAsync(CancellationToken cancellationToken = default) => LoadSprintsAsync(cancellationToken);
 
     public void SetShellSearch(string value)
     {
@@ -172,7 +172,7 @@ public class SprintManagementForm : UserControl
         return host;
     }
 
-    private async Task LoadSprintsAsync()
+    private async Task LoadSprintsAsync(CancellationToken cancellationToken = default)
     {
         if (_isLoading || !Visible)
         {
@@ -187,19 +187,20 @@ public class SprintManagementForm : UserControl
 
             await _session.RunSerializedAsync(async () =>
             {
-                project = await _session.Projects.GetActiveProjectAsync();
+                project = await _session.Projects.GetActiveProjectAsync(cancellationToken);
                 if (project is null)
                 {
                     return;
                 }
 
-                sprints = (await _session.Sprints.GetByProjectAsync(project.Id))
+                sprints = (await _session.Sprints.GetByProjectAsync(project.Id, cancellationToken))
                     .OrderByDescending(x => x.State == SprintState.Active)
                     .ThenByDescending(x => x.StartDate)
                     .ThenByDescending(x => x.Id)
                     .ToList();
-            });
+            }, cancellationToken);
 
+            cancellationToken.ThrowIfCancellationRequested();
             if (project is null)
             {
                 return;
@@ -217,6 +218,9 @@ public class SprintManagementForm : UserControl
             _activeBadge.Text = $"Active {_sprints.Count(x => x.State == SprintState.Active)}";
             _closedBadge.Text = $"Closed {_sprints.Count(x => x.State == SprintState.Closed)}";
             UpdateActionState();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -583,6 +587,7 @@ public class SprintManagementForm : UserControl
         public int? MoveIncompleteToSprintId { get; private set; }
     }
 }
+
 
 
 

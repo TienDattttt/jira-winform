@@ -1,4 +1,4 @@
-using JiraClone.Domain.Enums;
+﻿using JiraClone.Domain.Enums;
 
 namespace JiraClone.Application.Models;
 
@@ -15,5 +15,11 @@ public sealed record IssueSummaryDto(
     decimal BoardPosition,
     string ReporterName,
     IReadOnlyList<string> AssigneeNames,
+    int? ParentIssueId = null,
     string? ParentIssueKey = null,
-    int? StoryPoints = null);
+    int? EpicId = null,
+    string? EpicKey = null,
+    string? EpicTitle = null,
+    string? EpicColor = null,
+    int? StoryPoints = null,
+    DateOnly? DueDate = null);

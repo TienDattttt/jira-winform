@@ -9,6 +9,7 @@ namespace JiraClone.WinForms.Controls;
 public class BoardColumnControl : UserControl
 {
     private static readonly Color DropHighlightColor = ColorTranslator.FromHtml("#0052CC");
+    private static readonly Color WipLimitHighlightColor = ColorTranslator.FromHtml("#DE350B");
 
     private readonly HeaderPanel _headerPanel;
     private readonly Panel _scrollHost;
@@ -18,6 +19,8 @@ public class BoardColumnControl : UserControl
     private readonly DropPlaceholderPanel _dropPlaceholder = new();
     private BoardColumnDto _column;
     private bool _dropHighlight;
+    private bool _wipWarningRaised;
+    private Color _dropHighlightColor = DropHighlightColor;
 
     public BoardColumnControl(BoardColumnDto column)
     {
@@ -67,7 +70,7 @@ public class BoardColumnControl : UserControl
             AutoEllipsis = true,
         };
 
-        _createIssueLink.Click += (_, _) => CreateIssueRequested?.Invoke(this, _column.StatusId);
+        _createIssueLink.Click += OnCreateIssueLinkClick;
         _scrollHost.Controls.Add(_issuesPanel);
         _scrollHost.Controls.Add(_emptyState);
 
@@ -79,7 +82,7 @@ public class BoardColumnControl : UserControl
         Controls.Add(_scrollHost);
         Controls.Add(_createIssueLink);
         Controls.Add(_headerPanel);
-        Resize += (_, _) => UpdateScrollMetrics();
+        Resize += OnColumnResize;
 
         Bind(column);
     }
@@ -89,15 +92,19 @@ public class BoardColumnControl : UserControl
     public event EventHandler<int>? IssueSelected;
     public event EventHandler<int>? CreateIssueRequested;
     public event EventHandler<IssueMoveRequestedEventArgs>? IssueMoveRequested;
+    public event EventHandler<BoardColumnWipLimitEventArgs>? WipLimitWarningRequested;
 
     public void Bind(BoardColumnDto column, int? animatedIssueId = null)
     {
         _column = column;
         _headerPanel.Title = column.Name;
-        _headerPanel.Count = column.Issues.Count;
+        _headerPanel.Count = column.TotalIssueCount;
+        _headerPanel.WipLimit = column.WipLimit;
+        _headerPanel.IsOverLimit = column.WipLimit is int wipLimit && wipLimit > 0 && column.TotalIssueCount > wipLimit;
         _headerPanel.Accent = ParseColor(column.Color, JiraTheme.Blue600);
 
         RemoveDropPlaceholder();
+        DetachIssueCards();
         _issuesPanel.SuspendLayout();
         _issuesPanel.Controls.Clear();
 
@@ -105,8 +112,7 @@ public class BoardColumnControl : UserControl
         {
             var card = new IssueCardControl(issue);
             card.Width = Math.Max(248, Width - SystemInformation.VerticalScrollBarWidth - 12);
-            card.IssueSelected += (_, issueId) => IssueSelected?.Invoke(this, issueId);
-            card.IssueMoveRequested += (_, args) => IssueMoveRequested?.Invoke(this, args);
+            card.IssueSelected += OnCardIssueSelected;
             card.Height = card.GetPreferredSize(new Size(card.Width, 0)).Height;
             _issuesPanel.Controls.Add(card);
 
@@ -156,6 +162,14 @@ public class BoardColumnControl : UserControl
         control.DragDrop += OnDragDrop;
     }
 
+    private void UnconfigureDropTarget(Control control)
+    {
+        control.DragEnter -= OnDragEnter;
+        control.DragOver -= OnDragOver;
+        control.DragLeave -= OnDragLeave;
+        control.DragDrop -= OnDragDrop;
+    }
+
     private bool TryGetDragData(IDataObject? dataObject, out IssueCardDragData dragData)
     {
         if (dataObject?.GetDataPresent(typeof(IssueCardDragData)) == true && dataObject.GetData(typeof(IssueCardDragData)) is IssueCardDragData payload)
@@ -166,6 +180,21 @@ public class BoardColumnControl : UserControl
 
         dragData = null!;
         return false;
+    }
+
+    private void OnCreateIssueLinkClick(object? sender, EventArgs e)
+    {
+        CreateIssueRequested?.Invoke(this, _column.StatusId);
+    }
+
+    private void OnColumnResize(object? sender, EventArgs e)
+    {
+        UpdateScrollMetrics();
+    }
+
+    private void OnCardIssueSelected(object? sender, int issueId)
+    {
+        IssueSelected?.Invoke(this, issueId);
     }
 
     private void OnDragEnter(object? sender, DragEventArgs e)
@@ -182,15 +211,33 @@ public class BoardColumnControl : UserControl
     {
         if (TryGetDragData(e.Data, out var dragData) && dragData.Issue.StatusId != _column.StatusId)
         {
+            var isWipReached = IsWipLimitReached();
             e.Effect = DragDropEffects.Move;
-            SetDropHighlight(true);
-            EnsureDropPlaceholder();
+            SetDropHighlight(true, isWipReached ? WipLimitHighlightColor : DropHighlightColor);
+            EnsureDropPlaceholder(isWipReached ? WipLimitHighlightColor : DropHighlightColor);
+            if (isWipReached && !_wipWarningRaised && _column.WipLimit.HasValue)
+            {
+                _wipWarningRaised = true;
+                WipLimitWarningRequested?.Invoke(this, new BoardColumnWipLimitEventArgs(_column.StatusId, _column.Name, _column.TotalIssueCount, _column.WipLimit.Value));
+            }
+
+            if (!isWipReached)
+            {
+                _wipWarningRaised = false;
+            }
+
             return;
         }
 
         e.Effect = DragDropEffects.None;
         ClearDropState();
     }
+
+    private bool IsWipLimitReached() =>
+        _column.Category != JiraClone.Domain.Enums.StatusCategory.Done
+        && _column.WipLimit is int wipLimit
+        && wipLimit > 0
+        && _column.TotalIssueCount >= wipLimit;
 
     private void OnDragLeave(object? sender, EventArgs e)
     {
@@ -213,10 +260,12 @@ public class BoardColumnControl : UserControl
         }
     }
 
-    private void EnsureDropPlaceholder()
+    private void EnsureDropPlaceholder(Color accentColor)
     {
+        _dropPlaceholder.AccentColor = accentColor;
         if (_dropPlaceholder.Parent == _issuesPanel)
         {
+            _dropPlaceholder.Invalidate();
             return;
         }
 
@@ -239,20 +288,30 @@ public class BoardColumnControl : UserControl
         UpdateScrollMetrics();
     }
 
+    private void DetachIssueCards()
+    {
+        foreach (var card in _issuesPanel.Controls.OfType<IssueCardControl>())
+        {
+            card.IssueSelected -= OnCardIssueSelected;
+        }
+    }
+
     private void ClearDropState()
     {
-        SetDropHighlight(false);
+        _wipWarningRaised = false;
+        SetDropHighlight(false, DropHighlightColor);
         RemoveDropPlaceholder();
     }
 
-    private void SetDropHighlight(bool highlighted)
+    private void SetDropHighlight(bool highlighted, Color accentColor)
     {
-        if (_dropHighlight == highlighted)
+        if (_dropHighlight == highlighted && _dropHighlightColor == accentColor)
         {
             return;
         }
 
         _dropHighlight = highlighted;
+        _dropHighlightColor = accentColor;
         Invalidate();
     }
 
@@ -261,9 +320,25 @@ public class BoardColumnControl : UserControl
         base.OnPaint(e);
         if (_dropHighlight)
         {
-            using var pen = new Pen(DropHighlightColor, 3f);
+            using var pen = new Pen(_dropHighlightColor, 3f);
             e.Graphics.DrawRectangle(pen, 1, 1, Width - 3, Height - 3);
         }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _createIssueLink.Click -= OnCreateIssueLinkClick;
+            Resize -= OnColumnResize;
+            DetachIssueCards();
+            UnconfigureDropTarget(this);
+            UnconfigureDropTarget(_scrollHost);
+            UnconfigureDropTarget(_issuesPanel);
+            UnconfigureDropTarget(_emptyState);
+        }
+
+        base.Dispose(disposing);
     }
 
     private static Color ParseColor(string? value, Color fallback)
@@ -290,6 +365,8 @@ public class BoardColumnControl : UserControl
 
         public string Title { get; set; } = string.Empty;
         public int Count { get; set; }
+        public int? WipLimit { get; set; }
+        public bool IsOverLimit { get; set; }
         public Color Accent { get; set; } = JiraTheme.Blue600;
 
         protected override void OnPaint(PaintEventArgs e)
@@ -303,7 +380,7 @@ public class BoardColumnControl : UserControl
             e.Graphics.FillRectangle(accentBrush, 0, 0, Width, Height);
             e.Graphics.DrawLine(borderPen, 0, Height - 1, Width, Height - 1);
 
-            var titleBounds = new Rectangle(12, 0, Width - 92, Height);
+            var titleBounds = new Rectangle(12, 0, Width - 126, Height);
             TextRenderer.DrawText(
                 e.Graphics,
                 Title.ToUpperInvariant(),
@@ -312,12 +389,14 @@ public class BoardColumnControl : UserControl
                 JiraTheme.TextSecondary,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
 
-            var countText = Count.ToString();
+            var countText = WipLimit is int wipLimit && wipLimit > 0
+                ? $"{Count}/{wipLimit}"
+                : Count.ToString();
             var textSize = TextRenderer.MeasureText(countText, JiraTheme.FontCaption);
-            var badgeBounds = new Rectangle(Width - textSize.Width - 30, 12, textSize.Width + 18, 20);
+            var badgeBounds = new Rectangle(Width - textSize.Width - 34, 12, textSize.Width + 20, 20);
 
             using var badgePath = GraphicsHelper.CreateRoundedPath(badgeBounds, 10);
-            using var badgeBrush = new SolidBrush(JiraTheme.Neutral0);
+            using var badgeBrush = new SolidBrush(IsOverLimit ? Color.FromArgb(30, WipLimitHighlightColor) : JiraTheme.Neutral0);
             e.Graphics.FillPath(badgeBrush, badgePath);
 
             TextRenderer.DrawText(
@@ -325,7 +404,7 @@ public class BoardColumnControl : UserControl
                 countText,
                 JiraTheme.FontCaption,
                 badgeBounds,
-                JiraTheme.TextSecondary,
+                IsOverLimit ? WipLimitHighlightColor : JiraTheme.TextSecondary,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
     }
@@ -340,14 +419,16 @@ public class BoardColumnControl : UserControl
             DoubleBuffered = true;
         }
 
+        public Color AccentColor { get; set; } = DropHighlightColor;
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var bounds = new Rectangle(0, 0, Math.Max(0, Width - 4), Math.Max(0, Height - 4));
             using var path = GraphicsHelper.CreateRoundedPath(bounds, JiraTheme.BorderRadius);
-            using var fillBrush = new SolidBrush(Color.FromArgb(28, DropHighlightColor));
-            using var borderPen = new Pen(DropHighlightColor, 2f) { DashStyle = DashStyle.Dash };
+            using var fillBrush = new SolidBrush(Color.FromArgb(28, AccentColor));
+            using var borderPen = new Pen(AccentColor, 2f) { DashStyle = DashStyle.Dash };
             e.Graphics.FillPath(fillBrush, path);
             e.Graphics.DrawPath(borderPen, path);
 

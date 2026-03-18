@@ -4,6 +4,7 @@ using JiraClone.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace JiraClone.Persistence.Migrations
 {
     [DbContext(typeof(JiraCloneDbContext))]
-    partial class JiraCloneDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260318053100_AddSprintSoftDeleteForProjectDelete")]
+    partial class AddSprintSoftDeleteForProjectDelete
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -793,11 +796,6 @@ namespace JiraClone.Persistence.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("BoardType")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(1);
-
                     b.Property<int>("Category")
                         .HasColumnType("int");
 
@@ -838,7 +836,6 @@ namespace JiraClone.Persistence.Migrations
                         new
                         {
                             Id = 1,
-                            BoardType = 1,
                             Category = 1,
                             CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "WinForms migration workspace",

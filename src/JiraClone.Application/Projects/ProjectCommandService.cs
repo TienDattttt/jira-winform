@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using JiraClone.Application.Abstractions;
 using JiraClone.Application.Models;
@@ -25,6 +26,8 @@ public class ProjectCommandService : IProjectCommandService
 
     private readonly IProjectRepository _projects;
     private readonly IUserRepository _users;
+    private readonly IIssueRepository _issues;
+    private readonly ISprintRepository _sprints;
     private readonly IAuthorizationService _authorization;
     private readonly IActivityLogRepository _activityLogs;
     private readonly ICurrentUserContext _currentUserContext;
@@ -34,6 +37,8 @@ public class ProjectCommandService : IProjectCommandService
     public ProjectCommandService(
         IProjectRepository projects,
         IUserRepository users,
+        IIssueRepository issues,
+        ISprintRepository sprints,
         IAuthorizationService authorization,
         IActivityLogRepository activityLogs,
         ICurrentUserContext currentUserContext,
@@ -42,6 +47,8 @@ public class ProjectCommandService : IProjectCommandService
     {
         _projects = projects;
         _users = users;
+        _issues = issues;
+        _sprints = sprints;
         _authorization = authorization;
         _activityLogs = activityLogs;
         _currentUserContext = currentUserContext;
@@ -174,7 +181,7 @@ public class ProjectCommandService : IProjectCommandService
         return _projects.ExistsByKeyAsync(NormalizeProjectKey(key), excludeProjectId, cancellationToken);
     }
 
-    public async Task<Project?> UpdateProjectAsync(int projectId, string name, string? description, ProjectCategory category, string? url, CancellationToken cancellationToken = default)
+    public async Task<Project?> UpdateProjectAsync(int projectId, string name, string? description, ProjectCategory category, BoardType boardType, string? url, CancellationToken cancellationToken = default)
     {
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var project = await _projects.GetByIdAsync(projectId, cancellationToken);
@@ -189,14 +196,58 @@ public class ProjectCommandService : IProjectCommandService
             throw new ValidationException("Project name is required.");
         }
 
+        var normalizedDescription = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        var normalizedUrl = string.IsNullOrWhiteSpace(url) ? null : url.Trim();
         var oldName = project.Name;
+        var oldDescription = project.Description;
+        var oldCategory = project.Category;
+        var oldBoardType = project.BoardType;
+        var oldUrl = project.Url;
+
         project.Name = normalizedName;
-        project.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        project.Description = normalizedDescription;
         project.Category = category;
-        project.Url = string.IsNullOrWhiteSpace(url) ? null : url.Trim();
+        project.BoardType = boardType;
+        project.Url = normalizedUrl;
+
+        var hasChanges = !string.Equals(oldName, project.Name, StringComparison.Ordinal)
+            || !string.Equals(oldDescription, project.Description, StringComparison.Ordinal)
+            || oldCategory != project.Category
+            || oldBoardType != project.BoardType
+            || !string.Equals(oldUrl, project.Url, StringComparison.Ordinal);
+
+        if (!hasChanges)
+        {
+            return project;
+        }
+
         project.UpdatedAtUtc = DateTime.UtcNow;
 
-        await AddProjectActivityAsync(project.Id, ActivityActionType.Updated, nameof(Project.Name), oldName, project.Name, cancellationToken);
+        if (!string.Equals(oldName, project.Name, StringComparison.Ordinal))
+        {
+            await AddProjectActivityAsync(project.Id, ActivityActionType.Updated, nameof(Project.Name), oldName, project.Name, cancellationToken);
+        }
+
+        if (!string.Equals(oldDescription, project.Description, StringComparison.Ordinal))
+        {
+            await AddProjectActivityAsync(project.Id, ActivityActionType.Updated, nameof(Project.Description), oldDescription, project.Description, cancellationToken);
+        }
+
+        if (oldCategory != project.Category)
+        {
+            await AddProjectActivityAsync(project.Id, ActivityActionType.Updated, nameof(Project.Category), oldCategory.ToString(), project.Category.ToString(), cancellationToken);
+        }
+
+        if (oldBoardType != project.BoardType)
+        {
+            await AddProjectActivityAsync(project.Id, ActivityActionType.Updated, nameof(Project.BoardType), oldBoardType.ToString(), project.BoardType.ToString(), cancellationToken);
+        }
+
+        if (!string.Equals(oldUrl, project.Url, StringComparison.Ordinal))
+        {
+            await AddProjectActivityAsync(project.Id, ActivityActionType.Updated, nameof(Project.Url), oldUrl, project.Url, cancellationToken);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return project;
     }
@@ -215,6 +266,118 @@ public class ProjectCommandService : IProjectCommandService
 
         await AddProjectActivityAsync(projectId, ActivityActionType.Updated, nameof(Project.IsActive), bool.TrueString, bool.FalseString, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> DeleteProjectAsync(int projectId, int userId, CancellationToken cancellationToken = default)
+    {
+        _authorization.EnsureInRole(RoleCatalog.Admin);
+
+        var currentUserId = _currentUserContext.CurrentUser?.Id;
+        if (currentUserId.HasValue && currentUserId.Value != userId)
+        {
+            throw new ValidationException("Project deletion must be performed by the currently signed-in user.");
+        }
+
+        var project = await _projects.GetDeleteSnapshotAsync(projectId, cancellationToken);
+        if (project is null)
+        {
+            return false;
+        }
+
+        var sprints = await _sprints.GetAllByProjectIdAsync(projectId, cancellationToken);
+        if (sprints.Any(x => x.State == SprintState.Active && !x.IsDeleted))
+        {
+            throw new ValidationException("Close the active sprint before deleting this project.");
+        }
+
+        var issues = await _issues.GetAllByProjectIdAsync(projectId, cancellationToken);
+        var now = DateTime.UtcNow;
+        var deletedIssueCount = 0;
+        var deletedCommentCount = 0;
+        var deletedAttachmentCount = 0;
+
+        foreach (var issue in issues)
+        {
+            if (!issue.IsDeleted)
+            {
+                issue.IsDeleted = true;
+                issue.UpdatedAtUtc = now;
+                deletedIssueCount++;
+            }
+
+            foreach (var comment in issue.Comments)
+            {
+                if (comment.IsDeleted)
+                {
+                    continue;
+                }
+
+                comment.IsDeleted = true;
+                comment.UpdatedAtUtc = now;
+                deletedCommentCount++;
+            }
+
+            foreach (var attachment in issue.Attachments)
+            {
+                if (attachment.IsDeleted)
+                {
+                    continue;
+                }
+
+                attachment.IsDeleted = true;
+                attachment.UpdatedAtUtc = now;
+                deletedAttachmentCount++;
+            }
+        }
+
+        var deletedSprintCount = 0;
+        foreach (var sprint in sprints)
+        {
+            if (sprint.IsDeleted)
+            {
+                continue;
+            }
+
+            sprint.IsDeleted = true;
+            sprint.UpdatedAtUtc = now;
+            deletedSprintCount++;
+        }
+
+        var auditMetadata = JsonSerializer.Serialize(new
+        {
+            ProjectId = project.Id,
+            project.Key,
+            project.Name,
+            DeletedIssueCount = deletedIssueCount,
+            DeletedCommentCount = deletedCommentCount,
+            DeletedAttachmentCount = deletedAttachmentCount,
+            DeletedSprintCount = deletedSprintCount,
+            DeletedMemberCount = project.Members.Count,
+            DeletedBoardColumnCount = project.BoardColumns.Count,
+            DeletedLabelCount = project.Labels.Count,
+            DeletedComponentCount = project.Components.Count,
+            DeletedVersionCount = project.Versions.Count,
+            DeletedWorkflowCount = project.WorkflowDefinitions.Count,
+            DeletedSavedFilterCount = project.SavedFilters.Count,
+            DeletedByUserId = userId,
+            DeletedAtUtc = now,
+        });
+
+        await AddProjectActivityAsync(projectId, ActivityActionType.Deleted, nameof(Project), project.Key, project.Name, cancellationToken, userId, auditMetadata);
+        _logger.LogWarning(
+            "Project {ProjectId} ({ProjectKey}) delete confirmed by user {UserId}. Cascade summary: {AuditMetadata}",
+            project.Id,
+            project.Key,
+            userId,
+            auditMetadata);
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _projects.DeleteAsync(project, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Project {ProjectId} ({ProjectKey}) was deleted successfully by user {UserId}.", project.Id, project.Key, userId);
         return true;
     }
 
@@ -328,10 +491,18 @@ public class ProjectCommandService : IProjectCommandService
         });
     }
 
-    private async Task AddProjectActivityAsync(int projectId, ActivityActionType actionType, string? fieldName, string? oldValue, string? newValue, CancellationToken cancellationToken)
+    private async Task AddProjectActivityAsync(
+        int projectId,
+        ActivityActionType actionType,
+        string? fieldName,
+        string? oldValue,
+        string? newValue,
+        CancellationToken cancellationToken,
+        int? actorUserId = null,
+        string? metadataJson = null)
     {
-        var actorUserId = _currentUserContext.CurrentUser?.Id;
-        if (!actorUserId.HasValue)
+        var effectiveActorUserId = actorUserId ?? _currentUserContext.CurrentUser?.Id;
+        if (!effectiveActorUserId.HasValue)
         {
             return;
         }
@@ -339,15 +510,12 @@ public class ProjectCommandService : IProjectCommandService
         await _activityLogs.AddAsync(new ActivityLogEntity
         {
             ProjectId = projectId,
-            UserId = actorUserId.Value,
+            UserId = effectiveActorUserId.Value,
             ActionType = actionType,
             FieldName = fieldName,
             OldValue = oldValue,
-            NewValue = newValue
+            NewValue = newValue,
+            MetadataJson = metadataJson,
         }, cancellationToken);
     }
 }
-
-
-
-

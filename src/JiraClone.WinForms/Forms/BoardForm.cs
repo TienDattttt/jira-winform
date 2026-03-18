@@ -15,12 +15,15 @@ public class BoardForm : UserControl
     private readonly Label _sprintTitleLabel = JiraControlFactory.CreateLabel("No active sprint");
     private readonly Label _sprintDateLabel = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly Button _startSprintButton = JiraControlFactory.CreatePrimaryButton("Start Sprint");
+    private readonly Button _boardModeButton = JiraControlFactory.CreateSecondaryButton("Mode: Scrum");
     private readonly ComboBox _assigneeFilter = CreateFilterCombo(150);
     private readonly ComboBox _priorityFilter = CreateFilterCombo(130);
     private readonly ComboBox _typeFilter = CreateFilterCombo(130);
     private readonly TextBox _searchFilter = JiraControlFactory.CreateTextBox();
+    private readonly Button _groupByEpicButton = JiraControlFactory.CreateSecondaryButton("Group by Epic");
     private readonly Button _clearFiltersButton = JiraControlFactory.CreateSecondaryButton("Clear filters");
     private readonly Dictionary<int, BoardColumnControl> _columnControls = new();
+    private readonly HashSet<string> _collapsedLaneKeys = [];
     private readonly Panel _toastPanel = new();
     private readonly Label _toastLabel = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly System.Windows.Forms.Timer _toastTimer = new() { Interval = 2600 };
@@ -35,6 +38,27 @@ public class BoardForm : UserControl
         Margin = new Padding(0),
         Padding = new Padding(0),
     };
+    private readonly FlowLayoutPanel _swimlanesPanel = new()
+    {
+        Dock = DockStyle.Top,
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        FlowDirection = FlowDirection.TopDown,
+        WrapContents = false,
+        BackColor = JiraTheme.BgPage,
+        Margin = new Padding(0),
+        Padding = new Padding(0),
+        Visible = false,
+    };
+    private readonly Panel _boardContentHost = new()
+    {
+        Dock = DockStyle.Top,
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        BackColor = JiraTheme.BgPage,
+        Margin = new Padding(0),
+        Padding = new Padding(0),
+    };
     private readonly Panel _boardScrollPanel = new()
     {
         Dock = DockStyle.Fill,
@@ -43,10 +67,15 @@ public class BoardForm : UserControl
         Padding = new Padding(16, 12, 16, 16),
     };
 
+    private Project? _project;
     private int _projectId;
     private Sprint? _activeSprint;
     private IReadOnlyList<BoardColumnDto> _loadedColumns = Array.Empty<BoardColumnDto>();
     private bool _isLoadingBoard;
+    private bool _groupByEpic;
+    private BoardType _boardType = BoardType.Scrum;
+    private TimeSpan? _averageCycleTime;
+    private Color _toastAccentColor = JiraTheme.Blue600;
 
     public BoardForm(AppSession session, bool activeSprintOnly = true)
     {
@@ -65,25 +94,37 @@ public class BoardForm : UserControl
         _startSprintButton.Size = new Size(144, 38);
         _startSprintButton.Click += async (_, _) => await StartSprintAsync();
 
+        _boardModeButton.AutoSize = false;
+        _boardModeButton.Size = new Size(148, 38);
+        _boardModeButton.Click += async (_, _) => await ToggleBoardModeAsync();
+
         _searchFilter.Width = 260;
         _searchFilter.PlaceholderText = "Search issues";
+        _groupByEpicButton.AutoSize = false;
+        _groupByEpicButton.Size = new Size(136, 38);
         _clearFiltersButton.AutoSize = false;
         _clearFiltersButton.Size = new Size(124, 38);
         _assigneeFilter.Margin = new Padding(0, 0, 12, 0);
         _priorityFilter.Margin = new Padding(0, 0, 12, 0);
         _typeFilter.Margin = new Padding(0, 0, 12, 0);
         _searchFilter.Margin = new Padding(0, 0, 12, 0);
+        _groupByEpicButton.Margin = new Padding(0, 0, 12, 0);
         _clearFiltersButton.Margin = new Padding(0);
 
         _assigneeFilter.SelectedIndexChanged += (_, _) => ApplyFilters();
         _priorityFilter.SelectedIndexChanged += (_, _) => ApplyFilters();
         _typeFilter.SelectedIndexChanged += (_, _) => ApplyFilters();
         _searchFilter.TextChanged += (_, _) => ApplyFilters();
+        _groupByEpicButton.Click += (_, _) => ToggleGroupByEpic();
         _clearFiltersButton.Click += (_, _) => ClearFilters();
 
         ConfigureToast();
+        UpdateGroupByEpicButton();
+        UpdateBoardModeButton();
 
-        _boardScrollPanel.Controls.Add(_boardColumnsPanel);
+        _boardContentHost.Controls.Add(_swimlanesPanel);
+        _boardContentHost.Controls.Add(_boardColumnsPanel);
+        _boardScrollPanel.Controls.Add(_boardContentHost);
 
         Controls.Add(_toastPanel);
         Controls.Add(_boardScrollPanel);
@@ -98,7 +139,7 @@ public class BoardForm : UserControl
         };
     }
 
-    public Task RefreshBoardAsync() => LoadBoardAsync();
+    public Task RefreshBoardAsync(CancellationToken cancellationToken = default) => LoadBoardAsync(cancellationToken);
 
     public void SetShellSearch(string searchText)
     {
@@ -115,7 +156,7 @@ public class BoardForm : UserControl
     private void ConfigureToast()
     {
         _toastPanel.Visible = false;
-        _toastPanel.Size = new Size(300, 56);
+        _toastPanel.Size = new Size(360, 56);
         _toastPanel.BackColor = JiraTheme.BgSurface;
         _toastPanel.Padding = new Padding(14, 10, 14, 10);
 
@@ -126,7 +167,7 @@ public class BoardForm : UserControl
         _toastPanel.Controls.Add(_toastLabel);
         _toastPanel.Paint += (_, e) =>
         {
-            using var accentBrush = new SolidBrush(JiraTheme.Blue600);
+            using var accentBrush = new SolidBrush(_toastAccentColor);
             using var borderPen = new Pen(JiraTheme.Border);
             e.Graphics.FillRectangle(accentBrush, 0, 0, 4, _toastPanel.Height);
             e.Graphics.DrawRectangle(borderPen, 0, 0, _toastPanel.Width - 1, _toastPanel.Height - 1);
@@ -154,11 +195,21 @@ public class BoardForm : UserControl
         var right = new Panel
         {
             Dock = DockStyle.Right,
-            Width = 176,
+            Width = 340,
             BackColor = JiraTheme.BgSurface,
         };
-        right.Controls.Add(_startSprintButton);
-        _startSprintButton.Location = new Point(16, 11);
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            BackColor = JiraTheme.BgSurface,
+            Margin = new Padding(0),
+            Padding = new Padding(0, 11, 0, 0),
+        };
+        actions.Controls.Add(_startSprintButton);
+        actions.Controls.Add(_boardModeButton);
+        right.Controls.Add(actions);
 
         var left = new Panel
         {
@@ -203,6 +254,7 @@ public class BoardForm : UserControl
         filterBar.Controls.Add(_priorityFilter);
         filterBar.Controls.Add(_typeFilter);
         filterBar.Controls.Add(_searchFilter);
+        filterBar.Controls.Add(_groupByEpicButton);
         filterBar.Controls.Add(_clearFiltersButton);
         host.Controls.Add(filterBar);
         return host;
@@ -219,7 +271,7 @@ public class BoardForm : UserControl
         IntegralHeight = false
     };
 
-    private async Task LoadBoardAsync()
+    private async Task LoadBoardAsync(CancellationToken cancellationToken = default)
     {
         if (_isLoadingBoard || !Visible)
         {
@@ -232,33 +284,50 @@ public class BoardForm : UserControl
             Project? project = null;
             Sprint? activeSprint = null;
             IReadOnlyList<BoardColumnDto> columns = Array.Empty<BoardColumnDto>();
+            TimeSpan? averageCycleTime = null;
 
             await _session.RunSerializedAsync(async () =>
             {
-                project = await _session.Projects.GetActiveProjectAsync();
+                project = await _session.Projects.GetActiveProjectAsync(cancellationToken);
                 if (project is null)
                 {
                     return;
                 }
 
-                activeSprint = await _session.Sprints.GetActiveByProjectAsync(project.Id);
-                columns = _activeSprintOnly
-                    ? await _session.Board.GetBoardAsync(project.Id, activeSprint?.Id)
-                    : await _session.Board.GetBoardAsync(project.Id);
-            });
+                if (project.BoardType == BoardType.Scrum)
+                {
+                    activeSprint = await _session.Sprints.GetActiveByProjectAsync(project.Id, cancellationToken);
+                    columns = _activeSprintOnly
+                        ? await _session.Board.GetBoardAsync(project.Id, activeSprint?.Id, cancellationToken)
+                        : await _session.Board.GetBoardAsync(project.Id, cancellationToken);
+                }
+                else
+                {
+                    columns = await _session.Board.GetBoardAsync(project.Id, cancellationToken);
+                    averageCycleTime = await _session.Board.GetAverageCycleTimeAsync(project.Id, cancellationToken);
+                }
+            }, cancellationToken);
 
+            cancellationToken.ThrowIfCancellationRequested();
             if (project is null)
             {
                 ErrorDialogService.Show("No active project was found.");
                 return;
             }
 
+            _project = project;
             _projectId = project.Id;
+            _boardType = project.BoardType;
             _activeSprint = activeSprint;
             _loadedColumns = columns;
+            _averageCycleTime = averageCycleTime;
+            UpdateBoardModeButton();
             PopulateHeader();
             PopulateFilterOptions(_loadedColumns);
             ApplyFilters();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -272,6 +341,16 @@ public class BoardForm : UserControl
 
     private void PopulateHeader()
     {
+        if (_boardType == BoardType.Kanban)
+        {
+            _sprintTitleLabel.Text = $"{_project?.Name ?? "Project"} · Kanban";
+            _sprintDateLabel.Text = BuildKanbanSubtitle();
+            _startSprintButton.Enabled = false;
+            _startSprintButton.Visible = false;
+            _startSprintButton.Text = "Start Sprint";
+            return;
+        }
+
         if (_activeSprint is null)
         {
             _sprintTitleLabel.Text = _activeSprintOnly ? "No active sprint" : "Backlog";
@@ -287,6 +366,30 @@ public class BoardForm : UserControl
         _startSprintButton.Enabled = false;
         _startSprintButton.Visible = _activeSprintOnly;
         _startSprintButton.Text = "Running";
+    }
+
+    private string BuildKanbanSubtitle()
+    {
+        var parts = new List<string> { "Showing all issues outside Done" };
+        parts.Add(_averageCycleTime.HasValue
+            ? $"Avg cycle time: {FormatCycleTime(_averageCycleTime.Value)}"
+            : "Avg cycle time: n/a");
+        return string.Join("  ·  ", parts);
+    }
+
+    private static string FormatCycleTime(TimeSpan duration)
+    {
+        if (duration.TotalDays >= 1d)
+        {
+            return $"{duration.TotalDays:0.0} days";
+        }
+
+        if (duration.TotalHours >= 1d)
+        {
+            return $"{duration.TotalHours:0.#} hrs";
+        }
+
+        return $"{Math.Max(1d, duration.TotalMinutes):0} mins";
     }
 
     private static string FormatSprintDateRange(Sprint sprint)
@@ -329,7 +432,15 @@ public class BoardForm : UserControl
 
     private void ApplyFilters()
     {
-        RenderColumns(_loadedColumns.Select(GetFilteredColumn).ToList());
+        var filteredColumns = _loadedColumns.Select(GetFilteredColumn).ToList();
+        if (_groupByEpic)
+        {
+            RenderSwimlanes(BuildSwimlanes(filteredColumns));
+        }
+        else
+        {
+            RenderColumns(filteredColumns);
+        }
     }
 
     private BoardColumnDto GetFilteredColumn(BoardColumnDto column)
@@ -338,14 +449,34 @@ public class BoardForm : UserControl
         var priority = _priorityFilter.SelectedItem as string;
         var type = _typeFilter.SelectedItem as string;
         var search = _searchFilter.Text.Trim();
+        var boardIssues = GetBoardModeIssues(column);
 
-        var issues = column.Issues
+        var issues = boardIssues
             .Where(issue => IssueMatchesFilters(issue, assignee, priority, type, search))
             .OrderBy(issue => issue.BoardPosition)
             .ToList();
 
-        return column with { Issues = issues };
+        return column with
+        {
+            Issues = issues,
+            TotalIssueCount = boardIssues.Count
+        };
     }
+
+    private IReadOnlyList<IssueSummaryDto> GetBoardModeIssues(BoardColumnDto column)
+    {
+        if (_boardType == BoardType.Kanban)
+        {
+            return column.Issues
+                .Where(issue => issue.StatusCategory != StatusCategory.Done)
+                .OrderBy(issue => issue.BoardPosition)
+                .ToList();
+        }
+
+        return column.Issues.OrderBy(issue => issue.BoardPosition).ToList();
+    }
+
+    private int GetBoardModeTotalCount(BoardColumnDto column) => GetBoardModeIssues(column).Count;
 
     private static bool IssueMatchesFilters(IssueSummaryDto issue, string? assignee, string? priority, string? type, string search)
     {
@@ -354,7 +485,8 @@ public class BoardForm : UserControl
                (string.IsNullOrWhiteSpace(type) || type.StartsWith("All ") || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)) &&
                (string.IsNullOrWhiteSpace(search) ||
                 issue.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                issue.IssueKey.Contains(search, StringComparison.OrdinalIgnoreCase));
+                issue.IssueKey.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(issue.EpicTitle) && issue.EpicTitle.Contains(search, StringComparison.OrdinalIgnoreCase)));
     }
 
     private void ClearFilters()
@@ -380,18 +512,222 @@ public class BoardForm : UserControl
 
     private void RenderColumns(IReadOnlyList<BoardColumnDto> columns)
     {
+        _swimlanesPanel.Visible = false;
+        _boardColumnsPanel.Visible = true;
         _boardColumnsPanel.SuspendLayout();
         var totalWidth = 0;
 
         foreach (var column in columns)
         {
             var control = GetOrCreateColumnControl(column.StatusId, column);
+            control.Visible = true;
             control.Bind(column);
             totalWidth += control.Width + control.Margin.Horizontal;
         }
 
         _boardColumnsPanel.ResumeLayout();
         UpdateBoardScrollMetrics(totalWidth);
+    }
+
+    private void RenderSwimlanes(IReadOnlyList<EpicSwimlaneViewModel> lanes, int? animatedIssueId = null)
+    {
+        _boardColumnsPanel.Visible = false;
+        _swimlanesPanel.Visible = true;
+        _swimlanesPanel.SuspendLayout();
+        try
+        {
+            foreach (Control control in _swimlanesPanel.Controls)
+            {
+                control.Dispose();
+            }
+
+            _swimlanesPanel.Controls.Clear();
+            foreach (var lane in lanes)
+            {
+                var control = new EpicSwimlaneControl(lane, showStoryPointProgress: !_activeSprintOnly)
+                {
+                    Width = Math.Max(320, lane.Columns.Count * 312)
+                };
+                control.Bind(lane, animatedIssueId, !_activeSprintOnly);
+                control.IssueSelected += async (_, issueId) => await OpenIssueDetailsAsync(issueId);
+                control.EpicSelected += async (_, epicId) => await OpenIssueDetailsAsync(epicId, openChildIssues: true);
+                control.IssueMoveRequested += async (_, args) => await MoveIssueAsync(args);
+                control.CollapseChanged += (_, args) => OnLaneCollapseChanged(args);
+                _swimlanesPanel.Controls.Add(control);
+            }
+        }
+        finally
+        {
+            _swimlanesPanel.ResumeLayout();
+        }
+
+        var totalWidth = lanes.Count == 0 ? _loadedColumns.Count * 312 : lanes.Max(lane => lane.Columns.Count) * 312;
+        UpdateBoardScrollMetrics(totalWidth);
+    }
+
+    private IReadOnlyList<EpicSwimlaneViewModel> BuildSwimlanes(IReadOnlyList<BoardColumnDto> columns)
+    {
+        var allIssues = columns.SelectMany(column => column.Issues).ToList();
+        var workItems = allIssues.Where(issue => issue.Type != IssueType.Epic).ToList();
+        var metadata = new Dictionary<string, (int? EpicId, string Title, Color Color)>();
+
+        foreach (var issue in allIssues)
+        {
+            if (issue.Type == IssueType.Epic)
+            {
+                var laneKey = BuildLaneKey(issue.Id);
+                metadata[laneKey] = (issue.Id, BuildEpicTitle(issue), ParseColor(issue.EpicColor, JiraTheme.Blue600));
+            }
+            else if (issue.EpicId.HasValue)
+            {
+                var laneKey = BuildLaneKey(issue.EpicId.Value);
+                metadata[laneKey] = (issue.EpicId, BuildEpicTitle(issue), ParseColor(issue.EpicColor, JiraTheme.Blue600));
+            }
+        }
+
+        var groupedIssues = workItems
+            .GroupBy(issue => issue.EpicId.HasValue ? BuildLaneKey(issue.EpicId.Value) : NoEpicLaneKey)
+            .ToDictionary(group => group.Key, group => group.OrderBy(issue => issue.BoardPosition).ToList());
+
+        var laneKeys = metadata.Keys
+            .Union(groupedIssues.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(key => string.Equals(key, NoEpicLaneKey, StringComparison.Ordinal) ? 1 : 0)
+            .ThenBy(key => metadata.TryGetValue(key, out var entry) ? entry.Title : "No Epic", StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var lanes = new List<EpicSwimlaneViewModel>();
+        foreach (var laneKey in laneKeys)
+        {
+            var laneIssues = groupedIssues.GetValueOrDefault(laneKey, []);
+            if (string.Equals(laneKey, NoEpicLaneKey, StringComparison.Ordinal) && laneIssues.Count == 0)
+            {
+                continue;
+            }
+
+            var laneMeta = metadata.GetValueOrDefault(laneKey, (null, "No Epic", JiraTheme.Neutral500));
+            var laneColumns = columns
+                .OrderBy(column => column.DisplayOrder)
+                .Select(column => new EpicSwimlaneColumnViewModel(
+                    column.StatusId,
+                    column.Name,
+                    column.Color,
+                    column.WipLimit,
+                    column.TotalIssueCount,
+                    laneIssues.Where(issue => issue.StatusId == column.StatusId).OrderBy(issue => issue.BoardPosition).ToList()))
+                .ToList();
+
+            var doneIssues = laneIssues.Count(issue => issue.StatusCategory == StatusCategory.Done);
+            var totalIssues = laneIssues.Count;
+            var doneStoryPoints = laneIssues.Where(issue => issue.StatusCategory == StatusCategory.Done).Sum(issue => issue.StoryPoints ?? 0);
+            var totalStoryPoints = laneIssues.Sum(issue => issue.StoryPoints ?? 0);
+            lanes.Add(new EpicSwimlaneViewModel(
+                laneKey,
+                laneMeta.Item1,
+                laneMeta.Title,
+                laneMeta.Item3,
+                _collapsedLaneKeys.Contains(laneKey),
+                doneIssues,
+                totalIssues,
+                doneStoryPoints,
+                totalStoryPoints,
+                laneColumns));
+        }
+
+        if (lanes.Count == 0)
+        {
+            lanes.Add(new EpicSwimlaneViewModel(NoEpicLaneKey, null, "No Epic", JiraTheme.Neutral500, false, 0, 0, 0, 0,
+                columns.OrderBy(column => column.DisplayOrder)
+                    .Select(column => new EpicSwimlaneColumnViewModel(column.StatusId, column.Name, column.Color, column.WipLimit, column.TotalIssueCount, []))
+                    .ToList()));
+        }
+
+        return lanes;
+    }
+
+    private static string BuildEpicTitle(IssueSummaryDto issue)
+    {
+        var issueKey = issue.EpicKey ?? issue.IssueKey;
+        var title = issue.EpicTitle ?? issue.Title;
+        return string.IsNullOrWhiteSpace(issueKey) ? title : $"{issueKey} - {title}";
+    }
+
+    private static string BuildLaneKey(int epicId) => $"epic:{epicId}";
+
+    private void OnLaneCollapseChanged(EpicSwimlaneCollapseChangedEventArgs args)
+    {
+        if (args.IsCollapsed)
+        {
+            _collapsedLaneKeys.Add(args.LaneKey);
+        }
+        else
+        {
+            _collapsedLaneKeys.Remove(args.LaneKey);
+        }
+
+        ApplyFilters();
+    }
+
+    private async Task ToggleBoardModeAsync()
+    {
+        if (_project is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var nextBoardType = _boardType == BoardType.Scrum ? BoardType.Kanban : BoardType.Scrum;
+            var updatedProject = await _session.ProjectCommands.UpdateProjectAsync(
+                _project.Id,
+                _project.Name,
+                _project.Description,
+                _project.Category,
+                nextBoardType,
+                _project.Url);
+            if (updatedProject is null)
+            {
+                return;
+            }
+
+            _project = updatedProject;
+            _boardType = updatedProject.BoardType;
+            UpdateBoardModeButton();
+            await LoadBoardAsync();
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+
+    private void ToggleGroupByEpic()
+    {
+        _groupByEpic = !_groupByEpic;
+        UpdateGroupByEpicButton();
+        ApplyFilters();
+    }
+
+    private void UpdateGroupByEpicButton()
+    {
+        _groupByEpicButton.BackColor = _groupByEpic ? JiraTheme.Blue100 : JiraTheme.BgSurface;
+        _groupByEpicButton.ForeColor = _groupByEpic ? JiraTheme.PrimaryActive : JiraTheme.TextPrimary;
+        _groupByEpicButton.FlatAppearance.BorderSize = 1;
+        _groupByEpicButton.FlatAppearance.BorderColor = _groupByEpic ? JiraTheme.Primary : JiraTheme.Border;
+        _groupByEpicButton.FlatAppearance.MouseDownBackColor = _groupByEpic ? JiraTheme.Blue100 : JiraTheme.Neutral200;
+        _groupByEpicButton.FlatAppearance.MouseOverBackColor = _groupByEpic ? JiraTheme.Blue100 : JiraTheme.Neutral100;
+    }
+
+    private void UpdateBoardModeButton()
+    {
+        var isKanban = _boardType == BoardType.Kanban;
+        _boardModeButton.Text = isKanban ? "Mode: Kanban" : "Mode: Scrum";
+        _boardModeButton.BackColor = isKanban ? JiraTheme.Blue100 : JiraTheme.BgSurface;
+        _boardModeButton.ForeColor = isKanban ? JiraTheme.PrimaryActive : JiraTheme.TextPrimary;
+        _boardModeButton.FlatAppearance.BorderSize = 1;
+        _boardModeButton.FlatAppearance.BorderColor = isKanban ? JiraTheme.Primary : JiraTheme.Border;
+        _boardModeButton.FlatAppearance.MouseDownBackColor = isKanban ? JiraTheme.Blue100 : JiraTheme.Neutral200;
+        _boardModeButton.FlatAppearance.MouseOverBackColor = isKanban ? JiraTheme.Blue100 : JiraTheme.Neutral100;
     }
 
     private BoardColumnControl GetOrCreateColumnControl(int statusId, BoardColumnDto column)
@@ -409,9 +745,15 @@ public class BoardForm : UserControl
         control.IssueSelected += async (_, issueId) => await OpenIssueDetailsAsync(issueId);
         control.CreateIssueRequested += async (_, issueStatusId) => await CreateIssueAsync(issueStatusId);
         control.IssueMoveRequested += async (_, args) => await MoveIssueAsync(args);
+        control.WipLimitWarningRequested += OnWipLimitWarningRequested;
         _columnControls[statusId] = control;
         _boardColumnsPanel.Controls.Add(control);
         return control;
+    }
+
+    private void OnWipLimitWarningRequested(object? sender, BoardColumnWipLimitEventArgs args)
+    {
+        ShowWarningToast($"WIP limit reached in {args.StatusName} ({args.CurrentCount}/{args.Limit}). Drop to override.");
     }
 
     private void RenderMovedColumns(IReadOnlyCollection<int> statusIds, int issueId, int targetStatusId)
@@ -437,6 +779,12 @@ public class BoardForm : UserControl
 
     private void UpdateColumnHeights()
     {
+        if (_groupByEpic)
+        {
+            UpdateBoardScrollMetrics(_loadedColumns.Count * 312);
+            return;
+        }
+
         foreach (var control in _columnControls.Values)
         {
             control.Height = Math.Max(200, _boardScrollPanel.ClientSize.Height - 8);
@@ -449,7 +797,7 @@ public class BoardForm : UserControl
     {
         try
         {
-            if (_projectId == 0 || _activeSprint is not null)
+            if (_boardType == BoardType.Kanban || _projectId == 0 || _activeSprint is not null)
             {
                 return;
             }
@@ -475,11 +823,11 @@ public class BoardForm : UserControl
         }
     }
 
-    private async Task CreateIssueAsync(int? defaultStatusId = null)
+    private async Task CreateIssueAsync(int? defaultStatusId = null, int? epicParentIssueId = null, IssueType? preferredType = null)
     {
         try
         {
-            using var dialog = new IssueEditorForm(_session, _projectId, null, defaultStatusId);
+            using var dialog = new IssueEditorForm(_session, _projectId, null, defaultStatusId, epicParentIssueId, preferredType);
             if (dialog.ShowDialog(this) == DialogResult.OK)
             {
                 await LoadBoardAsync();
@@ -491,11 +839,11 @@ public class BoardForm : UserControl
         }
     }
 
-    private async Task OpenIssueDetailsAsync(int issueId)
+    private async Task OpenIssueDetailsAsync(int issueId, bool openChildIssues = false)
     {
         try
         {
-            using var dialog = new IssueDetailsForm(_session, issueId, _projectId);
+            using var dialog = new IssueDetailsForm(_session, issueId, _projectId, openChildIssues);
             if (dialog.ShowDialog(this) == DialogResult.OK)
             {
                 await LoadBoardAsync();
@@ -518,7 +866,28 @@ public class BoardForm : UserControl
 
             var currentUserId = _session.CurrentUserContext.RequireUserId();
             var targetColumn = _loadedColumns.FirstOrDefault(x => x.StatusId == args.TargetStatusId);
-            var boardPosition = targetColumn?.Issues.OrderBy(x => x.BoardPosition).FirstOrDefault() is { } first
+            if (targetColumn is null)
+            {
+                return;
+            }
+
+            if (ShouldConfirmWipOverride(targetColumn))
+            {
+                var currentCount = GetBoardModeTotalCount(targetColumn);
+                var confirm = MessageBox.Show(
+                    this,
+                    $"{targetColumn.Name} has reached its WIP limit ({currentCount}/{targetColumn.WipLimit}). Move the issue anyway?",
+                    "WIP Limit Reached",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+                if (confirm != DialogResult.Yes)
+                {
+                    ShowWarningToast($"Move cancelled because {targetColumn.Name} is at its WIP limit.");
+                    return;
+                }
+            }
+
+            var boardPosition = targetColumn.Issues.OrderBy(x => x.BoardPosition).FirstOrDefault() is { } first
                 ? first.BoardPosition - 1m
                 : 1m;
 
@@ -540,6 +909,14 @@ public class BoardForm : UserControl
         {
             ErrorDialogService.Show(exception);
         }
+    }
+
+    private bool ShouldConfirmWipOverride(BoardColumnDto targetColumn)
+    {
+        return targetColumn.Category != StatusCategory.Done
+            && targetColumn.WipLimit is int wipLimit
+            && wipLimit > 0
+            && GetBoardModeTotalCount(targetColumn) >= wipLimit;
     }
 
     private void ApplyIssueMoveLocally(int issueId, int sourceStatusId, int targetStatusId, decimal boardPosition)
@@ -581,7 +958,8 @@ public class BoardForm : UserControl
                         Issues = column.Issues
                             .Where(x => x.Id != issueId)
                             .OrderBy(x => x.BoardPosition)
-                            .ToList()
+                            .ToList(),
+                        TotalIssueCount = Math.Max(0, column.TotalIssueCount - 1)
                     };
                 }
 
@@ -593,7 +971,8 @@ public class BoardForm : UserControl
                             .Where(x => x.Id != issueId)
                             .Append(updatedIssue)
                             .OrderBy(x => x.BoardPosition)
-                            .ToList()
+                            .ToList(),
+                        TotalIssueCount = column.TotalIssueCount + 1
                     };
                 }
 
@@ -601,15 +980,34 @@ public class BoardForm : UserControl
             })
             .ToList();
 
-        RenderMovedColumns(new[] { sourceStatusId, targetStatusId }, issueId, targetStatusId);
+        if (_groupByEpic)
+        {
+            RenderSwimlanes(BuildSwimlanes(_loadedColumns.Select(GetFilteredColumn).ToList()), issueId);
+        }
+        else
+        {
+            RenderMovedColumns(new[] { sourceStatusId, targetStatusId }, issueId, targetStatusId);
+        }
     }
 
     private void ShowMoveToast(string statusName)
     {
-        _toastLabel.Text = $"Issue moved to {statusName}";
+        ShowToast($"Issue moved to {statusName}", JiraTheme.Blue600);
+    }
+
+    private void ShowWarningToast(string message)
+    {
+        ShowToast(message, JiraTheme.Red500);
+    }
+
+    private void ShowToast(string message, Color accentColor)
+    {
+        _toastLabel.Text = message;
+        _toastAccentColor = accentColor;
         PositionToast();
         _toastPanel.Visible = true;
         _toastPanel.BringToFront();
+        _toastPanel.Invalidate();
         _toastTimer.Stop();
         _toastTimer.Start();
     }
@@ -636,4 +1034,31 @@ public class BoardForm : UserControl
 
         base.Dispose(disposing);
     }
+
+    private static Color ParseColor(string? value, Color fallback)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(value) ? fallback : ColorTranslator.FromHtml(value);
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    private const string NoEpicLaneKey = "no-epic";
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -89,7 +89,7 @@ public sealed class ProjectListForm : UserControl
 
     public event EventHandler? ProjectOpened;
 
-    public Task RefreshProjectsAsync() => LoadProjectsAsync();
+    public Task RefreshProjectsAsync(CancellationToken cancellationToken = default) => LoadProjectsAsync(cancellationToken);
 
     public void SetShellSearch(string value)
     {
@@ -194,12 +194,16 @@ public sealed class ProjectListForm : UserControl
         _gridView.Resize += (_, _) => ApplyResponsiveColumns();
     }
 
-    private async Task LoadProjectsAsync()
+    private async Task LoadProjectsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            _projects = await _session.Projects.GetAccessibleProjectsAsync();
+            _projects = await _session.Projects.GetAccessibleProjectsAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             BindProjects();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -444,3 +448,4 @@ public sealed class ProjectListForm : UserControl
         }
     }
 }
+

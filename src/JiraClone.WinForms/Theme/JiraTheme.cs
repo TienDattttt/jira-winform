@@ -17,6 +17,7 @@ public static class JiraTheme
     public static Color Neutral700 => FromHex("#6B6E76");
     public static Color Neutral1100 => FromHex("#1E1F21");
     public static Color Red500 => FromHex("#F15B50");
+    public static Color Red600 => FromHex("#DE350B");
     public static Color Red700 => FromHex("#C9372C");
     public static Color Green500 => FromHex("#2ABB7F");
     public static Color Green700 => FromHex("#1F845A");

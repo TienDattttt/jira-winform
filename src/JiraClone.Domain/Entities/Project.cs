@@ -9,6 +9,7 @@ public class Project : AggregateRoot
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public ProjectCategory Category { get; set; } = ProjectCategory.Software;
+    public BoardType BoardType { get; set; } = BoardType.Scrum;
     public string? Url { get; set; }
     public bool IsActive { get; set; } = true;
     public ICollection<ProjectMember> Members { get; set; } = new List<ProjectMember>();
@@ -21,5 +22,3 @@ public class Project : AggregateRoot
     public ICollection<Issue> Issues { get; set; } = new List<Issue>();
     public ICollection<Sprint> Sprints { get; set; } = new List<Sprint>();
 }
-
-

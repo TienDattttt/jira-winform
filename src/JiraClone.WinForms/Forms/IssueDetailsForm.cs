@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
@@ -43,11 +43,17 @@ public class IssueDetailsForm : Form
     private readonly AttachmentListControl _attachments = new() { Dock = DockStyle.Fill };
     private readonly Button _commentsTab = MakeTab("Comments", true);
     private readonly Button _historyTab = MakeTab("History", false);
+    private readonly Button _childIssuesTab = MakeTab("Child Issues", false);
     private readonly Panel _tabIndicator = new() { Height = 2, Width = 100, BackColor = JiraTheme.Primary };
+    private readonly Panel _commentComposer = new() { Dock = DockStyle.Top, Height = 116, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 8) };
     private readonly TextBox _commentInput = JiraControlFactory.CreateTextBox();
     private readonly Button _saveComment = JiraControlFactory.CreatePrimaryButton("Save");
     private readonly CommentListControl _comments = new() { Dock = DockStyle.Fill };
     private readonly ActivityTimelineControl _history = new() { Dock = DockStyle.Fill, Visible = false };
+    private readonly Panel _childIssuesView = new() { Dock = DockStyle.Fill, Visible = false, BackColor = JiraTheme.BgSurface };
+    private readonly FlowLayoutPanel _childIssuesPanel = new() { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Visible = true, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 4, 0, 4) };
+    private readonly Button _addExistingIssueButton = JiraControlFactory.CreateSecondaryButton("Add existing issue");
+    private readonly Button _createChildIssueButton = JiraControlFactory.CreatePrimaryButton("Create child issue");
     private readonly ComboBox _status = new() { DrawMode = DrawMode.OwnerDrawFixed, DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
     private readonly ComboBox _priority = new() { DrawMode = DrawMode.OwnerDrawFixed, DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
     private readonly SprintSelectorControl _sprint = new() { Width = 180 };
@@ -60,11 +66,12 @@ public class IssueDetailsForm : Form
     private readonly Button _editLabels = JiraControlFactory.CreateSecondaryButton("Edit Labels");
     private readonly ComboBox _component = CreateValueCombo();
     private readonly ComboBox _fixVersion = CreateValueCombo();
+    private readonly Panel _dueDateField = new() { Width = 220, Height = 36, BackColor = Color.Transparent };
+    private readonly LinkLabel _dueDateDisplay = new() { Dock = DockStyle.Fill, AutoSize = false, Height = 32, Font = JiraTheme.FontSmall, LinkBehavior = LinkBehavior.HoverUnderline, TextAlign = ContentAlignment.MiddleLeft, BackColor = Color.Transparent, Cursor = Cursors.Hand };
+    private readonly DateTimePicker _dueDatePicker = new() { Dock = DockStyle.Fill, Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy", ShowCheckBox = true, Visible = false, CalendarForeColor = JiraTheme.TextPrimary, CalendarMonthBackground = JiraTheme.BgSurface, Font = JiraTheme.FontBody };
     private readonly Button _delete = JiraControlFactory.CreateSecondaryButton("Delete");
     private readonly LinkLabel _parentLink = new() { AutoSize = true, Font = JiraTheme.FontBody, LinkColor = JiraTheme.PrimaryActive, Visible = false };
     private readonly Panel _parentSection = new() { Dock = DockStyle.Top, Height = 40, Visible = false, BackColor = JiraTheme.BgSurface };
-    private readonly FlowLayoutPanel _childIssuesPanel = new() { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Visible = false, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 4, 0, 4) };
-    private readonly Panel _childSection = new() { Dock = DockStyle.Top, AutoSize = true, Visible = false, BackColor = JiraTheme.BgSurface };
     private IssueDetailsDto? _details;
     private IReadOnlyList<User> _users = Array.Empty<User>();
     private IReadOnlyList<JiraLabelEntity> _availableLabels = Array.Empty<JiraLabelEntity>();
@@ -77,12 +84,15 @@ public class IssueDetailsForm : Form
     private string _descriptionMarkdown = string.Empty;
     private bool _descriptionPreviewMode;
     private bool _descriptionModeInitialized;
+    private bool _dueDateEditing;
+    private readonly bool _openChildIssuesByDefault;
 
-    public IssueDetailsForm(AppSession session, int issueId, int projectId)
+    public IssueDetailsForm(AppSession session, int issueId, int projectId, bool openChildIssues = false)
     {
         _session = session;
         _issueId = issueId;
         _projectId = projectId;
+        _openChildIssuesByDefault = openChildIssues;
         _logger = session.CreateLogger<IssueDetailsForm>();
         Text = "Issue Details";
         StartPosition = FormStartPosition.CenterParent;
@@ -122,6 +132,22 @@ public class IssueDetailsForm : Form
         _saveComment.AutoSize = false;
         _saveComment.Size = new Size(90, 36);
         _saveComment.Click += async (_, _) => await AddCommentAsync();
+        _childIssuesTab.Width = 116;
+        _childIssuesTab.Click += (_, _) => ActivateTab(DetailsTab.ChildIssues);
+        _addExistingIssueButton.AutoSize = false;
+        _addExistingIssueButton.Size = new Size(148, 34);
+        _addExistingIssueButton.Click += async (_, _) => await AddExistingChildIssueAsync();
+        _createChildIssueButton.AutoSize = false;
+        _createChildIssueButton.Size = new Size(136, 34);
+        _createChildIssueButton.Click += async (_, _) => await CreateChildIssueAsync();
+        _parentLink.LinkClicked += (_, e) =>
+        {
+            if (e.Link?.LinkData is int parentIssueId)
+            {
+                using var dialog = new IssueDetailsForm(_session, parentIssueId, _projectId);
+                dialog.ShowDialog(this);
+            }
+        };
 
         _status.DisplayMember = nameof(WorkflowStatusOptionDto.Name);
         _status.ValueMember = nameof(WorkflowStatusOptionDto.Id);
@@ -143,6 +169,23 @@ public class IssueDetailsForm : Form
         _fixVersion.DisplayMember = nameof(LookupOption.Text);
         _fixVersion.ValueMember = nameof(LookupOption.Value);
         _fixVersion.SelectedIndexChanged += async (_, _) => await SaveFixVersionAsync();
+        ConfigureDueDateField();
+        _dueDateDisplay.LinkClicked += (_, _) => BeginDueDateEdit();
+        _dueDateDisplay.Click += (_, _) => BeginDueDateEdit();
+        _dueDatePicker.CloseUp += async (_, _) => await CommitDueDateAsync();
+        _dueDatePicker.Leave += async (_, _) => await CommitDueDateAsync();
+        _dueDatePicker.KeyDown += async (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                await CommitDueDateAsync();
+            }
+            else if (e.KeyCode == Keys.Escape)
+            {
+                CancelDueDateEdit();
+            }
+        };
         _logTime.AutoSize = false;
         _logTime.Size = new Size(100, 36);
         _logTime.Click += async (_, _) => await LogTimeAsync();
@@ -348,30 +391,55 @@ public class IssueDetailsForm : Form
 
     private Control BuildActivity()
     {
-        var host = new Panel { Dock = DockStyle.Top, Height = 344, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 0) };
+        var host = new Panel { Dock = DockStyle.Top, Height = 384, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 0) };
         var tabs = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = JiraTheme.BgSurface };
         _commentsTab.Location = new Point(0, 0);
         _historyTab.Location = new Point(104, 0);
-        _commentsTab.Click += (_, _) => ActivateTab(true);
-        _historyTab.Click += (_, _) => ActivateTab(false);
+        _childIssuesTab.Location = new Point(198, 0);
+        _commentsTab.Click += (_, _) => ActivateTab(DetailsTab.Comments);
+        _historyTab.Click += (_, _) => ActivateTab(DetailsTab.History);
         _tabIndicator.Location = new Point(0, 32);
         tabs.Controls.Add(_tabIndicator);
+        tabs.Controls.Add(_childIssuesTab);
         tabs.Controls.Add(_historyTab);
         tabs.Controls.Add(_commentsTab);
 
-        var composer = new Panel { Dock = DockStyle.Top, Height = 116, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 8) };
+        _commentComposer.Controls.Clear();
         _commentInput.Dock = DockStyle.Fill;
         _saveComment.Dock = DockStyle.Bottom;
         _saveComment.Height = 36;
-        composer.Controls.Add(_commentInput);
-        composer.Controls.Add(_saveComment);
+        _commentComposer.Controls.Add(_commentInput);
+        _commentComposer.Controls.Add(_saveComment);
+
+        _childIssuesView.Controls.Clear();
+        var childActions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 44,
+            WrapContents = false,
+            BackColor = JiraTheme.BgSurface,
+            FlowDirection = FlowDirection.LeftToRight,
+            Padding = new Padding(0, 0, 0, 8),
+            Visible = false
+        };
+        childActions.Controls.Add(_createChildIssueButton);
+        childActions.Controls.Add(_addExistingIssueButton);
+        _createChildIssueButton.Margin = new Padding(0, 0, 8, 0);
+        _addExistingIssueButton.Margin = new Padding(0);
+
+        var childScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = JiraTheme.BgSurface };
+        childScroll.Controls.Add(_childIssuesPanel);
+        _childIssuesView.Controls.Add(childScroll);
+        _childIssuesView.Controls.Add(childActions);
+        _childIssuesView.Tag = childActions;
 
         var content = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
         content.Controls.Add(_comments);
         content.Controls.Add(_history);
+        content.Controls.Add(_childIssuesView);
 
         host.Controls.Add(content);
-        host.Controls.Add(composer);
+        host.Controls.Add(_commentComposer);
         host.Controls.Add(tabs);
         host.Controls.Add(TopLabel("Activity"));
         return host;
@@ -401,11 +469,12 @@ public class IssueDetailsForm : Form
         AddField(fields, 2, "Labels", _labelsField);
         AddField(fields, 3, "Component", _component);
         AddField(fields, 4, "Fix version", _fixVersion);
-        AddField(fields, 5, "Priority", _priority);
-        AddField(fields, 6, "Sprint", _sprint);
-        AddField(fields, 7, "Story points", _storyPoints);
+        AddField(fields, 5, "Due date", _dueDateField);
+        AddField(fields, 6, "Priority", _priority);
+        AddField(fields, 7, "Sprint", _sprint);
+        AddField(fields, 8, "Story points", _storyPoints);
 
-        var detailsBlock = new Panel { Dock = DockStyle.Top, Height = 418, BackColor = JiraTheme.BgSurface };
+        var detailsBlock = new Panel { Dock = DockStyle.Top, Height = 454, BackColor = JiraTheme.BgSurface };
         detailsBlock.Controls.Add(fields);
         detailsBlock.Controls.Add(statusHost);
         detailsBlock.Controls.Add(TopLabel("Status"));
@@ -416,19 +485,10 @@ public class IssueDetailsForm : Form
         timeBlock.Controls.Add(_logTime);
         timeBlock.Controls.Add(_time);
 
-        // Parent section
         _parentLink.Dock = DockStyle.Fill;
         _parentSection.Controls.Add(_parentLink);
         var parentLabel = TopLabel("Parent");
 
-        // Child issues section
-        _childSection.Controls.Add(_childIssuesPanel);
-        var childLabel = TopLabel("Child Issues");
-        childLabel.Tag = "childLabel";
-
-        panel.Controls.Add(_childSection);
-        panel.Controls.Add(childLabel);
-        panel.Controls.Add(JiraControlFactory.CreateSeparator());
         panel.Controls.Add(timeBlock);
         panel.Controls.Add(TopLabel("Time Tracking"));
         panel.Controls.Add(JiraControlFactory.CreateSeparator());
@@ -463,7 +523,7 @@ public class IssueDetailsForm : Form
             _comments.Bind(_details.Comments);
             _attachments.Bind(_details.Attachments);
             _history.Bind(_details.ActivityLogs);
-            ActivateTab(_comments.Visible || !_history.Visible);
+            ActivateTab(ResolveInitialTab(_details));
         }
         catch (Exception ex) { ErrorDialogService.Show(ex); }
         finally { _loading = false; }
@@ -509,6 +569,7 @@ public class IssueDetailsForm : Form
         RenderLabelChips();
         SelectLookupValue(_component, issue.IssueComponents.Select(x => (int?)x.ComponentId).FirstOrDefault());
         SelectLookupValue(_fixVersion, issue.FixVersionId);
+        BindDueDate(issue);
 
         _selectedAssigneeIds = issue.Assignees.Select(x => x.UserId).ToHashSet();
         ApplyAssigneeSummary(issue.Assignees.Select(x => x.User.DisplayName).ToList());
@@ -518,12 +579,11 @@ public class IssueDetailsForm : Form
         _time.RemainingHours = issue.TimeRemainingHours ?? Math.Max(0, _time.EstimatedHours - _time.LoggedHours);
         _time.Invalidate();
 
-        // Parent link
         if (issue.ParentIssue is not null)
         {
-            _parentLink.Text = $"{issue.ParentIssue.IssueKey} — {issue.ParentIssue.Title}";
+            _parentLink.Text = $"{issue.ParentIssue.IssueKey} - {issue.ParentIssue.Title}";
             _parentLink.Links.Clear();
-            _parentLink.Links.Add(0, issue.ParentIssue.IssueKey.Length, issue.ParentIssue.Id);
+            _parentLink.Links.Add(0, _parentLink.Text.Length, issue.ParentIssue.Id);
             _parentSection.Visible = true;
         }
         else
@@ -531,34 +591,200 @@ public class IssueDetailsForm : Form
             _parentSection.Visible = false;
         }
 
-        // Child issues
-        _childIssuesPanel.Controls.Clear();
-        if (details.SubIssues.Count > 0)
-        {
-            foreach (var child in details.SubIssues)
-            {
-                var row = new Label
-                {
-                    Text = $"  {child.IssueKey}  {child.Title}  [{child.WorkflowStatus.Name}]",
-                    Font = JiraTheme.FontCaption,
-                    ForeColor = JiraTheme.TextPrimary,
-                    AutoSize = true,
-                    Padding = new Padding(0, 2, 0, 2),
-                    Cursor = Cursors.Hand
-                };
-                var childId = child.Id;
-                row.Click += (_, _) => { using var f = new IssueDetailsForm(_session, childId, _projectId); f.ShowDialog(this); };
-                _childIssuesPanel.Controls.Add(row);
-            }
-            _childSection.Visible = true;
-        }
-        else
-        {
-            _childSection.Visible = false;
-        }
+        RenderChildIssues(details);
     }
 
 
+    private void RenderChildIssues(IssueDetailsDto details)
+    {
+        _childIssuesPanel.SuspendLayout();
+        try
+        {
+            foreach (Control control in _childIssuesPanel.Controls)
+            {
+                control.Dispose();
+            }
+
+            _childIssuesPanel.Controls.Clear();
+            if (details.SubIssues.Count == 0)
+            {
+                var empty = JiraControlFactory.CreateLabel(
+                    details.Issue.Type == IssueType.Epic ? "No child issues linked to this epic yet." : "No child issues.",
+                    true);
+                empty.AutoSize = true;
+                empty.ForeColor = JiraTheme.TextSecondary;
+                empty.Margin = new Padding(0, 4, 0, 0);
+                _childIssuesPanel.Controls.Add(empty);
+            }
+            else
+            {
+                foreach (var child in details.SubIssues.OrderBy(issue => issue.WorkflowStatus.DisplayOrder).ThenBy(issue => issue.Title))
+                {
+                    _childIssuesPanel.Controls.Add(CreateChildIssueRow(child));
+                }
+            }
+        }
+        finally
+        {
+            _childIssuesPanel.ResumeLayout();
+        }
+
+        var showChildTab = details.Issue.Type == IssueType.Epic || details.SubIssues.Count > 0;
+        _childIssuesTab.Visible = showChildTab;
+        if (_childIssuesView.Tag is Control actions)
+        {
+            actions.Visible = details.Issue.Type == IssueType.Epic;
+        }
+    }
+
+    private Control CreateChildIssueRow(Issue child)
+    {
+        var row = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 52,
+            Width = 520,
+            BackColor = JiraTheme.BgSurface,
+            Margin = new Padding(0, 0, 0, 8),
+            Padding = new Padding(0, 4, 0, 4),
+            Cursor = Cursors.Hand
+        };
+        row.Paint += (_, e) =>
+        {
+            using var pen = new Pen(JiraTheme.Border);
+            e.Graphics.DrawLine(pen, 0, row.Height - 1, row.Width, row.Height - 1);
+        };
+
+        var badge = JiraBadge.ForType(child.Type);
+        badge.Location = new Point(0, 12);
+
+        var titleLink = new LinkLabel
+        {
+            AutoSize = false,
+            Location = new Point(78, 4),
+            Size = new Size(360, 22),
+            Text = $"{child.IssueKey} - {child.Title}",
+            Font = JiraTheme.FontSmall,
+            LinkColor = JiraTheme.PrimaryActive,
+            ActiveLinkColor = JiraTheme.PrimaryHover,
+            VisitedLinkColor = JiraTheme.PrimaryActive,
+            LinkBehavior = LinkBehavior.HoverUnderline,
+            TextAlign = ContentAlignment.MiddleLeft,
+            BackColor = Color.Transparent
+        };
+
+        var meta = JiraControlFactory.CreateLabel(FormatChildIssueMeta(child), true);
+        meta.Location = new Point(78, 26);
+        meta.Size = new Size(360, 18);
+        meta.ForeColor = JiraTheme.TextSecondary;
+        meta.Font = JiraTheme.FontCaption;
+
+        var status = JiraControlFactory.CreateLabel(child.WorkflowStatus.Name, true);
+        status.AutoSize = true;
+        status.BackColor = ParseStatusColor(child.WorkflowStatus.Color, child.WorkflowStatus.Category);
+        status.ForeColor = GetStatusTextColor(child.WorkflowStatus.Category);
+        status.Padding = new Padding(10, 4, 10, 4);
+        status.Location = new Point(452, 11);
+
+        void OpenChild(object? sender, EventArgs e)
+        {
+            using var dialog = new IssueDetailsForm(_session, child.Id, _projectId);
+            dialog.ShowDialog(this);
+        }
+
+        row.Click += OpenChild;
+        titleLink.LinkClicked += (_, _) => OpenChild(null, EventArgs.Empty);
+        foreach (Control nested in new Control[] { badge, meta, status })
+        {
+            nested.Click += OpenChild;
+        }
+
+        row.Controls.Add(status);
+        row.Controls.Add(meta);
+        row.Controls.Add(titleLink);
+        row.Controls.Add(badge);
+        return row;
+    }
+
+    private static string FormatChildIssueMeta(Issue child)
+    {
+        var storyPoints = child.StoryPoints.HasValue ? $" | {child.StoryPoints.Value} pts" : string.Empty;
+        return $"{child.Type} | {child.WorkflowStatus.Name}{storyPoints}";
+    }
+
+    private DetailsTab ResolveInitialTab(IssueDetailsDto details)
+    {
+        var showChildTab = details.Issue.Type == IssueType.Epic || details.SubIssues.Count > 0;
+        if (showChildTab && (_openChildIssuesByDefault || details.Issue.Type == IssueType.Epic))
+        {
+            return DetailsTab.ChildIssues;
+        }
+
+        return DetailsTab.Comments;
+    }
+
+    private async Task AddExistingChildIssueAsync()
+    {
+        if (_details is null || _details.Issue.Type != IssueType.Epic)
+        {
+            return;
+        }
+
+        try
+        {
+            var candidates = (await _session.Board.GetBoardAsync(_projectId))
+                .SelectMany(column => column.Issues)
+                .GroupBy(issue => issue.Id)
+                .Select(group => group.First())
+                .Where(issue => issue.Id != _details.Issue.Id && issue.Type is IssueType.Story or IssueType.Task && issue.EpicId != _details.Issue.Id)
+                .OrderBy(issue => issue.IssueKey)
+                .ToList();
+            using var dialog = new ExistingIssuePickerDialog(candidates);
+            if (dialog.ShowDialog(this) != DialogResult.OK || dialog.SelectedIssueIds.Count == 0)
+            {
+                return;
+            }
+
+            var currentUserId = _session.CurrentUserContext.RequireUserId();
+            foreach (var selectedIssueId in dialog.SelectedIssueIds)
+            {
+                await _session.Issues.UpdateParentAsync(selectedIssueId, _details.Issue.Id, currentUserId);
+            }
+
+            await LoadDetailsAsync(false);
+            ActivateTab(DetailsTab.ChildIssues);
+            DialogResult = DialogResult.OK;
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogService.Show(ex);
+        }
+    }
+
+    private async Task CreateChildIssueAsync()
+    {
+        if (_details is null || _details.Issue.Type != IssueType.Epic)
+        {
+            return;
+        }
+
+        try
+        {
+            using var dialog = new IssueEditorForm(_session, _projectId, null, null, _details.Issue.Id, IssueType.Story);
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            await LoadDetailsAsync(false);
+            ActivateTab(DetailsTab.ChildIssues);
+            DialogResult = DialogResult.OK;
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogService.Show(ex);
+        }
+    }
     private async Task BindStatusOptionsAsync(Issue issue)
     {
         var currentUserId = _session.CurrentUserContext.RequireUserId();
@@ -627,6 +853,108 @@ public class IssueDetailsForm : Form
         var initials = Initials(names[0]);
         var summaryInitials = string.IsNullOrWhiteSpace(initials) ? "A+" : $"{initials[0]}+";
         _assignee.SetPerson($"{names[0]} +{names.Count - 1}", summaryInitials, true);
+    }
+
+    private void ConfigureDueDateField()
+    {
+        _dueDateDisplay.LinkColor = JiraTheme.TextSecondary;
+        _dueDateDisplay.ActiveLinkColor = JiraTheme.PrimaryActive;
+        _dueDateDisplay.VisitedLinkColor = JiraTheme.TextSecondary;
+        _dueDateDisplay.Margin = new Padding(0);
+        _dueDateDisplay.Padding = new Padding(0, 4, 0, 0);
+        _dueDateField.Controls.Add(_dueDateDisplay);
+        _dueDateField.Controls.Add(_dueDatePicker);
+    }
+
+    private void BeginDueDateEdit()
+    {
+        if (_loading || _details is null)
+        {
+            return;
+        }
+
+        _dueDateEditing = true;
+        _dueDateDisplay.Visible = false;
+        _dueDatePicker.Visible = true;
+        _dueDatePicker.BringToFront();
+        _dueDatePicker.Focus();
+    }
+
+    private void CancelDueDateEdit()
+    {
+        _dueDateEditing = false;
+        _dueDatePicker.Visible = false;
+        _dueDateDisplay.Visible = true;
+    }
+
+    private async Task CommitDueDateAsync()
+    {
+        if (!_dueDateEditing || _details is null)
+        {
+            return;
+        }
+
+        DateOnly? nextDueDate = _dueDatePicker.Checked ? DateOnly.FromDateTime(_dueDatePicker.Value.Date) : null;
+        CancelDueDateEdit();
+
+        if (_details.Issue.DueDate == nextDueDate)
+        {
+            BindDueDate(_details.Issue);
+            return;
+        }
+
+        try
+        {
+            var currentUserId = _session.CurrentUserContext.RequireUserId();
+            var updatedIssue = await _session.Issues.UpdateDueDateAsync(_issueId, nextDueDate, currentUserId);
+            if (updatedIssue is null)
+            {
+                return;
+            }
+
+            var activityLogs = await _session.ActivityLog.GetIssueActivityAsync(_issueId);
+            _loading = true;
+            try
+            {
+                _details = _details with { Issue = updatedIssue, ActivityLogs = activityLogs };
+                BindIssue(_details);
+                _history.Bind(activityLogs);
+                DialogResult = DialogResult.OK;
+            }
+            finally
+            {
+                _loading = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogService.Show(ex);
+            BindDueDate(_details.Issue);
+        }
+    }
+
+    private void BindDueDate(Issue issue)
+    {
+        var overdue = issue.DueDate.HasValue
+            && issue.DueDate.Value < DateOnly.FromDateTime(DateTime.Today)
+            && (issue.WorkflowStatus?.Category ?? StatusCategory.ToDo) != StatusCategory.Done;
+        var displayColor = issue.DueDate.HasValue
+            ? overdue ? JiraTheme.Red600 : JiraTheme.TextPrimary
+            : JiraTheme.TextSecondary;
+
+        _dueDateDisplay.Text = issue.DueDate switch
+        {
+            DateOnly dueDate when overdue => $"Overdue {dueDate:dd MMM yyyy}",
+            DateOnly dueDate => dueDate.ToString("dd MMM yyyy"),
+            _ => "No due date"
+        };
+        _dueDateDisplay.LinkColor = displayColor;
+        _dueDateDisplay.ActiveLinkColor = displayColor;
+        _dueDateDisplay.VisitedLinkColor = displayColor;
+        _dueDateDisplay.ForeColor = displayColor;
+        _dueDatePicker.Value = issue.DueDate?.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today;
+        _dueDatePicker.Checked = issue.DueDate.HasValue;
+        CancelDueDateEdit();
     }
 
     private void BindMetadataOptions()
@@ -774,6 +1102,13 @@ public class IssueDetailsForm : Form
         }
     }
 
+    private enum DetailsTab
+    {
+        Comments,
+        History,
+        ChildIssues
+    }
+
     private static string? NormalizeDescription(string? markdown)
     {
         return string.IsNullOrWhiteSpace(markdown)
@@ -781,16 +1116,22 @@ public class IssueDetailsForm : Form
             : markdown.Trim();
     }
 
-    private void ActivateTab(bool comments)
+    private void ActivateTab(DetailsTab tab)
     {
+        var comments = tab == DetailsTab.Comments;
+        var history = tab == DetailsTab.History;
+        var childIssues = tab == DetailsTab.ChildIssues && _childIssuesTab.Visible;
         _comments.Visible = comments;
-        _history.Visible = !comments;
-        _commentInput.Visible = comments;
-        _saveComment.Visible = comments;
+        _history.Visible = history;
+        _childIssuesView.Visible = childIssues;
+        _commentComposer.Visible = comments;
         _commentsTab.ForeColor = comments ? JiraTheme.TextPrimary : JiraTheme.TextSecondary;
-        _historyTab.ForeColor = comments ? JiraTheme.TextSecondary : JiraTheme.TextPrimary;
-        _tabIndicator.Left = comments ? _commentsTab.Left : _historyTab.Left;
-        _tabIndicator.Width = comments ? _commentsTab.Width : _historyTab.Width;
+        _historyTab.ForeColor = history ? JiraTheme.TextPrimary : JiraTheme.TextSecondary;
+        _childIssuesTab.ForeColor = childIssues ? JiraTheme.TextPrimary : JiraTheme.TextSecondary;
+
+        var activeTab = childIssues ? _childIssuesTab : history ? _historyTab : _commentsTab;
+        _tabIndicator.Left = activeTab.Left;
+        _tabIndicator.Width = activeTab.Width;
     }
 
     private async Task SaveIssueAsync()
@@ -815,7 +1156,9 @@ public class IssueDetailsForm : Form
                 TimeSpentHours = _time.LoggedHours,
                 TimeRemainingHours = _time.RemainingHours,
                 StoryPoints = (int)_storyPoints.Value,
+                DueDate = _details.Issue.DueDate,
                 SprintId = _sprint.SelectedValue is int sprintId ? sprintId : null,
+                ParentIssueId = _details.Issue.ParentIssueId,
                 AssigneeIds = _selectedAssigneeIds.ToArray()
             };
 
@@ -1324,6 +1667,78 @@ public class IssueDetailsForm : Form
 
         public IReadOnlyList<int> SelectedLabelIds => _labels.CheckedItems.Cast<JiraLabelEntity>().Select(x => x.Id).ToList();
     }
+    private sealed record ExistingIssueOption(int Id, string DisplayText)
+    {
+        public override string ToString() => DisplayText;
+    }
+
+    private sealed class ExistingIssuePickerDialog : Form
+    {
+        private readonly CheckedListBox _issues = new()
+        {
+            Dock = DockStyle.Fill,
+            BorderStyle = BorderStyle.FixedSingle,
+            CheckOnClick = true,
+            BackColor = JiraTheme.BgSurface,
+            ForeColor = JiraTheme.TextPrimary,
+            Font = JiraTheme.FontBody
+        };
+
+        public ExistingIssuePickerDialog(IReadOnlyList<IssueSummaryDto> issues)
+        {
+            Text = "Add Existing Issues";
+            StartPosition = FormStartPosition.CenterParent;
+            AutoScaleMode = AutoScaleMode.Font;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            ClientSize = new Size(520, 460);
+            MinimumSize = new Size(520, 460);
+            MaximizeBox = false;
+            MinimizeBox = false;
+            BackColor = JiraTheme.BgSurface;
+
+            foreach (var issue in issues)
+            {
+                var context = string.IsNullOrWhiteSpace(issue.EpicTitle) ? "No epic" : issue.EpicTitle;
+                _issues.Items.Add(new ExistingIssueOption(issue.Id, $"{issue.IssueKey} - {issue.Title} ({context})"), false);
+            }
+
+            _issues.DisplayMember = nameof(ExistingIssueOption.DisplayText);
+
+            var save = JiraControlFactory.CreatePrimaryButton("Link issues");
+            var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
+            save.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };
+            cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+
+            var buttons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 52,
+                FlowDirection = FlowDirection.RightToLeft,
+                Padding = new Padding(12),
+                BackColor = JiraTheme.BgSurface
+            };
+            buttons.Controls.Add(save);
+            buttons.Controls.Add(cancel);
+
+            var caption = JiraControlFactory.CreateLabel("Choose one or more existing stories or tasks", true);
+            caption.Dock = DockStyle.Top;
+            caption.Height = 28;
+
+            var content = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(16),
+                BackColor = JiraTheme.BgSurface
+            };
+            content.Controls.Add(_issues);
+            content.Controls.Add(caption);
+
+            Controls.Add(content);
+            Controls.Add(buttons);
+        }
+
+        public IReadOnlyList<int> SelectedIssueIds => _issues.CheckedItems.Cast<ExistingIssueOption>().Select(x => x.Id).ToList();
+    }
     private sealed class AssigneePickerDialog : Form
     {
         private readonly CheckedListBox _assignees = new()
@@ -1392,6 +1807,17 @@ public class IssueDetailsForm : Form
         public IReadOnlyList<int> SelectedUserIds => _assignees.CheckedItems.Cast<User>().Select(x => x.Id).ToList();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -35,6 +35,26 @@ public class ProjectRepository : IProjectRepository
             .FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
     }
 
+    public async Task<Project?> GetDeleteSnapshotAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Projects
+            .AsSplitQuery()
+            .Include(x => x.Members)
+            .ThenInclude(x => x.User)
+            .Include(x => x.BoardColumns)
+            .ThenInclude(x => x.WorkflowStatus)
+            .Include(x => x.Labels)
+            .Include(x => x.Components)
+            .Include(x => x.Versions)
+            .Include(x => x.SavedFilters)
+            .Include(x => x.WorkflowDefinitions)
+            .ThenInclude(x => x.Statuses)
+            .Include(x => x.WorkflowDefinitions)
+            .ThenInclude(x => x.Transitions)
+            .ThenInclude(x => x.AllowedRoles)
+            .FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
+    }
+
     public Task<bool> ExistsByKeyAsync(string key, int? excludeProjectId = null, CancellationToken cancellationToken = default)
     {
         var normalizedKey = (key ?? string.Empty).Trim().ToUpperInvariant();
@@ -46,6 +66,12 @@ public class ProjectRepository : IProjectRepository
     public Task AddAsync(Project project, CancellationToken cancellationToken = default)
     {
         return _dbContext.Projects.AddAsync(project, cancellationToken).AsTask();
+    }
+
+    public Task DeleteAsync(Project project, CancellationToken cancellationToken = default)
+    {
+        _dbContext.Projects.Remove(project);
+        return Task.CompletedTask;
     }
 
     private IQueryable<Project> IncludeProjectGraph()

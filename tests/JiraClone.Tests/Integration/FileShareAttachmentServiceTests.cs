@@ -12,7 +12,7 @@ public class FileShareAttachmentServiceTests
         Directory.CreateDirectory(root);
         var sourceFile = Path.Combine(root, "note.txt");
         await File.WriteAllTextAsync(sourceFile, "hello world");
-        var service = new FileShareAttachmentService(root);
+        var service = new FileShareAttachmentService(root, 10 * 1024 * 1024);
 
         try
         {

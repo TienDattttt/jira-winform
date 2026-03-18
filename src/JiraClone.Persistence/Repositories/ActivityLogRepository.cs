@@ -1,4 +1,5 @@
-﻿using JiraClone.Application.Abstractions;
+using JiraClone.Application.Abstractions;
+using JiraClone.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace JiraClone.Persistence.Repositories;
@@ -26,6 +27,14 @@ public class ActivityLogRepository : IActivityLogRepository
             .Where(x => x.ProjectId == projectId)
             .OrderByDescending(x => x.OccurredAtUtc)
             .Take(Math.Max(1, take))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<JiraClone.Domain.Entities.ActivityLog>> GetProjectStatusChangesAsync(int projectId, CancellationToken cancellationToken = default) =>
+        await _dbContext.ActivityLogs
+            .Where(x => x.ProjectId == projectId && x.IssueId != null && x.ActionType == ActivityActionType.StatusChanged)
+            .OrderBy(x => x.IssueId)
+            .ThenBy(x => x.OccurredAtUtc)
+            .ThenBy(x => x.Id)
             .ToListAsync(cancellationToken);
 
     public Task AddAsync(JiraClone.Domain.Entities.ActivityLog activityLog, CancellationToken cancellationToken = default) =>

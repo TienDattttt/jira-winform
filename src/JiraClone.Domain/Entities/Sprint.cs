@@ -13,5 +13,6 @@ public class Sprint : AggregateRoot
     public DateOnly? EndDate { get; set; }
     public SprintState State { get; set; } = SprintState.Planned;
     public DateTime? ClosedAtUtc { get; set; }
+    public bool IsDeleted { get; set; }
     public ICollection<Issue> Issues { get; set; } = new List<Issue>();
 }

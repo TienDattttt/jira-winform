@@ -55,12 +55,13 @@ public sealed class ProjectSwitcherControl : UserControl
 
     public event EventHandler<AppSession.ProjectChangedEventArgs>? ProjectChanged;
 
-    public async Task RefreshProjectsAsync()
+    public async Task RefreshProjectsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             _isBinding = true;
-            var projects = await _session.Projects.GetAccessibleProjectsAsync();
+            var projects = await _session.Projects.GetAccessibleProjectsAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             var items = projects
                 .OrderBy(project => project.Name)
                 .Select(project => new ProjectOption(project.Id, $"{project.Key} - {project.Name}"))
@@ -77,6 +78,9 @@ public sealed class ProjectSwitcherControl : UserControl
             {
                 _projectComboBox.SelectedIndex = 0;
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -136,3 +140,6 @@ public sealed class ProjectSwitcherControl : UserControl
         public override string ToString() => DisplayName;
     }
 }
+
+
+

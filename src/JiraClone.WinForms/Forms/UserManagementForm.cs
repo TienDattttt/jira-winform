@@ -179,7 +179,7 @@ public class UserManagementForm : UserControl
         return host;
     }
 
-    public Task RefreshUsersAsync() => LoadUsersAsync();
+    public Task RefreshUsersAsync(CancellationToken cancellationToken = default) => LoadUsersAsync(cancellationToken);
 
     public void SetShellSearch(string value)
     {
@@ -192,7 +192,7 @@ public class UserManagementForm : UserControl
         _searchBox.Text = target;
     }
 
-    private async Task LoadUsersAsync()
+    private async Task LoadUsersAsync(CancellationToken cancellationToken = default)
     {
         if (_isLoading || !Visible)
         {
@@ -207,15 +207,16 @@ public class UserManagementForm : UserControl
 
             await _session.RunSerializedAsync(async () =>
             {
-                project = await _session.Projects.GetActiveProjectAsync();
+                project = await _session.Projects.GetActiveProjectAsync(cancellationToken);
                 if (project is null)
                 {
                     return;
                 }
 
-                users = (await _session.UserCommands.GetAllAsync()).OrderBy(x => x.DisplayName).ToList();
-            });
+                users = (await _session.UserCommands.GetAllAsync(cancellationToken)).OrderBy(x => x.DisplayName).ToList();
+            }, cancellationToken);
 
+            cancellationToken.ThrowIfCancellationRequested();
             if (project is null)
             {
                 return;
@@ -224,6 +225,9 @@ public class UserManagementForm : UserControl
             _projectId = project.Id;
             _users = users;
             BindUsers();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -494,4 +498,5 @@ public class UserManagementForm : UserControl
         }
     }
 }
+
 

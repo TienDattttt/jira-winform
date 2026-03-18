@@ -11,9 +11,10 @@ public class SprintConfiguration : IEntityTypeConfiguration<Sprint>
     {
         builder.ToTable("Sprints");
         builder.HasIndex(x => new { x.ProjectId, x.State });
-        builder.HasIndex(x => x.ProjectId).IsUnique().HasFilter($"[{nameof(Sprint.State)}] = {(int)SprintState.Active}");
+        builder.HasIndex(x => x.ProjectId).IsUnique().HasFilter($"[{nameof(Sprint.State)}] = {(int)SprintState.Active} AND [{nameof(Sprint.IsDeleted)}] = 0");
         builder.HasIndex(x => new { x.ProjectId, x.StartDate });
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Goal).HasMaxLength(1000);
+        builder.Property(x => x.IsDeleted).HasDefaultValue(false);
     }
 }

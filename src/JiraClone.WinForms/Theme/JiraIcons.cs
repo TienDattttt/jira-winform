@@ -86,6 +86,25 @@ public static class JiraIcons
         return bitmap;
     }
 
+    public static Bitmap GetCalendarIcon(Color color, int size = 16)
+    {
+        var bitmap = new Bitmap(size, size);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        graphics.Clear(Color.Transparent);
+
+        var bounds = new Rectangle(2, 3, size - 4, size - 5);
+        var headerHeight = Math.Max(3, size / 4);
+        using var pen = new Pen(color, 1.5f);
+        using var headerBrush = new SolidBrush(Color.FromArgb(40, color));
+        graphics.FillRectangle(headerBrush, bounds.X, bounds.Y, bounds.Width, headerHeight);
+        graphics.DrawRectangle(pen, bounds);
+        graphics.DrawLine(pen, bounds.X, bounds.Y + headerHeight, bounds.Right, bounds.Y + headerHeight);
+        graphics.DrawLine(pen, bounds.X + 3, 1, bounds.X + 3, 4);
+        graphics.DrawLine(pen, bounds.Right - 3, 1, bounds.Right - 3, 4);
+        return bitmap;
+    }
+
     public static Bitmap GetPriorityIcon(IssuePriority priority, int size = 16)
     {
         var bitmap = new Bitmap(size, size);

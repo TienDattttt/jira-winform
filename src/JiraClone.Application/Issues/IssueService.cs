@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using JiraClone.Application.Abstractions;
 using JiraClone.Application.Common;
 using JiraClone.Application.Models;
@@ -62,6 +62,7 @@ public class IssueService
         }
 
         var workflowStatus = await ResolveWorkflowStatusAsync(model.ProjectId, model.WorkflowStatusId, cancellationToken);
+        var parentIssue = await ValidateParentRelationshipAsync(model.ProjectId, model.Type, model.ParentIssueId, issueId: null, cancellationToken);
         var descriptionText = MarkdownHtmlRenderer.Normalize(model.DescriptionText);
         var issue = new Issue
         {
@@ -78,24 +79,12 @@ public class IssueService
             TimeSpentHours = model.TimeSpentHours,
             TimeRemainingHours = model.TimeRemainingHours,
             StoryPoints = model.StoryPoints,
+            DueDate = model.DueDate,
             SprintId = model.SprintId,
-            ParentIssueId = model.ParentIssueId,
+            ParentIssueId = parentIssue?.Id,
+            ParentIssue = parentIssue,
             WorkflowStatus = workflowStatus
         };
-
-        if (model.ParentIssueId.HasValue)
-        {
-            var parent = await _issues.GetByIdAsync(model.ParentIssueId.Value, cancellationToken);
-            if (parent is null)
-            {
-                throw new ValidationException($"Parent issue with id {model.ParentIssueId.Value} was not found.");
-            }
-
-            if (parent.Type == IssueType.Subtask)
-            {
-                throw new ValidationException("A subtask cannot be a parent of another issue.");
-            }
-        }
 
         issue.MoveTo(workflowStatus.Id, await _issues.GetNextBoardPositionAsync(model.ProjectId, workflowStatus.Id, cancellationToken));
         issue.Assignees = await BuildAssigneesAsync(model.AssigneeIds, issue, cancellationToken);
@@ -129,7 +118,10 @@ public class IssueService
             throw new NotFoundException($"Issue with id {model.Id.Value} was not found.");
         }
 
+        var parentIssue = await ValidateParentRelationshipAsync(issue.ProjectId, model.Type, model.ParentIssueId, issue.Id, cancellationToken);
         var originalStatusId = issue.WorkflowStatusId;
+        var previousTitle = issue.Title;
+        var previousDueDate = issue.DueDate;
         var descriptionText = MarkdownHtmlRenderer.Normalize(model.DescriptionText);
         issue.Title = model.Title.Trim();
         issue.DescriptionText = descriptionText;
@@ -141,10 +133,17 @@ public class IssueService
         issue.TimeSpentHours = model.TimeSpentHours;
         issue.TimeRemainingHours = model.TimeRemainingHours;
         issue.StoryPoints = model.StoryPoints;
+        issue.DueDate = model.DueDate;
         issue.SprintId = model.SprintId;
-        issue.ParentIssueId = model.ParentIssueId;
+        issue.ParentIssueId = parentIssue?.Id;
+        issue.ParentIssue = parentIssue;
         issue.Assignees.Clear();
         issue.Assignees = await BuildAssigneesAsync(model.AssigneeIds, issue, cancellationToken);
+
+        if (previousDueDate != model.DueDate)
+        {
+            await AddDueDateActivityAsync(issue, previousDueDate, model.DueDate, model.CreatedById, cancellationToken);
+        }
 
         var requestedStatus = await ResolveWorkflowStatusAsync(issue.ProjectId, model.WorkflowStatusId ?? issue.WorkflowStatusId, cancellationToken);
         if (requestedStatus.Id != originalStatusId)
@@ -160,7 +159,7 @@ public class IssueService
                 IssueId = issue.Id,
                 UserId = model.CreatedById,
                 ActionType = ActivityActionType.Updated,
-                OldValue = issue.Title,
+                OldValue = previousTitle,
                 NewValue = issue.Title
             }, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -176,6 +175,73 @@ public class IssueService
     {
         var result = await _workflowService.ExecuteTransitionAsync(issueId, targetStatusId, userId, boardPosition, cancellationToken);
         return result.Succeeded;
+    }
+
+    public async Task<Issue?> UpdateDueDateAsync(int issueId, DateOnly? dueDate, int userId, CancellationToken cancellationToken = default)
+    {
+        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
+
+        var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
+        if (issue is null)
+        {
+            return null;
+        }
+
+        if (issue.DueDate == dueDate)
+        {
+            return issue;
+        }
+
+        var previousDueDate = issue.DueDate;
+        issue.DueDate = dueDate;
+        issue.UpdatedAtUtc = DateTime.UtcNow;
+
+        await AddDueDateActivityAsync(issue, previousDueDate, dueDate, userId, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Updated due date for issue {IssueId} from {PreviousDueDate} to {NextDueDate}.",
+            issueId,
+            previousDueDate,
+            dueDate);
+
+        return issue;
+    }
+
+    public async Task<Issue?> UpdateParentAsync(int issueId, int? parentIssueId, int userId, CancellationToken cancellationToken = default)
+    {
+        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
+
+        var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
+        if (issue is null)
+        {
+            return null;
+        }
+
+        if (issue.ParentIssueId == parentIssueId)
+        {
+            return issue;
+        }
+
+        var previousParent = issue.ParentIssue;
+        var nextParent = await ValidateParentRelationshipAsync(issue.ProjectId, issue.Type, parentIssueId, issue.Id, cancellationToken);
+        issue.ParentIssueId = nextParent?.Id;
+        issue.ParentIssue = nextParent;
+        issue.UpdatedAtUtc = DateTime.UtcNow;
+
+        await _activityLogs.AddAsync(new ActivityLogEntity
+        {
+            ProjectId = issue.ProjectId,
+            IssueId = issue.Id,
+            UserId = userId,
+            ActionType = ActivityActionType.Updated,
+            FieldName = issue.Type == IssueType.Subtask ? "Parent" : "Epic link",
+            OldValue = previousParent?.IssueKey,
+            NewValue = nextParent?.IssueKey ?? "Cleared"
+        }, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return issue;
     }
 
     public async Task<IssueDetailsDto?> GetDetailsAsync(int issueId, CancellationToken cancellationToken = default)
@@ -268,6 +334,52 @@ public class IssueService
         return defaultStatus ?? throw new ValidationException("The project workflow does not contain any statuses.");
     }
 
+    private async Task<Issue?> ValidateParentRelationshipAsync(int projectId, IssueType childType, int? parentIssueId, int? issueId, CancellationToken cancellationToken)
+    {
+        if (!parentIssueId.HasValue)
+        {
+            return null;
+        }
+
+        if (issueId.HasValue && parentIssueId.Value == issueId.Value)
+        {
+            throw new ValidationException("An issue cannot be linked to itself.");
+        }
+
+        var parent = await _issues.GetByIdAsync(parentIssueId.Value, cancellationToken);
+        if (parent is null)
+        {
+            throw new ValidationException($"Parent issue with id {parentIssueId.Value} was not found.");
+        }
+
+        if (parent.ProjectId != projectId)
+        {
+            throw new ValidationException("The selected parent issue belongs to a different project.");
+        }
+
+        if (childType == IssueType.Subtask)
+        {
+            if (parent.Type is IssueType.Subtask or IssueType.Epic)
+            {
+                throw new ValidationException("Subtasks can only be created under stories, tasks, or bugs.");
+            }
+
+            return parent;
+        }
+
+        if (childType is IssueType.Story or IssueType.Task)
+        {
+            if (parent.Type != IssueType.Epic)
+            {
+                throw new ValidationException("Only epics can be selected for Epic Link.");
+            }
+
+            return parent;
+        }
+
+        throw new ValidationException($"{childType} cannot be linked to a parent issue.");
+    }
+
     private async Task<ICollection<IssueAssignee>> BuildAssigneesAsync(IEnumerable<int> assigneeIds, Issue issue, CancellationToken cancellationToken)
     {
         var result = new List<IssueAssignee>();
@@ -290,9 +402,23 @@ public class IssueService
 
         return result;
     }
+
+    private async Task AddDueDateActivityAsync(Issue issue, DateOnly? previousDueDate, DateOnly? nextDueDate, int userId, CancellationToken cancellationToken)
+    {
+        await _activityLogs.AddAsync(new ActivityLogEntity
+        {
+            ProjectId = issue.ProjectId,
+            IssueId = issue.Id,
+            UserId = userId,
+            ActionType = ActivityActionType.Updated,
+            FieldName = "Due date",
+            OldValue = FormatDueDateActivity(previousDueDate),
+            NewValue = nextDueDate.HasValue
+                ? $"Due date set to {nextDueDate.Value:yyyy-MM-dd}"
+                : "Due date cleared"
+        }, cancellationToken);
+    }
+
+    private static string? FormatDueDateActivity(DateOnly? dueDate) =>
+        dueDate.HasValue ? dueDate.Value.ToString("yyyy-MM-dd") : null;
 }
-
-
-
-
-

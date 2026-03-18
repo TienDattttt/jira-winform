@@ -22,7 +22,7 @@ public class SprintConfigurationTests
             x.Properties.Count == 1 &&
             x.Properties[0].Name == nameof(Sprint.ProjectId) &&
             x.IsUnique &&
-            x.GetFilter() == "[State] = 2");
+            x.GetFilter() == "[State] = 2 AND [IsDeleted] = 0");
 
         // Assert
         Assert.NotNull(activeIndex);

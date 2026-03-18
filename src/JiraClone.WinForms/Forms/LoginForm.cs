@@ -20,6 +20,7 @@ public class LoginForm : Form
     private Point _dragOrigin;
     private Point _formOrigin;
     private bool _dragging;
+    private readonly HashSet<Control> _draggableControls = [];
 
     public LoginForm(AppSession session)
     {
@@ -229,22 +230,46 @@ public class LoginForm : Form
 
     private void WireDragging(Control control)
     {
+        if (!_draggableControls.Add(control))
+        {
+            return;
+        }
+
         control.MouseDown += StartDrag;
         control.MouseMove += DragWindow;
         control.MouseUp += StopDrag;
+        control.ControlAdded += HandleDragControlAdded;
 
         foreach (Control child in control.Controls)
         {
             WireDragging(child);
         }
+    }
 
-        control.ControlAdded += (_, args) =>
+    private void UnwireDragging(Control control)
+    {
+        if (!_draggableControls.Remove(control))
         {
-            if (args.Control is not null)
-            {
-                WireDragging(args.Control);
-            }
-        };
+            return;
+        }
+
+        control.MouseDown -= StartDrag;
+        control.MouseMove -= DragWindow;
+        control.MouseUp -= StopDrag;
+        control.ControlAdded -= HandleDragControlAdded;
+
+        foreach (Control child in control.Controls)
+        {
+            UnwireDragging(child);
+        }
+    }
+
+    private void HandleDragControlAdded(object? sender, ControlEventArgs e)
+    {
+        if (e.Control is not null)
+        {
+            WireDragging(e.Control);
+        }
     }
 
     private void StartDrag(object? sender, MouseEventArgs e)
@@ -330,6 +355,16 @@ public class LoginForm : Form
         _errorLabel.Text = string.Empty;
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            UnwireDragging(_cardPanel);
+        }
+
+        base.Dispose(disposing);
+    }
+
     private sealed class LogoControl : Control
     {
         private static readonly Font LogoFont = new("Segoe UI", 22f, FontStyle.Bold);
@@ -400,6 +435,8 @@ public class LoginForm : Form
 
     }
 }
+
+
 
 
 

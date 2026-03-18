@@ -10,4 +10,5 @@ public sealed record BoardColumnDto(
     StatusCategory Category,
     int DisplayOrder,
     int? WipLimit,
-    IReadOnlyList<IssueSummaryDto> Issues);
+    IReadOnlyList<IssueSummaryDto> Issues,
+    int TotalIssueCount);

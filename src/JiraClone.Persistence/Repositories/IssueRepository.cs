@@ -24,6 +24,7 @@ public class IssueRepository : IIssueRepository
             .Include(x => x.Assignees)
             .ThenInclude(x => x.User)
             .Include(x => x.ParentIssue)
+            .ThenInclude(x => x!.ParentIssue)
             .Include(x => x.WorkflowStatus)
             .Where(x => x.ProjectId == projectId && !x.IsDeleted);
 
@@ -43,6 +44,19 @@ public class IssueRepository : IIssueRepository
             .Where(x => x.ProjectId == projectId && !x.IsDeleted)
             .OrderBy(x => x.WorkflowStatus.DisplayOrder)
             .ThenBy(x => x.Title)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Issue>> GetAllByProjectIdAsync(int projectId, CancellationToken cancellationToken = default) =>
+        await _dbContext.Issues
+            .AsSplitQuery()
+            .Include(x => x.Comments)
+            .Include(x => x.Attachments)
+            .Include(x => x.Assignees)
+            .Include(x => x.IssueLabels)
+            .Include(x => x.IssueComponents)
+            .Include(x => x.ActivityLogs)
+            .Where(x => x.ProjectId == projectId)
+            .OrderBy(x => x.Id)
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<Issue>> ExecuteQueryAsync(int projectId, Func<IQueryable<Issue>, IQueryable<Issue>> queryShaper, CancellationToken cancellationToken = default)
@@ -68,6 +82,7 @@ public class IssueRepository : IIssueRepository
             .ThenInclude(x => x.User)
             .Include(x => x.Attachments)
             .Include(x => x.ParentIssue)
+            .ThenInclude(x => x!.ParentIssue)
             .Include(x => x.FixVersion)
             .Include(x => x.WorkflowStatus)
             .ThenInclude(x => x.WorkflowDefinition)
@@ -142,16 +157,14 @@ public class IssueRepository : IIssueRepository
     public async Task<IReadOnlyList<Issue>> GetPotentialParentsAsync(int projectId, IssueType childType, CancellationToken cancellationToken = default)
     {
         var query = _dbContext.Issues
-            .Where(x => x.ProjectId == projectId && !x.IsDeleted && x.Type != IssueType.Subtask);
+            .Where(x => x.ProjectId == projectId && !x.IsDeleted);
 
-        if (childType == IssueType.Subtask)
+        query = childType switch
         {
-            query = query.Where(x => x.Type != IssueType.Subtask);
-        }
-        else
-        {
-            query = query.Where(x => x.Type == IssueType.Epic);
-        }
+            IssueType.Subtask => query.Where(x => x.Type != IssueType.Subtask && x.Type != IssueType.Epic),
+            IssueType.Story or IssueType.Task => query.Where(x => x.Type == IssueType.Epic),
+            _ => query.Where(_ => false)
+        };
 
         return await query
             .Include(x => x.WorkflowStatus)
@@ -175,4 +188,3 @@ public class IssueRepository : IIssueRepository
             .ThenInclude(x => x.Component);
     }
 }
-

@@ -17,6 +17,7 @@ public class ProjectSettingsForm : UserControl
     private readonly TextBox _name = JiraControlFactory.CreateTextBox();
     private readonly TextBox _description = JiraControlFactory.CreateTextBox();
     private readonly ComboBox _category = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody };
+    private readonly ComboBox _boardType = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody };
     private readonly TextBox _url = JiraControlFactory.CreateTextBox();
     private readonly ListView _members = CreateListView();
     private readonly ListView _columns = CreateListView();
@@ -25,7 +26,9 @@ public class ProjectSettingsForm : UserControl
     private readonly ListView _versions = CreateListView();
     private readonly WorkflowSettingsControl _workflowSettings;
     private readonly Button _saveProject = JiraControlFactory.CreatePrimaryButton("Save Project");
+    private readonly Button _saveBoardSettings = JiraControlFactory.CreateSecondaryButton("Save Board");
     private readonly Button _archiveProject = JiraControlFactory.CreateSecondaryButton("Archive Project");
+    private readonly Button _deleteProject = JiraControlFactory.CreateSecondaryButton("Delete Project");
     private readonly Button _addMember = JiraControlFactory.CreateSecondaryButton("Add Member");
     private readonly Button _changeMemberRole = JiraControlFactory.CreateSecondaryButton("Change Role");
     private readonly Button _removeMember = JiraControlFactory.CreateSecondaryButton("Remove Member");
@@ -65,10 +68,12 @@ public class ProjectSettingsForm : UserControl
         _name.MinimumSize = new Size(360, 38);
         _url.MinimumSize = new Size(360, 38);
         _category.MinimumSize = new Size(360, 38);
+        _boardType.MinimumSize = new Size(260, 38);
         _description.Multiline = true;
         _description.Height = 96;
         _description.ScrollBars = ScrollBars.Vertical;
         _category.DataSource = Enum.GetValues<ProjectCategory>();
+        _boardType.DataSource = Enum.GetValues<BoardType>();
 
         ConfigureListViews();
         WireActions();
@@ -95,7 +100,7 @@ public class ProjectSettingsForm : UserControl
     private JiraComponentEntity? SelectedProjectComponent => _components.SelectedItems.Count == 0 ? null : _components.SelectedItems[0].Tag as JiraComponentEntity;
     private JiraProjectVersionEntity? SelectedProjectVersion => _versions.SelectedItems.Count == 0 ? null : _versions.SelectedItems[0].Tag as JiraProjectVersionEntity;
 
-    public Task RefreshProjectAsync() => LoadProjectAsync();
+    public Task RefreshProjectAsync(CancellationToken cancellationToken = default) => LoadProjectAsync(cancellationToken);
 
     public void SetShellSearch(string value)
     {
@@ -147,6 +152,7 @@ public class ProjectSettingsForm : UserControl
     private void WireActions()
     {
         _saveProject.Click += async (_, _) => await SaveProjectAsync();
+        _saveBoardSettings.Click += async (_, _) => await SaveProjectAsync();
         _addMember.Click += async (_, _) => await AddMemberAsync();
         _changeMemberRole.Click += async (_, _) => await ChangeMemberRoleAsync();
         _removeMember.Click += async (_, _) => await RemoveMemberAsync();
@@ -162,13 +168,17 @@ public class ProjectSettingsForm : UserControl
         _deleteVersion.Click += async (_, _) => await DeleteVersionAsync();
         _markVersionReleased.Click += async (_, _) => await MarkVersionReleasedAsync();
         _archiveProject.Click += async (_, _) => await ArchiveProjectAsync();
+        _deleteProject.Click += async (_, _) => await DeleteProjectAsync();
     }
 
     private void ConfigureActionButtons()
     {
         ConfigureActionButton(_saveProject, 118);
+        ConfigureActionButton(_saveBoardSettings, 110);
         ConfigureActionButton(_archiveProject, 138);
         StyleDangerButton(_archiveProject);
+        ConfigureActionButton(_deleteProject, 132);
+        StyleDangerButton(_deleteProject);
         ConfigureActionButton(_addMember, 116);
         ConfigureActionButton(_changeMemberRole, 116);
         ConfigureActionButton(_removeMember, 126);
@@ -226,6 +236,7 @@ public class ProjectSettingsForm : UserControl
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, BackColor = JiraTheme.BgSurface, Margin = new Padding(0) };
         actions.Controls.Add(_saveProject);
         actions.Controls.Add(_archiveProject);
+        actions.Controls.Add(_deleteProject);
         layout.Controls.Add(actions, 1, 4);
         page.Controls.Add(WrapSurface(layout));
         return page;
@@ -241,10 +252,57 @@ public class ProjectSettingsForm : UserControl
 
     private TabPage BuildColumnsTab()
     {
-        var page = CreatePage("Board Columns");
-        var actions = CreateActionBar(_editColumn);
-        page.Controls.Add(WrapSurface(BuildListSurface(_columns, _columnsEmptyState, actions)));
+        var page = CreatePage("Board");
+        var content = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
+        content.Controls.Add(BuildBoardColumnsSection());
+        content.Controls.Add(BuildBoardSettingsSection());
+        page.Controls.Add(WrapSurface(content));
         return page;
+    }
+
+    private Control BuildBoardSettingsSection()
+    {
+        var section = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 134,
+            Padding = new Padding(24, 20, 24, 12),
+            BackColor = JiraTheme.BgSurface,
+        };
+
+        var title = JiraControlFactory.CreateLabel("Board Mode");
+        title.Font = JiraTheme.FontH2;
+        title.Location = new Point(0, 0);
+
+        var caption = JiraControlFactory.CreateLabel("Switch this project between Scrum and Kanban. WIP limits remain configured per workflow column.", true);
+        caption.AutoSize = false;
+        caption.Size = new Size(680, 34);
+        caption.Location = new Point(0, 28);
+
+        var row = new FlowLayoutPanel
+        {
+            Location = new Point(0, 74),
+            AutoSize = true,
+            WrapContents = false,
+            BackColor = JiraTheme.BgSurface,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+        };
+        row.Controls.Add(_boardType);
+        row.Controls.Add(_saveBoardSettings);
+
+        section.Controls.Add(title);
+        section.Controls.Add(caption);
+        section.Controls.Add(row);
+        return section;
+    }
+
+    private Control BuildBoardColumnsSection()
+    {
+        var actions = CreateActionBar(_editColumn);
+        var section = BuildListSurface(_columns, _columnsEmptyState, actions);
+        section.Dock = DockStyle.Fill;
+        return section;
     }
 
     private TabPage BuildWorkflowTab()
@@ -309,7 +367,7 @@ public class ProjectSettingsForm : UserControl
         return host;
     }
 
-    private async Task LoadProjectAsync()
+    private async Task LoadProjectAsync(CancellationToken cancellationToken = default)
     {
         if (_isLoading || !Visible)
         {
@@ -319,7 +377,8 @@ public class ProjectSettingsForm : UserControl
         try
         {
             _isLoading = true;
-            _project = await _session.RunSerializedAsync(() => _session.Projects.GetActiveProjectAsync());
+            _project = await _session.RunSerializedAsync(() => _session.Projects.GetActiveProjectAsync(cancellationToken), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             if (_project is null)
             {
                 return;
@@ -328,6 +387,7 @@ public class ProjectSettingsForm : UserControl
             _name.Text = _project.Name;
             _description.Text = _project.Description;
             _category.SelectedItem = _project.Category;
+            _boardType.SelectedItem = _project.BoardType;
             _url.Text = _project.Url;
             _memberCountBadge.Text = _project.Members.Count == 1 ? "1 member" : $"{_project.Members.Count} members";
             _columnCountBadge.Text = _project.BoardColumns.Count == 1 ? "1 column" : $"{_project.BoardColumns.Count} columns";
@@ -337,6 +397,9 @@ public class ProjectSettingsForm : UserControl
             BindProjectLists();
             UpdateActionState();
             await _workflowSettings.RefreshAsync();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -537,7 +600,7 @@ public class ProjectSettingsForm : UserControl
         if (_project is null) return;
         try
         {
-            await _session.ProjectCommands.UpdateProjectAsync(_project.Id, _name.Text, _description.Text, (ProjectCategory)_category.SelectedItem!, _url.Text);
+            await _session.ProjectCommands.UpdateProjectAsync(_project.Id, _name.Text, _description.Text, (ProjectCategory)_category.SelectedItem!, (BoardType)_boardType.SelectedItem!, _url.Text);
             await LoadProjectAsync();
         }
         catch (Exception exception)
@@ -557,6 +620,38 @@ public class ProjectSettingsForm : UserControl
             {
                 ErrorDialogService.Show("The project could not be archived.");
                 return;
+            }
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+
+    private async Task DeleteProjectAsync()
+    {
+        if (_project is null)
+        {
+            return;
+        }
+
+        if (MessageBox.Show(this, $"Delete project '{_project.Name}'? This permanently removes the project and all of its related records after cascade cleanup.", "Delete Project", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            using var dialog = new DeleteProjectDialog(_project.Name, _project.Key);
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            var deleted = await _session.ProjectCommands.DeleteProjectAsync(_project.Id);
+            if (!deleted)
+            {
+                ErrorDialogService.Show("The project could not be deleted.");
             }
         }
         catch (Exception exception)
@@ -853,8 +948,14 @@ public class ProjectSettingsForm : UserControl
         var canManage = _session.Authorization.IsInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var hasProject = _project is not null;
 
+        var isAdmin = _session.Authorization.IsInRole(RoleCatalog.Admin);
+
         _saveProject.Enabled = canManage && hasProject;
-        _archiveProject.Enabled = _session.Authorization.IsInRole(RoleCatalog.Admin) && hasProject;
+        _archiveProject.Enabled = isAdmin && hasProject;
+        _archiveProject.Visible = isAdmin;
+        _saveBoardSettings.Enabled = canManage && hasProject;
+        _deleteProject.Enabled = isAdmin && hasProject;
+        _deleteProject.Visible = isAdmin;
         _addMember.Enabled = canManage && hasProject;
         _changeMemberRole.Enabled = canManage && SelectedMember is not null;
         _removeMember.Enabled = canManage && SelectedMember is not null;
@@ -872,6 +973,85 @@ public class ProjectSettingsForm : UserControl
         _editVersion.Enabled = canManage && SelectedProjectVersion is not null;
         _deleteVersion.Enabled = canManage && SelectedProjectVersion is not null;
         _markVersionReleased.Enabled = canManage && SelectedProjectVersion is { IsReleased: false };
+    }
+
+    private sealed class DeleteProjectDialog : Form
+    {
+        private readonly string _expectedProjectKey;
+        private readonly TextBox _confirmationInput = JiraControlFactory.CreateTextBox();
+        private readonly Button _deleteButton = JiraControlFactory.CreateSecondaryButton("Delete Project");
+
+        public DeleteProjectDialog(string projectName, string projectKey)
+        {
+            _expectedProjectKey = projectKey;
+            Text = "Delete Project";
+            AutoScaleMode = AutoScaleMode.Font;
+            Width = 460;
+            Height = 250;
+            MinimumSize = new Size(460, 250);
+            StartPosition = FormStartPosition.CenterParent;
+            BackColor = JiraTheme.BgSurface;
+            Font = JiraTheme.FontBody;
+
+            var title = JiraControlFactory.CreateLabel($"Type {projectKey} to confirm deleting {projectName}.");
+            title.MaximumSize = new Size(380, 0);
+            title.AutoSize = true;
+
+            var caption = JiraControlFactory.CreateLabel("This action permanently deletes the project, its issues, comments, sprints, and related configuration.", true);
+            caption.MaximumSize = new Size(380, 0);
+            caption.AutoSize = true;
+
+            _confirmationInput.Width = 320;
+            _confirmationInput.CharacterCasing = CharacterCasing.Upper;
+            _confirmationInput.TextChanged += (_, _) => UpdateDeleteState();
+
+            var cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
+            cancelButton.Click += (_, _) =>
+            {
+                DialogResult = DialogResult.Cancel;
+                Close();
+            };
+
+            StyleDangerButton(_deleteButton);
+            _deleteButton.Enabled = false;
+            _deleteButton.Click += (_, _) =>
+            {
+                DialogResult = DialogResult.OK;
+                Close();
+            };
+
+            var buttons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 56,
+                FlowDirection = FlowDirection.RightToLeft,
+                Padding = new Padding(12),
+                BackColor = JiraTheme.BgSurface,
+            };
+            buttons.Controls.Add(_deleteButton);
+            buttons.Controls.Add(cancelButton);
+
+            var layout = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding = new Padding(16),
+                BackColor = JiraTheme.BgSurface,
+            };
+            layout.Controls.Add(title);
+            layout.Controls.Add(caption);
+            layout.Controls.Add(JiraControlFactory.CreateLabel("Project key", true));
+            layout.Controls.Add(_confirmationInput);
+
+            Controls.Add(layout);
+            Controls.Add(buttons);
+        }
+
+        private void UpdateDeleteState()
+        {
+            _deleteButton.Enabled = string.Equals(_confirmationInput.Text.Trim(), _expectedProjectKey, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private sealed class MemberDialog : Form
@@ -1170,6 +1350,17 @@ public class ProjectSettingsForm : UserControl
         public bool IsReleased => _released.Checked;
     }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-using JiraClone.Application.Models;
+﻿using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
@@ -15,6 +15,8 @@ public class IssueEditorForm : Form
     private readonly int _projectId;
     private readonly int? _issueId;
     private readonly int? _defaultStatusId;
+    private readonly int? _preselectedParentIssueId;
+    private readonly IssueType? _preferredType;
     private readonly ILogger<IssueEditorForm> _logger;
     private readonly TextBox _titleTextBox = JiraControlFactory.CreateTextBox();
     private readonly TextBox _descriptionTextBox = JiraControlFactory.CreateTextBox();
@@ -33,18 +35,30 @@ public class IssueEditorForm : Form
         IntegralHeight = false,
     };
     private readonly SprintSelectorControl _sprintSelector = new() { Dock = DockStyle.Fill, MinimumSize = new Size(0, 38) };
+    private readonly DateTimePicker _dueDatePicker = new() { Format = DateTimePickerFormat.Short, Width = 180, CalendarForeColor = JiraTheme.TextPrimary, CalendarMonthBackground = JiraTheme.BgSurface };
+    private readonly CheckBox _noDueDateCheckBox = new() { Text = "No due date", AutoSize = true, ForeColor = JiraTheme.TextPrimary, BackColor = JiraTheme.BgSurface, Font = JiraTheme.FontBody };
     private readonly ComboBox _parentComboBox = CreateCombo();
+    private readonly Panel _dueDateRow;
     private readonly Panel _parentRow;
+    private Label _parentLabel = null!;
     private readonly Button _saveButton = JiraControlFactory.CreatePrimaryButton("Save issue");
     private readonly Button _cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
     private IReadOnlyList<WorkflowStatusOptionDto> _workflowStatuses = Array.Empty<WorkflowStatusOptionDto>();
 
-    public IssueEditorForm(AppSession session, int projectId, int? issueId, int? defaultStatusId = null)
+    public IssueEditorForm(
+        AppSession session,
+        int projectId,
+        int? issueId,
+        int? defaultStatusId = null,
+        int? preselectedParentIssueId = null,
+        IssueType? preferredType = null)
     {
         _session = session;
         _projectId = projectId;
         _issueId = issueId;
         _defaultStatusId = defaultStatusId;
+        _preselectedParentIssueId = preselectedParentIssueId;
+        _preferredType = preferredType;
         _logger = session.CreateLogger<IssueEditorForm>();
 
         Text = issueId.HasValue ? "Edit Issue" : "Create Issue";
@@ -79,13 +93,18 @@ public class IssueEditorForm : Form
             Close();
         };
 
+        _dueDateRow = BuildDueDateRow();
+        _noDueDateCheckBox.Checked = true;
+        _noDueDateCheckBox.CheckedChanged += (_, _) => ToggleDueDateInput();
+        ToggleDueDateInput();
+
         _parentComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
         _parentRow = WrapControl(_parentComboBox, 44);
         _parentRow.Visible = false;
 
-        _typeComboBox.SelectedIndexChanged += async (_, _) => await RefreshParentListAsync();
-
         Controls.Add(BuildLayout());
+        SetParentFieldState(false, "Parent");
+        _typeComboBox.SelectedIndexChanged += async (_, _) => await RefreshParentListAsync();
         Shown += async (_, _) => await LoadDataAsync();
     }
 
@@ -136,14 +155,48 @@ public class IssueEditorForm : Form
         AddRow(formLayout, 4, "Priority", WrapControl(_priorityComboBox, 44));
         AddRow(formLayout, 5, "Reporter", WrapControl(_reporterComboBox, 44));
         AddRow(formLayout, 6, "Sprint", WrapControl(_sprintSelector, 44));
-        AddRow(formLayout, 7, "Parent", _parentRow);
-        AddRow(formLayout, 8, "Assignees", WrapControl(_assigneesList, 148));
+        AddRow(formLayout, 7, "Due date", _dueDateRow);
+        _parentLabel = AddRow(formLayout, 8, "Parent", _parentRow);
+        AddRow(formLayout, 9, "Assignees", WrapControl(_assigneesList, 148));
 
         host.Controls.Add(formLayout);
         host.Controls.Add(footer);
         host.Controls.Add(subtitle);
         host.Controls.Add(title);
         return host;
+    }
+
+    private Panel BuildDueDateRow()
+    {
+        var panel = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 44,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(0, 0, 0, 8)
+        };
+
+        var pickerHost = new Panel
+        {
+            Dock = DockStyle.Left,
+            Width = 188,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(0)
+        };
+        _dueDatePicker.Dock = DockStyle.Fill;
+        pickerHost.Controls.Add(_dueDatePicker);
+
+        _noDueDateCheckBox.Dock = DockStyle.Fill;
+        _noDueDateCheckBox.Margin = new Padding(12, 8, 0, 0);
+
+        panel.Controls.Add(_noDueDateCheckBox);
+        panel.Controls.Add(pickerHost);
+        return panel;
+    }
+
+    private void ToggleDueDateInput()
+    {
+        _dueDatePicker.Enabled = !_noDueDateCheckBox.Checked;
     }
 
     private static Panel WrapControl(Control control, int height)
@@ -172,7 +225,7 @@ public class IssueEditorForm : Form
         MinimumSize = new Size(0, 38),
     };
 
-    private static void AddRow(TableLayoutPanel layout, int row, string label, Control control)
+    private static Label AddRow(TableLayoutPanel layout, int row, string label, Control control)
     {
         layout.RowCount = row + 1;
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -185,6 +238,7 @@ public class IssueEditorForm : Form
 
         layout.Controls.Add(labelControl, 0, row);
         layout.Controls.Add(control, 1, row);
+        return labelControl;
     }
 
     private async Task LoadDataAsync()
@@ -211,6 +265,11 @@ public class IssueEditorForm : Form
 
             if (_issueId is null)
             {
+                if (_preferredType.HasValue)
+                {
+                    _typeComboBox.SelectedItem = _preferredType.Value;
+                }
+
                 if (_defaultStatusId.HasValue)
                 {
                     _statusComboBox.SelectedValue = _defaultStatusId.Value;
@@ -220,6 +279,7 @@ public class IssueEditorForm : Form
                     _statusComboBox.SelectedIndex = 0;
                 }
 
+                await RefreshParentListAsync();
                 return;
             }
 
@@ -240,6 +300,17 @@ public class IssueEditorForm : Form
             if (details.Issue.SprintId.HasValue)
             {
                 _sprintSelector.SelectedValue = details.Issue.SprintId.Value;
+            }
+
+            if (details.Issue.DueDate.HasValue)
+            {
+                _noDueDateCheckBox.Checked = false;
+                _dueDatePicker.Value = details.Issue.DueDate.Value.ToDateTime(TimeOnly.MinValue);
+            }
+            else
+            {
+                _noDueDateCheckBox.Checked = true;
+                _dueDatePicker.Value = DateTime.Today;
             }
 
             for (var index = 0; index < _assigneesList.Items.Count; index++)
@@ -281,8 +352,9 @@ public class IssueEditorForm : Form
                 Priority = (IssuePriority)_priorityComboBox.SelectedItem!,
                 ReporterId = _reporterComboBox.SelectedValue is int reporterId ? reporterId : 1,
                 CreatedById = currentUserId,
+                DueDate = _noDueDateCheckBox.Checked ? null : DateOnly.FromDateTime(_dueDatePicker.Value.Date),
                 SprintId = _sprintSelector.SelectedValue is int sprintId ? sprintId : null,
-                ParentIssueId = _parentComboBox.Visible && _parentComboBox.SelectedValue is int parentId && parentId > 0 ? parentId : null,
+                ParentIssueId = _parentRow.Visible && _parentComboBox.SelectedValue is int parentId && parentId > 0 ? parentId : null,
                 AssigneeIds = _assigneesList.CheckedItems.Cast<User>().Select(x => x.Id).ToArray()
             };
 
@@ -310,45 +382,62 @@ public class IssueEditorForm : Form
         {
             if (_typeComboBox.SelectedItem is not IssueType selectedType)
             {
-                _parentRow.Visible = false;
+                SetParentFieldState(false, "Parent");
                 return;
             }
 
-            if (selectedType == IssueType.Epic)
+            List<Issue> potentialParents;
+            var labelText = "Parent";
+
+            switch (selectedType)
             {
-                _parentRow.Visible = false;
-                _parentComboBox.DataSource = null;
-                return;
+                case IssueType.Subtask:
+                    potentialParents = (await _session.Issues.GetPotentialParentsAsync(_projectId, selectedType)).ToList();
+                    labelText = "Parent";
+                    break;
+                case IssueType.Story:
+                case IssueType.Task:
+                    potentialParents = (await _session.Issues.GetPotentialParentsAsync(_projectId, selectedType)).ToList();
+                    labelText = "Epic Link";
+                    break;
+                default:
+                    SetParentFieldState(false, "Parent");
+                    return;
             }
 
-            var potentialParents = await _session.Issues.GetPotentialParentsAsync(_projectId, selectedType);
-            if (potentialParents.Count == 0 && selectedType != IssueType.Subtask)
-            {
-                _parentRow.Visible = false;
-                _parentComboBox.DataSource = null;
-                return;
-            }
+            var items = potentialParents
+                .Select(p => new { p.Id, Display = $"{p.IssueKey} - {p.Title}" })
+                .ToList();
 
-            var items = potentialParents.Select(p => new { p.Id, Display = $"{p.IssueKey} - {p.Title}" }).ToList();
-
-            if (selectedType != IssueType.Subtask)
-            {
-                items.Insert(0, new { Id = 0, Display = "(None)" });
-            }
-
+            items.Insert(0, new { Id = 0, Display = selectedType == IssueType.Subtask ? "(Select parent)" : "(No epic)" });
+            var selectedParentId = _parentComboBox.SelectedValue is int currentParentId ? currentParentId : 0;
             _parentComboBox.DataSource = items;
             _parentComboBox.DisplayMember = "Display";
             _parentComboBox.ValueMember = "Id";
-            _parentRow.Visible = true;
+            SetParentFieldState(true, labelText);
+
+            var desiredParentId = _issueId is null && _preselectedParentIssueId.HasValue
+                ? _preselectedParentIssueId.Value
+                : selectedParentId;
+            _parentComboBox.SelectedValue = items.Any(item => item.Id == desiredParentId) ? desiredParentId : 0;
         }
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Failed to load potential parent issues.");
-            _parentRow.Visible = false;
+            SetParentFieldState(false, "Parent");
+        }
+    }
+
+    private void SetParentFieldState(bool visible, string label)
+    {
+        _parentLabel.Text = label;
+        _parentLabel.Visible = visible;
+        _parentRow.Visible = visible;
+        if (!visible)
+        {
+            _parentComboBox.DataSource = null;
         }
     }
 }
-
-
 
 

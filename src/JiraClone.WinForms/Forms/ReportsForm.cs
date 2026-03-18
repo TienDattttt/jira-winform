@@ -81,7 +81,7 @@ public class ReportsForm : UserControl
         UpdateToolbarState();
     }
 
-    public Task RefreshReportsAsync() => LoadReportsAsync();
+    public Task RefreshReportsAsync(CancellationToken cancellationToken = default) => LoadReportsAsync(cancellationToken);
 
     public void SetShellSearch(string value)
     {
@@ -242,7 +242,7 @@ public class ReportsForm : UserControl
         return host;
     }
 
-    private async Task LoadReportsAsync()
+    private async Task LoadReportsAsync(CancellationToken cancellationToken = default)
     {
         if (_isLoading || !Visible)
         {
@@ -260,18 +260,19 @@ public class ReportsForm : UserControl
 
             await _session.RunSerializedAsync(async () =>
             {
-                project = await _session.Projects.GetActiveProjectAsync();
+                project = await _session.Projects.GetActiveProjectAsync(cancellationToken);
                 if (project is null)
                 {
                     return;
                 }
 
-                sprints = (await _session.Sprints.GetByProjectAsync(project.Id))
+                sprints = (await _session.Sprints.GetByProjectAsync(project.Id, cancellationToken))
                     .OrderByDescending(GetSprintSortDate)
                     .ToList();
-                velocityData = await _session.Sprints.GetVelocityDataAsync(project.Id, 6);
-            });
+                velocityData = await _session.Sprints.GetVelocityDataAsync(project.Id, 6, cancellationToken);
+            }, cancellationToken);
 
+            cancellationToken.ThrowIfCancellationRequested();
             _project = project;
             _allSprints = sprints;
             _velocityData = velocityData;
@@ -284,7 +285,8 @@ public class ReportsForm : UserControl
 
             if (SelectedSprintId.HasValue)
             {
-                _burndownData = await _session.Sprints.GetBurndownDataAsync(SelectedSprintId.Value);
+                _burndownData = await _session.Sprints.GetBurndownDataAsync(SelectedSprintId.Value, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 ApplyBurndownData(_burndownData);
             }
             else
@@ -292,6 +294,9 @@ public class ReportsForm : UserControl
                 _burndownData = null;
                 ApplyBurndownData(null);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -895,3 +900,4 @@ public class ReportsForm : UserControl
     private static string TrimLabel(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..Math.Max(1, maxLength - 3)] + "...";
 }
+

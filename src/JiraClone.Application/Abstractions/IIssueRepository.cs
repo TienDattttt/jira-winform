@@ -8,6 +8,7 @@ public interface IIssueRepository
     Task<IReadOnlyList<Issue>> GetBoardIssuesAsync(int projectId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Issue>> GetBoardIssuesAsync(int projectId, int? sprintId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Issue>> GetProjectIssuesAsync(int projectId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Issue>> GetAllByProjectIdAsync(int projectId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Issue>> ExecuteQueryAsync(int projectId, Func<IQueryable<Issue>, IQueryable<Issue>> queryShaper, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Issue>> GetIncompleteBySprintIdAsync(int sprintId, CancellationToken cancellationToken = default);
     Task<Issue?> GetByIdAsync(int issueId, CancellationToken cancellationToken = default);
@@ -18,5 +19,3 @@ public interface IIssueRepository
     Task<IReadOnlyList<Issue>> GetSubIssuesAsync(int parentIssueId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Issue>> GetPotentialParentsAsync(int projectId, IssueType childType, CancellationToken cancellationToken = default);
 }
-
-

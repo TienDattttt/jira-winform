@@ -1,4 +1,5 @@
 using JiraClone.Domain.Entities;
+using JiraClone.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -12,6 +13,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.HasIndex(x => x.Key).IsUnique();
         builder.Property(x => x.Key).HasMaxLength(20).IsRequired();
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.BoardType).HasDefaultValue(BoardType.Scrum);
         builder.Property(x => x.Url).HasMaxLength(500);
     }
 }
