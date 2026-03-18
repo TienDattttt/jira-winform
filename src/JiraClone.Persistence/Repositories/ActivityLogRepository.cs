@@ -39,4 +39,7 @@ public class ActivityLogRepository : IActivityLogRepository
 
     public Task AddAsync(JiraClone.Domain.Entities.ActivityLog activityLog, CancellationToken cancellationToken = default) =>
         _dbContext.ActivityLogs.AddAsync(activityLog, cancellationToken).AsTask();
+
+    public Task<bool> ExistsIssueEntryAsync(int issueId, string fieldName, string newValue, CancellationToken cancellationToken = default) =>
+        _dbContext.ActivityLogs.AnyAsync(x => x.IssueId == issueId && x.FieldName == fieldName && x.NewValue == newValue, cancellationToken);
 }

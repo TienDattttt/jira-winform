@@ -235,6 +235,7 @@ public class ProjectCommandServiceTests
         Mock<ISprintRepository>? sprints = null,
         Mock<IAuthorizationService>? authorization = null,
         Mock<IPermissionService>? permissionService = null,
+        Mock<IWebhookDispatcher>? webhookDispatcher = null,
         Mock<IActivityLogRepository>? activityLogs = null,
         User? currentUser = null,
         Mock<ICurrentUserContext>? currentUserContext = null,
@@ -264,6 +265,7 @@ public class ProjectCommandServiceTests
             (authorization ?? new Mock<IAuthorizationService>()).Object,
             permissionService.Object,
             (activityLogs ?? new Mock<IActivityLogRepository>()).Object,
+            (webhookDispatcher ?? new Mock<IWebhookDispatcher>()).Object,
             currentUserContext.Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
     }

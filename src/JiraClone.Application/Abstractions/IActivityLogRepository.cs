@@ -8,4 +8,5 @@ public interface IActivityLogRepository
     Task<IReadOnlyList<ActivityLogEntity>> GetProjectActivityAsync(int projectId, int take = 10, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ActivityLogEntity>> GetProjectStatusChangesAsync(int projectId, CancellationToken cancellationToken = default);
     Task AddAsync(ActivityLogEntity activityLog, CancellationToken cancellationToken = default);
+    Task<bool> ExistsIssueEntryAsync(int issueId, string fieldName, string newValue, CancellationToken cancellationToken = default);
 }

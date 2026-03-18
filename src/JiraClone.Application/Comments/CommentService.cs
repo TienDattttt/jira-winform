@@ -18,6 +18,7 @@ public class CommentService
     private readonly IUserRepository _users;
     private readonly IWatcherRepository _watchers;
     private readonly INotificationService _notificationService;
+    private readonly IWebhookDispatcher _webhookDispatcher;
     private readonly IAuthorizationService _authorization;
     private readonly IActivityLogRepository _activityLogs;
     private readonly IUnitOfWork _unitOfWork;
@@ -29,6 +30,7 @@ public class CommentService
         IUserRepository users,
         IWatcherRepository watchers,
         INotificationService notificationService,
+        IWebhookDispatcher webhookDispatcher,
         IAuthorizationService authorization,
         IActivityLogRepository activityLogs,
         IUnitOfWork unitOfWork,
@@ -39,6 +41,7 @@ public class CommentService
         _users = users;
         _watchers = watchers;
         _notificationService = notificationService;
+        _webhookDispatcher = webhookDispatcher;
         _authorization = authorization;
         _activityLogs = activityLogs;
         _unitOfWork = unitOfWork;
@@ -102,6 +105,24 @@ public class CommentService
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _webhookDispatcher.DispatchAsync(
+            issue.ProjectId,
+            WebhookEventType.CommentAdded,
+            new
+            {
+                comment.Id,
+                comment.IssueId,
+                issue.ProjectId,
+                issue.IssueKey,
+                issue.Title,
+                Body = normalizedBody,
+                CommentPreview = BuildExcerpt(normalizedBody),
+                AuthorUserId = userId,
+                AuthorName = actorName,
+                MentionedUserIds = mentionedUserIds.OrderBy(x => x).ToArray(),
+                CreatedAtUtc = comment.CreatedAtUtc,
+            },
+            cancellationToken);
         return comment;
     }
 
@@ -182,4 +203,3 @@ public class CommentService
         return trimmed.Length <= 140 ? trimmed : $"{trimmed[..137]}...";
     }
 }
-

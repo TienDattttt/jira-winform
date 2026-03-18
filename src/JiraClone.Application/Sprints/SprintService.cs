@@ -17,6 +17,7 @@ public class SprintService : ISprintService
     private readonly IProjectRepository _projects;
     private readonly IUserRepository _users;
     private readonly INotificationService _notificationService;
+    private readonly IWebhookDispatcher _webhookDispatcher;
     private readonly IPermissionService _permissionService;
     private readonly IActivityLogRepository _activityLogs;
     private readonly ICurrentUserContext _currentUserContext;
@@ -30,6 +31,7 @@ public class SprintService : ISprintService
         IProjectRepository projects,
         IUserRepository users,
         INotificationService notificationService,
+        IWebhookDispatcher webhookDispatcher,
         IPermissionService permissionService,
         IActivityLogRepository activityLogs,
         ICurrentUserContext currentUserContext,
@@ -42,6 +44,7 @@ public class SprintService : ISprintService
         _projects = projects;
         _users = users;
         _notificationService = notificationService;
+        _webhookDispatcher = webhookDispatcher;
         _permissionService = permissionService;
         _activityLogs = activityLogs;
         _currentUserContext = currentUserContext;
@@ -163,6 +166,7 @@ public class SprintService : ISprintService
 
         await QueueSprintNotificationsAsync(sprint, NotificationType.SprintStarted, actorUserId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _webhookDispatcher.DispatchAsync(sprint.ProjectId, WebhookEventType.SprintStarted, CreateSprintWebhookPayload(sprint, actorUserId), cancellationToken);
         return true;
     }
 
@@ -251,6 +255,7 @@ public class SprintService : ISprintService
 
         await QueueSprintNotificationsAsync(sprint, NotificationType.SprintCompleted, actorUserId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _webhookDispatcher.DispatchAsync(sprint.ProjectId, WebhookEventType.SprintCompleted, CreateSprintWebhookPayload(sprint, actorUserId), cancellationToken);
         return true;
     }
 
@@ -935,6 +940,23 @@ public class SprintService : ISprintService
         _ => "#6B778C"
     };
 
+    private static object CreateSprintWebhookPayload(Sprint sprint, int? actorUserId)
+    {
+        return new
+        {
+            sprint.Id,
+            sprint.ProjectId,
+            sprint.Name,
+            sprint.Goal,
+            sprint.State,
+            sprint.StartDate,
+            sprint.EndDate,
+            sprint.ClosedAtUtc,
+            sprint.UpdatedAtUtc,
+            ActorUserId = actorUserId,
+        };
+    }
+
     private async Task QueueSprintNotificationsAsync(Sprint sprint, NotificationType notificationType, int? actorUserId, CancellationToken cancellationToken)
     {
         var project = await _projects.GetByIdAsync(sprint.ProjectId, cancellationToken);
@@ -991,7 +1013,6 @@ public class SprintService : ISprintService
         string NewStatusName,
         StatusCategory NewCategory);
 }
-
 
 
 

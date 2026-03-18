@@ -7,6 +7,7 @@ using JiraClone.Application.Comments;
 using JiraClone.Application.Components;
 using JiraClone.Application.Dashboard;
 using JiraClone.Application.Issues;
+using JiraClone.Application.Integrations;
 using JiraClone.Application.Jql;
 using JiraClone.Application.Labels;
 using JiraClone.Application.Notifications;
@@ -19,6 +20,7 @@ using JiraClone.Application.Sprints;
 using JiraClone.Application.Users;
 using JiraClone.Application.Versions;
 using JiraClone.Application.Watchers;
+using JiraClone.Application.Webhooks;
 using JiraClone.Application.Workflows;
 using JiraClone.Domain.Entities;
 using ProjectLabel = JiraClone.Domain.Entities.Label;
@@ -80,6 +82,8 @@ public sealed class AppSession : IDisposable
         Labels = new LabelOperations(this);
         Components = new ComponentOperations(this);
         Versions = new VersionOperations(this);
+        Integrations = new IntegrationOperations(this);
+        Webhooks = new WebhookOperations(this);
         Watchers = new WatcherOperations(this);
         Notifications = new NotificationOperations(this);
         Workflows = new WorkflowOperations(this);
@@ -106,6 +110,8 @@ public sealed class AppSession : IDisposable
     public LabelOperations Labels { get; }
     public ComponentOperations Components { get; }
     public VersionOperations Versions { get; }
+    public IntegrationOperations Integrations { get; }
+    public WebhookOperations Webhooks { get; }
     public WatcherOperations Watchers { get; }
     public NotificationOperations Notifications { get; }
     public WorkflowOperations Workflows { get; }
@@ -175,6 +181,18 @@ public sealed class AppSession : IDisposable
 
     internal IVersionService CreateVersionService(IServiceProvider services) =>
         services.GetRequiredService<IVersionService>();
+
+    internal IIntegrationCatalogService CreateIntegrationCatalogService(IServiceProvider services) =>
+        services.GetRequiredService<IIntegrationCatalogService>();
+
+    internal IGitHubIntegrationService CreateGitHubIntegrationService(IServiceProvider services) =>
+        services.GetRequiredService<IGitHubIntegrationService>();
+
+    internal IConfluenceIntegrationService CreateConfluenceIntegrationService(IServiceProvider services) =>
+        services.GetRequiredService<IConfluenceIntegrationService>();
+
+    internal IWebhookService CreateWebhookService(IServiceProvider services) =>
+        services.GetRequiredService<IWebhookService>();
 
     internal CommentService CreateCommentService(IServiceProvider services) =>
         services.GetRequiredService<CommentService>();
@@ -930,6 +948,128 @@ public sealed class AppSession : IDisposable
         }
     }
 
+
+    public sealed class WebhookOperations
+    {
+        private readonly AppSession _session;
+
+        internal WebhookOperations(AppSession session) => _session = session;
+
+        public async Task<IReadOnlyList<WebhookEndpoint>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateWebhookService(scope.ServiceProvider).GetByProjectAsync(projectId, cancellationToken);
+        }
+
+        public async Task<WebhookEndpoint> CreateAsync(int projectId, string name, string url, string secret, bool isActive, IReadOnlyCollection<WebhookEventType> subscribedEvents, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateWebhookService(scope.ServiceProvider).CreateAsync(projectId, name, url, secret, isActive, subscribedEvents, cancellationToken);
+        }
+
+        public async Task<WebhookEndpoint?> UpdateAsync(int endpointId, string name, string url, string secret, bool isActive, IReadOnlyCollection<WebhookEventType> subscribedEvents, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateWebhookService(scope.ServiceProvider).UpdateAsync(endpointId, name, url, secret, isActive, subscribedEvents, cancellationToken);
+        }
+
+        public async Task<bool> DeleteAsync(int endpointId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateWebhookService(scope.ServiceProvider).DeleteAsync(endpointId, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<WebhookDelivery>> GetDeliveryHistoryAsync(int endpointId, int take = 50, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateWebhookService(scope.ServiceProvider).GetDeliveryHistoryAsync(endpointId, take, cancellationToken);
+        }
+
+        public async Task<WebhookDelivery?> SendTestAsync(int endpointId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateWebhookService(scope.ServiceProvider).SendTestAsync(endpointId, cancellationToken);
+        }
+    }
+
+    public sealed class IntegrationOperations
+    {
+        private readonly AppSession _session;
+
+        internal IntegrationOperations(AppSession session) => _session = session;
+
+        public async Task<IReadOnlyList<IntegrationStatus>> GetProjectStatusesAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateIntegrationCatalogService(scope.ServiceProvider).GetProjectStatusesAsync(projectId, cancellationToken);
+        }
+
+        public async Task<GitHubProjectConfig?> GetGitHubConfigAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateGitHubIntegrationService(scope.ServiceProvider).GetConfigAsync(projectId, cancellationToken);
+        }
+
+        public async Task SaveGitHubConfigAsync(int projectId, GitHubProjectConfig config, bool isEnabled = true, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            await _session.CreateGitHubIntegrationService(scope.ServiceProvider).ConfigureAsync(projectId, config, isEnabled, cancellationToken);
+        }
+
+        public async Task DisconnectGitHubAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            await _session.CreateGitHubIntegrationService(scope.ServiceProvider).DisconnectAsync(projectId, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<GitHubCommitLinkDto>> GetIssueCommitsAsync(int issueId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateGitHubIntegrationService(scope.ServiceProvider).GetIssueCommitsAsync(issueId, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<GitHubPullRequestLinkDto>> GetIssuePullRequestsAsync(int issueId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateGitHubIntegrationService(scope.ServiceProvider).GetIssuePullRequestsAsync(issueId, cancellationToken);
+        }
+
+        public async Task<ConfluenceProjectConfig?> GetConfluenceConfigAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateConfluenceIntegrationService(scope.ServiceProvider).GetConfigAsync(projectId, cancellationToken);
+        }
+
+        public async Task SaveConfluenceConfigAsync(int projectId, ConfluenceProjectConfig config, bool isEnabled = true, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            await _session.CreateConfluenceIntegrationService(scope.ServiceProvider).ConfigureAsync(projectId, config, isEnabled, cancellationToken);
+        }
+
+        public async Task DisconnectConfluenceAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            await _session.CreateConfluenceIntegrationService(scope.ServiceProvider).DisconnectAsync(projectId, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<ConfluencePageLinkDto>> GetIssueConfluencePagesAsync(int issueId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateConfluenceIntegrationService(scope.ServiceProvider).GetIssuePagesAsync(issueId, cancellationToken);
+        }
+
+        public async Task AddConfluencePageLinkAsync(int issueId, string title, string url, int userId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            await _session.CreateConfluenceIntegrationService(scope.ServiceProvider).AddPageLinkAsync(issueId, title, url, userId, cancellationToken);
+        }
+
+        public async Task<ConfluencePageLinkDto> CreateConfluencePageFromIssueAsync(int issueId, int userId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateConfluenceIntegrationService(scope.ServiceProvider).CreatePageFromIssueAsync(issueId, userId, cancellationToken);
+        }
+    }
 
     public sealed class WorkflowOperations
     {

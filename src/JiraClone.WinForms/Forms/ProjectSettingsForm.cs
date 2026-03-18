@@ -28,11 +28,13 @@ public class ProjectSettingsForm : UserControl
     private readonly ListView _labels = CreateListView();
     private readonly ListView _components = CreateListView();
     private readonly ListView _versions = CreateListView();
+    private readonly DataGridView _webhooks = new();
     private readonly TextBox _permissionSchemeName = JiraControlFactory.CreateTextBox();
     private readonly TableLayoutPanel _permissionMatrix = new() { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 5, Padding = new Padding(0), Margin = new Padding(0), BackColor = JiraTheme.BgSurface };
     private readonly Dictionary<(Permission Permission, ProjectRole Role), CheckBox> _permissionChecks = new();
     private readonly ProfileSettingsControl _profileSettings;
     private readonly WorkflowSettingsControl _workflowSettings;
+    private readonly IntegrationSettingsControl _integrationSettings;
     private readonly Button _saveProject = JiraControlFactory.CreatePrimaryButton("Save Project");
     private readonly Button _saveBoardSettings = JiraControlFactory.CreateSecondaryButton("Save Board");
     private readonly Button _archiveProject = JiraControlFactory.CreateSecondaryButton("Archive Project");
@@ -51,18 +53,26 @@ public class ProjectSettingsForm : UserControl
     private readonly Button _editVersion = JiraControlFactory.CreateSecondaryButton("Edit Version");
     private readonly Button _deleteVersion = JiraControlFactory.CreateSecondaryButton("Delete Version");
     private readonly Button _markVersionReleased = JiraControlFactory.CreateSecondaryButton("Mark Released");
+    private readonly Button _addWebhook = JiraControlFactory.CreateSecondaryButton("Add Webhook");
+    private readonly Button _editWebhook = JiraControlFactory.CreateSecondaryButton("Edit Webhook");
+    private readonly Button _deleteWebhook = JiraControlFactory.CreateSecondaryButton("Delete Webhook");
+    private readonly Button _testWebhook = JiraControlFactory.CreateSecondaryButton("Test");
+    private readonly Button _viewWebhookHistory = JiraControlFactory.CreateSecondaryButton("Delivery History");
     private readonly Button _savePermissions = JiraControlFactory.CreatePrimaryButton("Save Permissions");
     private readonly Label _memberCountBadge = CreateBadgeLabel();
     private readonly Label _columnCountBadge = CreateBadgeLabel();
     private readonly Label _labelCountBadge = CreateBadgeLabel();
     private readonly Label _componentCountBadge = CreateBadgeLabel();
     private readonly Label _versionCountBadge = CreateBadgeLabel();
+    private readonly Label _webhookCountBadge = CreateBadgeLabel();
     private readonly Label _membersEmptyState = CreateEmptyState("No members on this project yet.");
     private readonly Label _columnsEmptyState = CreateEmptyState("No board columns configured.");
     private readonly Label _labelsEmptyState = CreateEmptyState("No labels created for this project yet.");
     private readonly Label _componentsEmptyState = CreateEmptyState("No components created for this project yet.");
     private readonly Label _versionsEmptyState = CreateEmptyState("No versions created for this project yet.");
+    private readonly Label _webhooksEmptyState = CreateEmptyState("No webhooks configured for this project yet.");
     private Project? _project;
+    private IReadOnlyList<WebhookEndpoint> _webhookEndpoints = [];
     private bool _isLoading;
     private string _shellSearch = string.Empty;
 
@@ -71,6 +81,7 @@ public class ProjectSettingsForm : UserControl
         _session = session;
         _profileSettings = new ProfileSettingsControl(_session);
         _workflowSettings = new WorkflowSettingsControl(_session);
+        _integrationSettings = new IntegrationSettingsControl(_session);
         BackColor = JiraTheme.BgPage;
         Font = JiraTheme.FontBody;
         DoubleBuffered = true;
@@ -87,6 +98,7 @@ public class ProjectSettingsForm : UserControl
         _boardType.DataSource = Enum.GetValues<BoardType>();
 
         ConfigureListViews();
+        ConfigureWebhookGrid();
         BuildPermissionMatrix();
         WireActions();
         ConfigureActionButtons();
@@ -101,6 +113,8 @@ public class ProjectSettingsForm : UserControl
         tabs.TabPages.Add(BuildLabelsTab());
         tabs.TabPages.Add(BuildComponentsTab());
         tabs.TabPages.Add(BuildVersionsTab());
+        tabs.TabPages.Add(BuildIntegrationsTab());
+        tabs.TabPages.Add(BuildWebhooksTab());
 
         Controls.Add(tabs);
         Controls.Add(BuildHeader());
@@ -124,6 +138,9 @@ public class ProjectSettingsForm : UserControl
     
 
     private JiraProjectVersionEntity? SelectedProjectVersion => _versions.SelectedItems.Count == 0 ? null : _versions.SelectedItems[0].Tag as JiraProjectVersionEntity;
+
+    private WebhookEndpoint? SelectedWebhookEndpoint => _webhooks.SelectedRows.Count == 0 ? null : _webhooks.SelectedRows[0].Tag as WebhookEndpoint;
+
     
 
     public async Task RefreshProjectAsync(CancellationToken cancellationToken = default)
@@ -175,6 +192,7 @@ public class ProjectSettingsForm : UserControl
         _labels.SelectedIndexChanged += (_, _) => UpdateActionState();
         _components.SelectedIndexChanged += (_, _) => UpdateActionState();
         _versions.SelectedIndexChanged += (_, _) => UpdateActionState();
+        _webhooks.SelectionChanged += (_, _) => UpdateActionState();
 
         _members.Resize += (_, _) => ApplyResponsiveColumns();
         _columns.Resize += (_, _) => ApplyResponsiveColumns();
@@ -182,9 +200,28 @@ public class ProjectSettingsForm : UserControl
         _components.Resize += (_, _) => ApplyResponsiveColumns();
         _versions.Resize += (_, _) => ApplyResponsiveColumns();
     }
-
-    
-
+    private void ConfigureWebhookGrid()
+    {
+        JiraTheme.StyleDataGridView(_webhooks);
+        _webhooks.Dock = DockStyle.Fill;
+        _webhooks.ReadOnly = true;
+        _webhooks.MultiSelect = false;
+        _webhooks.AllowUserToAddRows = false;
+        _webhooks.AllowUserToDeleteRows = false;
+        _webhooks.AllowUserToResizeRows = false;
+        _webhooks.AutoGenerateColumns = false;
+        _webhooks.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _webhooks.RowHeadersVisible = false;
+        _webhooks.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
+        _webhooks.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        _webhooks.Columns.Clear();
+        _webhooks.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Name", Width = 180 });
+        _webhooks.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "URL", Width = 280 });
+        _webhooks.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Events", Width = 220 });
+        _webhooks.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Active", Width = 80 });
+        _webhooks.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Last delivery", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, MinimumWidth = 220 });
+        _webhooks.CellDoubleClick += async (_, _) => await ViewWebhookHistoryAsync();
+    }
     private void WireActions()
     {
         _saveProject.Click += async (_, _) => await SaveProjectAsync();
@@ -203,6 +240,11 @@ public class ProjectSettingsForm : UserControl
         _editVersion.Click += async (_, _) => await EditVersionAsync();
         _deleteVersion.Click += async (_, _) => await DeleteVersionAsync();
         _markVersionReleased.Click += async (_, _) => await MarkVersionReleasedAsync();
+        _addWebhook.Click += async (_, _) => await AddWebhookAsync();
+        _editWebhook.Click += async (_, _) => await EditWebhookAsync();
+        _deleteWebhook.Click += async (_, _) => await DeleteWebhookAsync();
+        _testWebhook.Click += async (_, _) => await TestWebhookAsync();
+        _viewWebhookHistory.Click += async (_, _) => await ViewWebhookHistoryAsync();
         _savePermissions.Click += async (_, _) => await SavePermissionsAsync();
         _archiveProject.Click += async (_, _) => await ArchiveProjectAsync();
         _deleteProject.Click += async (_, _) => await DeleteProjectAsync();
@@ -232,6 +274,11 @@ public class ProjectSettingsForm : UserControl
         ConfigureActionButton(_editVersion, 124);
         ConfigureActionButton(_deleteVersion, 132);
         ConfigureActionButton(_markVersionReleased, 132);
+        ConfigureActionButton(_addWebhook, 126);
+        ConfigureActionButton(_editWebhook, 126);
+        ConfigureActionButton(_deleteWebhook, 136);
+        ConfigureActionButton(_testWebhook, 94);
+        ConfigureActionButton(_viewWebhookHistory, 154);
         ConfigureActionButton(_savePermissions, 148);
     }
 
@@ -244,7 +291,7 @@ public class ProjectSettingsForm : UserControl
         title.Font = JiraTheme.FontH1;
         title.Location = new Point(0, 0);
 
-        var caption = JiraControlFactory.CreateLabel("Adjust project details, members, board structure, workflows, permissions, labels, components, and release versions without leaving the desktop flow.", true);
+        var caption = JiraControlFactory.CreateLabel("Adjust project details, members, board structure, workflows, permissions, labels, components, release versions, and outbound webhooks without leaving the desktop flow.", true);
         caption.Location = new Point(0, 42);
 
         var badges = new FlowLayoutPanel
@@ -256,7 +303,7 @@ public class ProjectSettingsForm : UserControl
             Margin = new Padding(0),
             Padding = new Padding(0),
         };
-        badges.Controls.AddRange([_memberCountBadge, _columnCountBadge, _labelCountBadge, _componentCountBadge, _versionCountBadge]);
+        badges.Controls.AddRange([_memberCountBadge, _columnCountBadge, _labelCountBadge, _componentCountBadge, _versionCountBadge, _webhookCountBadge]);
 
         header.Controls.Add(title);
         header.Controls.Add(caption);
@@ -470,6 +517,21 @@ public class ProjectSettingsForm : UserControl
         return page;
     }
 
+    private TabPage BuildIntegrationsTab()
+    {
+        var page = CreatePage("Integrations");
+        page.Controls.Add(WrapSurface(_integrationSettings));
+        return page;
+    }
+
+    private TabPage BuildWebhooksTab()
+    {
+        var page = CreatePage("Webhooks");
+        var actions = CreateActionBar(_addWebhook, _editWebhook, _deleteWebhook, _testWebhook, _viewWebhookHistory);
+        page.Controls.Add(WrapSurface(BuildListSurface(_webhooks, _webhooksEmptyState, actions)));
+        return page;
+    }
+
     
 
     private static Control BuildListSurface(Control list, Control emptyState, Control actions)
@@ -536,10 +598,13 @@ public class ProjectSettingsForm : UserControl
             _labelCountBadge.Text = _project.Labels.Count == 1 ? "1 label" : $"{_project.Labels.Count} labels";
             _componentCountBadge.Text = _project.Components.Count == 1 ? "1 component" : $"{_project.Components.Count} components";
             _versionCountBadge.Text = _project.Versions.Count == 1 ? "1 version" : $"{_project.Versions.Count} versions";
+            
+            await LoadWebhooksAsync(cancellationToken);
             BindPermissionScheme();
             BindProjectLists();
             UpdateActionState();
             await _workflowSettings.RefreshAsync();
+            await _integrationSettings.RefreshAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -602,11 +667,22 @@ public class ProjectSettingsForm : UserControl
             .ThenBy(x => x.Name)
             .ToList();
 
+        var webhooks = _webhookEndpoints
+            .Where(x => string.IsNullOrWhiteSpace(_shellSearch)
+                || x.Name.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase)
+                || x.Url.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase)
+                || x.Subscriptions.Any(s => s.EventType.ToString().Contains(_shellSearch, StringComparison.OrdinalIgnoreCase))
+                || (x.IsActive ? "Active" : "Inactive").Contains(_shellSearch, StringComparison.OrdinalIgnoreCase)
+                || FormatLastDelivery(x).Contains(_shellSearch, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.Name)
+            .ToList();
+
         BindMembers(members);
         BindColumns(columns);
         BindLabels(labels);
         BindComponents(components);
         BindVersions(versions);
+        BindWebhooks(webhooks);
         ApplyResponsiveColumns();
 
         _membersEmptyState.Visible = members.Count == 0;
@@ -619,6 +695,8 @@ public class ProjectSettingsForm : UserControl
         _components.Visible = components.Count > 0;
         _versionsEmptyState.Visible = versions.Count == 0;
         _versions.Visible = versions.Count > 0;
+        _webhooksEmptyState.Visible = webhooks.Count == 0;
+        _webhooks.Visible = webhooks.Count > 0;
     }
 
 
@@ -698,9 +776,45 @@ public class ProjectSettingsForm : UserControl
         }
         _versions.EndUpdate();
     }
-
-    
-
+    private void BindWebhooks(IEnumerable<WebhookEndpoint> webhooks)
+    {
+        _webhooks.Rows.Clear();
+        foreach (var endpoint in webhooks)
+        {
+            var rowIndex = _webhooks.Rows.Add(
+                endpoint.Name,
+                endpoint.Url,
+                string.Join(", ", endpoint.Subscriptions.Select(x => x.EventType.ToString()).OrderBy(x => x)),
+                endpoint.IsActive ? "Yes" : "No",
+                FormatLastDelivery(endpoint));
+            _webhooks.Rows[rowIndex].Tag = endpoint;
+        }
+    }
+    private string FormatLastDelivery(WebhookEndpoint endpoint)
+    {
+        var latestDelivery = endpoint.Deliveries
+            .OrderByDescending(x => x.AttemptedAtUtc)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefault();
+        if (latestDelivery is null)
+        {
+            return "No deliveries yet";
+        }
+        var status = latestDelivery.Success ? "Success" : "Failed";
+        var code = latestDelivery.ResponseCode == 0 ? "-" : latestDelivery.ResponseCode.ToString();
+        return $"{status} ({code}) at {latestDelivery.AttemptedAtUtc.ToLocalTime():dd MMM yyyy HH:mm}";
+    }
+    private async Task LoadWebhooksAsync(CancellationToken cancellationToken = default)
+    {
+        if (_project is null)
+        {
+            _webhookEndpoints = [];
+            _webhookCountBadge.Text = "0 webhooks";
+            return;
+        }
+        _webhookEndpoints = await _session.Webhooks.GetByProjectAsync(_project.Id, cancellationToken);
+        _webhookCountBadge.Text = _webhookEndpoints.Count == 1 ? "1 webhook" : $"{_webhookEndpoints.Count} webhooks";
+    }
     private void BuildPermissionMatrix()
     {
         if (_permissionChecks.Count > 0)
@@ -1127,6 +1241,107 @@ public class ProjectSettingsForm : UserControl
         }
 
     }
+    private async Task AddWebhookAsync()
+    {
+        if (_project is null)
+        {
+            return;
+        }
+        try
+        {
+            using var dialog = new WebhookEndpointDialog();
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+            await _session.Webhooks.CreateAsync(_project.Id, dialog.EndpointName, dialog.EndpointUrl, dialog.Secret, dialog.IsActive, dialog.SubscribedEvents);
+            await LoadProjectAsync();
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+    private async Task EditWebhookAsync()
+    {
+        if (SelectedWebhookEndpoint is not { } endpoint)
+        {
+            return;
+        }
+        try
+        {
+            using var dialog = new WebhookEndpointDialog(endpoint);
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+            await _session.Webhooks.UpdateAsync(endpoint.Id, dialog.EndpointName, dialog.EndpointUrl, dialog.Secret, dialog.IsActive, dialog.SubscribedEvents);
+            await LoadProjectAsync();
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+    private async Task DeleteWebhookAsync()
+    {
+        if (SelectedWebhookEndpoint is not { } endpoint)
+        {
+            return;
+        }
+        if (MessageBox.Show(this, $"Delete webhook '{endpoint.Name}'?", "Delete Webhook", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+        {
+            return;
+        }
+        try
+        {
+            await _session.Webhooks.DeleteAsync(endpoint.Id);
+            await LoadProjectAsync();
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+    private async Task TestWebhookAsync()
+    {
+        if (SelectedWebhookEndpoint is not { } endpoint)
+        {
+            return;
+        }
+        try
+        {
+            var delivery = await _session.Webhooks.SendTestAsync(endpoint.Id);
+            await LoadProjectAsync();
+            if (delivery is null)
+            {
+                ErrorDialogService.Show("Unable to run webhook test.");
+                return;
+            }
+            var result = delivery.Success ? "succeeded" : "failed";
+            var responseCode = delivery.ResponseCode == 0 ? "-" : delivery.ResponseCode.ToString();
+            MessageBox.Show(
+                this,
+                $"Webhook test {result}.\nResponse code: {responseCode}",
+                "Webhook Test",
+                MessageBoxButtons.OK,
+                delivery.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+    }
+    private async Task ViewWebhookHistoryAsync()
+    {
+        if (SelectedWebhookEndpoint is not { } endpoint)
+        {
+            return;
+        }
+        using var dialog = new WebhookDeliveryHistoryForm(_session, endpoint);
+        dialog.ShowDialog(this);
+        await LoadProjectAsync();
+    }
     private async Task SavePermissionsAsync()
     {
         if (_project is null)
@@ -1253,7 +1468,13 @@ public class ProjectSettingsForm : UserControl
         _addVersion.Enabled = canManage && hasProject;
         _editVersion.Enabled = canManage && SelectedProjectVersion is not null;
         _deleteVersion.Enabled = canManage && SelectedProjectVersion is not null;
-        _markVersionReleased.Enabled = canManage && SelectedProjectVersion is { IsReleased: false };
+        
+
+        _addWebhook.Enabled = canManage && hasProject;
+        _editWebhook.Enabled = canManage && SelectedWebhookEndpoint is not null;
+        _deleteWebhook.Enabled = canManage && SelectedWebhookEndpoint is not null;
+        _testWebhook.Enabled = canManage && SelectedWebhookEndpoint is not null;
+        _viewWebhookHistory.Enabled = canManage && SelectedWebhookEndpoint is not null;
 
         _permissionSchemeName.Enabled = isAdmin && hasProject;
         _savePermissions.Enabled = isAdmin && hasProject;
@@ -1638,6 +1859,9 @@ public class ProjectSettingsForm : UserControl
         public bool IsReleased => _released.Checked;
     }
 }
+
+
+
 
 
 

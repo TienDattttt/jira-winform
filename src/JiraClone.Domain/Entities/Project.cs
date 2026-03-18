@@ -23,6 +23,6 @@ public class Project : AggregateRoot
     public ICollection<Issue> Issues { get; set; } = new List<Issue>();
     public ICollection<Sprint> Sprints { get; set; } = new List<Sprint>();
     public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+    public ICollection<WebhookEndpoint> WebhookEndpoints { get; set; } = new List<WebhookEndpoint>();
+    public ICollection<ProjectIntegrationConfig> ProjectIntegrationConfigs { get; set; } = new List<ProjectIntegrationConfig>();
 }
-
-

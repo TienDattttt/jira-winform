@@ -292,6 +292,7 @@ public class IssueServiceTests
         Mock<IWorkflowRepository>? workflowRepository = null,
         Mock<IWatcherRepository>? watcherRepository = null,
         Mock<INotificationService>? notificationService = null,
+        Mock<IWebhookDispatcher>? webhookDispatcher = null,
         Mock<IUnitOfWork>? unitOfWork = null)
     {
         projectRepository ??= new Mock<IProjectRepository>();
@@ -332,6 +333,7 @@ public class IssueServiceTests
             workflowRepository.Object,
             watcherRepository.Object,
             (notificationService ?? new Mock<INotificationService>()).Object,
+            (webhookDispatcher ?? new Mock<IWebhookDispatcher>()).Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
     }
 

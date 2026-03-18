@@ -23,6 +23,7 @@ public class IssueService
     private readonly IWorkflowRepository _workflows;
     private readonly IWatcherRepository _watchers;
     private readonly INotificationService _notificationService;
+    private readonly IWebhookDispatcher _webhookDispatcher;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<IssueService> _logger;
 
@@ -38,6 +39,7 @@ public class IssueService
         IWorkflowRepository workflows,
         IWatcherRepository watchers,
         INotificationService notificationService,
+        IWebhookDispatcher webhookDispatcher,
         IUnitOfWork unitOfWork,
         ILogger<IssueService>? logger = null)
     {
@@ -52,6 +54,7 @@ public class IssueService
         _workflows = workflows;
         _watchers = watchers;
         _notificationService = notificationService;
+        _webhookDispatcher = webhookDispatcher;
         _unitOfWork = unitOfWork;
         _logger = logger ?? NullLogger<IssueService>.Instance;
     }
@@ -108,6 +111,7 @@ public class IssueService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         await QueueAssignmentNotificationsAsync(issue, [], model.AssigneeIds, model.CreatedById, cancellationToken);
+        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueCreated, CreateIssueWebhookPayload(issue, model.CreatedById), cancellationToken);
 
         return issue;
     }
@@ -178,6 +182,7 @@ public class IssueService
         }
 
         await QueueAssignmentNotificationsAsync(issue, previousAssigneeIds, nextAssigneeIds, model.CreatedById, cancellationToken);
+        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, model.CreatedById), cancellationToken);
 
         return issue;
     }
@@ -210,6 +215,7 @@ public class IssueService
             issueId,
             previousDueDate,
             dueDate);
+        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, userId), cancellationToken);
         return issue;
     }
     public async Task<Issue?> UpdateScheduleAsync(int issueId, DateOnly? startDate, DateOnly? dueDate, int userId, CancellationToken cancellationToken = default)
@@ -253,6 +259,7 @@ public class IssueService
             previousDueDate,
             startDate,
             dueDate);
+        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, userId), cancellationToken);
         return issue;
     }
     public async Task<Issue?> UpdateParentAsync(int issueId, int? parentIssueId, int userId, CancellationToken cancellationToken = default)
@@ -287,6 +294,7 @@ public class IssueService
             NewValue = nextParent?.IssueKey ?? "Cleared"
         }, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, userId), cancellationToken);
 
         return issue;
     }
@@ -327,6 +335,7 @@ public class IssueService
 
         await _issues.RemoveAsync(issue, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueDeleted, CreateIssueWebhookPayload(issue, userId ?? issue.CreatedById), cancellationToken);
         return true;
     }
 
@@ -504,6 +513,7 @@ public class IssueService
         }
 
         await QueueStatusChangeNotificationsAsync(issue, result.PreviousStatus, result.CurrentStatus, userId, cancellationToken);
+        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueStatusChanged, CreateIssueStatusChangeWebhookPayload(issue, result.PreviousStatus, result.CurrentStatus, userId), cancellationToken);
 
         return true;
     }
@@ -584,6 +594,52 @@ public class IssueService
         return true;
     }
 
+    private static object CreateIssueWebhookPayload(Issue issue, int actorUserId)
+    {
+        return new
+        {
+            issue.Id,
+            issue.ProjectId,
+            issue.IssueKey,
+            issue.Title,
+            issue.Type,
+            issue.Priority,
+            issue.ReporterId,
+            issue.ParentIssueId,
+            issue.SprintId,
+            issue.StoryPoints,
+            issue.StartDate,
+            issue.DueDate,
+            issue.WorkflowStatusId,
+            WorkflowStatus = issue.WorkflowStatus.Name,
+            WorkflowCategory = issue.WorkflowStatus.Category,
+            AssigneeIds = issue.Assignees.Select(x => x.UserId).OrderBy(x => x).ToArray(),
+            issue.IsDeleted,
+            issue.CreatedAtUtc,
+            issue.UpdatedAtUtc,
+            ActorUserId = actorUserId,
+        };
+    }
+
+    private static object CreateIssueStatusChangeWebhookPayload(Issue issue, WorkflowStatus? previousStatus, WorkflowStatus? currentStatus, int actorUserId)
+    {
+        return new
+        {
+            issue.Id,
+            issue.ProjectId,
+            issue.IssueKey,
+            issue.Title,
+            issue.Type,
+            issue.Priority,
+            issue.BoardPosition,
+            issue.WorkflowStatusId,
+            PreviousStatus = previousStatus is null ? null : new { previousStatus.Id, previousStatus.Name, previousStatus.Category },
+            CurrentStatus = currentStatus is null ? null : new { currentStatus.Id, currentStatus.Name, currentStatus.Category },
+            AssigneeIds = issue.Assignees.Select(x => x.UserId).OrderBy(x => x).ToArray(),
+            issue.UpdatedAtUtc,
+            ActorUserId = actorUserId,
+        };
+    }
     private static string? FormatDateOnlyActivity(DateOnly? value) =>
         value.HasValue ? value.Value.ToString("yyyy-MM-dd") : null;
 }

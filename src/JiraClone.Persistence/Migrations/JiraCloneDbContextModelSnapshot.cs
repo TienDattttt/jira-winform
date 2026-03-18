@@ -1166,6 +1166,48 @@ namespace JiraClone.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.ProjectIntegrationConfig", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ConfigJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IntegrationName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime?>("LastSyncAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "IntegrationName")
+                        .IsUnique();
+
+                    b.ToTable("ProjectIntegrationConfigs", (string)null);
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.ProjectMember", b =>
                 {
                     b.Property<int>("ProjectId")
@@ -1618,6 +1660,116 @@ namespace JiraClone.Persistence.Migrations
                     b.HasIndex("IssueId", "WatchedAtUtc");
 
                     b.ToTable("Watchers", (string)null);
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WebhookDelivery", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AttemptedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ResponseCode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WebhookEndpointId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WebhookEndpointId", "AttemptedAtUtc");
+
+                    b.ToTable("WebhookDeliveries", (string)null);
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WebhookEndpoint", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Secret")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "IsActive");
+
+                    b.HasIndex("ProjectId", "Name");
+
+                    b.ToTable("WebhookEndpoints", (string)null);
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WebhookEndpointSubscription", b =>
+                {
+                    b.Property<int>("WebhookEndpointId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("int");
+
+                    b.HasKey("WebhookEndpointId", "EventType");
+
+                    b.HasIndex("EventType");
+
+                    b.ToTable("WebhookEndpointSubscriptions", (string)null);
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowDefinition", b =>
@@ -2385,6 +2537,17 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.ProjectIntegrationConfig", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.Project", "Project")
+                        .WithMany("ProjectIntegrationConfigs")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.ProjectMember", b =>
                 {
                     b.HasOne("JiraClone.Domain.Entities.Project", "Project")
@@ -2481,6 +2644,39 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("Issue");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WebhookDelivery", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.WebhookEndpoint", "WebhookEndpoint")
+                        .WithMany("Deliveries")
+                        .HasForeignKey("WebhookEndpointId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("WebhookEndpoint");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WebhookEndpoint", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.Project", "Project")
+                        .WithMany("WebhookEndpoints")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WebhookEndpointSubscription", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.WebhookEndpoint", "WebhookEndpoint")
+                        .WithMany("Subscriptions")
+                        .HasForeignKey("WebhookEndpointId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("WebhookEndpoint");
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowDefinition", b =>
@@ -2599,11 +2795,15 @@ namespace JiraClone.Persistence.Migrations
 
                     b.Navigation("PermissionScheme");
 
+                    b.Navigation("ProjectIntegrationConfigs");
+
                     b.Navigation("SavedFilters");
 
                     b.Navigation("Sprints");
 
                     b.Navigation("Versions");
+
+                    b.Navigation("WebhookEndpoints");
 
                     b.Navigation("WorkflowDefinitions");
                 });
@@ -2640,6 +2840,13 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("UserRoles");
 
                     b.Navigation("WatchedIssues");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WebhookEndpoint", b =>
+                {
+                    b.Navigation("Deliveries");
+
+                    b.Navigation("Subscriptions");
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowDefinition", b =>

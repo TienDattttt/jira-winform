@@ -1,4 +1,4 @@
-﻿using JiraClone.Application.Abstractions;
+using JiraClone.Application.Abstractions;
 using JiraClone.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -46,7 +46,13 @@ public class ProjectRepository : IProjectRepository
             .Include(x => x.Labels)
             .Include(x => x.Components)
             .Include(x => x.Versions)
+            .Include(x => x.WebhookEndpoints)
+            .ThenInclude(x => x.Subscriptions)
             .Include(x => x.SavedFilters)
+            .Include(x => x.WebhookEndpoints)
+            .ThenInclude(x => x.Subscriptions)
+            .Include(x => x.WebhookEndpoints)
+            .ThenInclude(x => x.Deliveries)
             .Include(x => x.WorkflowDefinitions)
             .ThenInclude(x => x.Statuses)
             .Include(x => x.WorkflowDefinitions)
@@ -88,6 +94,8 @@ public class ProjectRepository : IProjectRepository
             .Include(x => x.Components)
             .ThenInclude(x => x.LeadUser)
             .Include(x => x.Versions)
+            .Include(x => x.WebhookEndpoints)
+            .ThenInclude(x => x.Subscriptions)
             .Include(x => x.WorkflowDefinitions)
             .ThenInclude(x => x.Statuses)
             .Include(x => x.WorkflowDefinitions)

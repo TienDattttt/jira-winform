@@ -73,6 +73,7 @@ public class IssueDetailsForm : Form
     private readonly Label _watcherCountLabel = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly FlowLayoutPanel _watcherAvatars = new() { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = false, Margin = new Padding(0), Padding = new Padding(0), BackColor = Color.Transparent };
     private readonly Button _watchButton = JiraControlFactory.CreateSecondaryButton("Watch");
+    private readonly IssueIntegrationsControl _integrations;
     private readonly Button _delete = JiraControlFactory.CreateSecondaryButton("Delete");
     private readonly ToolStripMenuItem _deleteIssueMenuItem = new("Delete issue");
     private readonly LinkLabel _parentLink = new() { AutoSize = true, Font = JiraTheme.FontBody, LinkColor = JiraTheme.PrimaryActive, Visible = false };
@@ -101,6 +102,7 @@ public class IssueDetailsForm : Form
         _projectId = projectId;
         _openChildIssuesByDefault = openChildIssues;
         _logger = session.CreateLogger<IssueDetailsForm>();
+        _integrations = new IssueIntegrationsControl(_session);
         Text = "Issue Details";
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Font;
@@ -174,6 +176,7 @@ public class IssueDetailsForm : Form
         _logTime.AutoSize = false;
         ConfigureWatchField();
         _watchButton.Click += OnWatchButtonClick;
+        _integrations.DataChanged += OnIntegrationsDataChanged;
         _logTime.Size = new Size(100, 36);
         _logTime.Click += OnLogTimeClick;
         _delete.AutoSize = false;
@@ -359,6 +362,11 @@ public class IssueDetailsForm : Form
     private async void OnWatchButtonClick(object? sender, EventArgs e)
     {
         await ToggleWatchAsync();
+    }
+
+    private async void OnIntegrationsDataChanged(object? sender, EventArgs e)
+    {
+        await LoadDetailsAsync(false);
     }
 
     private async void OnLogTimeClick(object? sender, EventArgs e)
@@ -666,6 +674,10 @@ public class IssueDetailsForm : Form
         detailsBlock.Controls.Add(statusHost);
         detailsBlock.Controls.Add(TopLabel("Status"));
 
+        var integrationsBlock = new Panel { Dock = DockStyle.Top, Height = 330, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 0) };
+        _integrations.Dock = DockStyle.Fill;
+        integrationsBlock.Controls.Add(_integrations);
+
         var timeBlock = new Panel { Dock = DockStyle.Top, Height = 114, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 0) };
         _logTime.Dock = DockStyle.Top;
         _time.Dock = DockStyle.Top;
@@ -676,6 +688,9 @@ public class IssueDetailsForm : Form
         _parentSection.Controls.Add(_parentLink);
         var parentLabel = TopLabel("Parent");
 
+        panel.Controls.Add(integrationsBlock);
+        panel.Controls.Add(TopLabel("Integrations"));
+        panel.Controls.Add(JiraControlFactory.CreateSeparator());
         panel.Controls.Add(timeBlock);
         panel.Controls.Add(TopLabel("Time Tracking"));
         panel.Controls.Add(JiraControlFactory.CreateSeparator());
@@ -713,6 +728,7 @@ public class IssueDetailsForm : Form
             _comments.Bind(_details.Comments);
             _attachments.Bind(_details.Attachments);
             _history.Bind(_details.ActivityLogs);
+            await _integrations.LoadAsync(_issueId, _projectId, CancellationToken.None);
             ActivateTab(ResolveInitialTab(_details));
         }
         catch (Exception ex) { ErrorDialogService.Show(ex); }
@@ -2205,6 +2221,8 @@ public class IssueDetailsForm : Form
         public IReadOnlyList<int> SelectedUserIds => _assignees.CheckedItems.Cast<User>().Select(x => x.Id).ToList();
     }
 }
+
+
 
 
 

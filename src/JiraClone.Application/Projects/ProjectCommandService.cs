@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using JiraClone.Application.Abstractions;
@@ -32,6 +32,7 @@ public class ProjectCommandService : IProjectCommandService
     private readonly IAuthorizationService _authorization;
     private readonly IPermissionService _permissionService;
     private readonly IActivityLogRepository _activityLogs;
+    private readonly IWebhookDispatcher _webhookDispatcher;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<ProjectCommandService> _logger;
@@ -44,6 +45,7 @@ public class ProjectCommandService : IProjectCommandService
         IAuthorizationService authorization,
         IPermissionService permissionService,
         IActivityLogRepository activityLogs,
+        IWebhookDispatcher webhookDispatcher,
         ICurrentUserContext currentUserContext,
         IUnitOfWork unitOfWork,
         ILogger<ProjectCommandService>? logger = null)
@@ -55,6 +57,7 @@ public class ProjectCommandService : IProjectCommandService
         _authorization = authorization;
         _permissionService = permissionService;
         _activityLogs = activityLogs;
+        _webhookDispatcher = webhookDispatcher;
         _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
         _logger = logger ?? NullLogger<ProjectCommandService>.Instance;
@@ -254,6 +257,7 @@ public class ProjectCommandService : IProjectCommandService
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _webhookDispatcher.DispatchAsync(project.Id, WebhookEventType.ProjectUpdated, CreateProjectWebhookPayload(project, "ProjectUpdated"), cancellationToken);
         return project;
     }
 
@@ -473,6 +477,7 @@ public class ProjectCommandService : IProjectCommandService
 
         await AddProjectActivityAsync(projectId, ActivityActionType.Updated, nameof(BoardColumn.Name), oldValue, $"{column.Name}|{column.WipLimit}", cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _webhookDispatcher.DispatchAsync(projectId, WebhookEventType.ProjectUpdated, CreateProjectWebhookPayload(project!, "BoardColumnUpdated"), cancellationToken);
         return true;
     }
 
@@ -530,7 +535,25 @@ public class ProjectCommandService : IProjectCommandService
                 Grants = scheme.Grants.Select(x => new { x.Permission, x.ProjectRole }).ToArray()
             }));
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _webhookDispatcher.DispatchAsync(projectId, WebhookEventType.ProjectUpdated, CreateProjectWebhookPayload(project, "PermissionSchemeUpdated"), cancellationToken);
         return true;
+    }
+
+    private static object CreateProjectWebhookPayload(Project project, string reason)
+    {
+        return new
+        {
+            project.Id,
+            project.Key,
+            project.Name,
+            project.Description,
+            project.Category,
+            project.BoardType,
+            project.Url,
+            project.IsActive,
+            Reason = reason,
+            project.UpdatedAtUtc,
+        };
     }
 
     private static string NormalizeProjectKey(string? key)

@@ -6,6 +6,7 @@ using JiraClone.Application.Boards;
 using JiraClone.Application.Comments;
 using JiraClone.Application.Components;
 using JiraClone.Application.Dashboard;
+using JiraClone.Application.Integrations;
 using JiraClone.Application.Issues;
 using JiraClone.Application.Jql;
 using JiraClone.Application.Labels;
@@ -18,11 +19,14 @@ using JiraClone.Application.Sprints;
 using JiraClone.Application.Users;
 using JiraClone.Application.Versions;
 using JiraClone.Application.Watchers;
+using JiraClone.Application.Webhooks;
 using JiraClone.Application.Workflows;
 using JiraClone.Infrastructure.Email;
+using JiraClone.Infrastructure.Integrations;
 using JiraClone.Infrastructure.Security;
 using JiraClone.Infrastructure.Session;
 using JiraClone.Infrastructure.Storage;
+using JiraClone.Infrastructure.Webhooks;
 using JiraClone.Persistence;
 using JiraClone.Persistence.Repositories;
 using JiraClone.WinForms.Composition;
@@ -122,9 +126,11 @@ internal static class Program
             services.AddSingleton(emailOptions);
             services.AddSingleton<IEmailService, MailKitEmailService>();
             services.AddSingleton<INotificationEmailTemplateRenderer, NotificationEmailTemplateRenderer>();
+            services.AddSingleton<IIntegrationConfigProtector, DpapiIntegrationConfigProtector>();
 
             services.AddSingleton(new SessionPersistenceOptions { SessionFilePath = sessionFilePath });
             services.AddSingleton<ISessionPersistenceService, DpapiSessionPersistenceService>();
+            services.AddSingleton(new HttpClient());
 
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<IActivityLogRepository, ActivityLogRepository>();
@@ -135,11 +141,14 @@ internal static class Program
             services.AddScoped<ILabelRepository, LabelRepository>();
             services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IProjectRepository, ProjectRepository>();
+            services.AddScoped<IProjectIntegrationConfigRepository, ProjectIntegrationConfigRepository>();
             services.AddScoped<IProjectVersionRepository, ProjectVersionRepository>();
             services.AddScoped<ISavedFilterRepository, SavedFilterRepository>();
             services.AddScoped<ISprintRepository, SprintRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IWatcherRepository, WatcherRepository>();
+            services.AddScoped<IWebhookEndpointRepository, WebhookEndpointRepository>();
+            services.AddScoped<IWebhookDeliveryRepository, WebhookDeliveryRepository>();
             services.AddScoped<IWorkflowRepository, WorkflowRepository>();
 
             services.AddScoped<AuthenticationService>();
@@ -151,10 +160,16 @@ internal static class Program
             services.AddScoped<UserCommandService>();
             services.AddScoped<IWorkflowService, WorkflowService>();
             services.AddScoped<IJqlService, JqlService>();
+            services.AddScoped<IntegrationConfigStore>();
+            services.AddScoped<IIntegrationCatalogService, IntegrationCatalogService>();
+            services.AddScoped<IGitHubIntegrationService, GitHubIntegrationService>();
+            services.AddScoped<IConfluenceIntegrationService, ConfluenceIntegrationService>();
             services.AddScoped<ISavedFilterService, SavedFilterService>();
             services.AddScoped<IssueService>();
             services.AddScoped<IWatcherService, WatcherService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IWebhookDispatcher, WebhookDispatcher>();
+            services.AddScoped<IWebhookService, WebhookService>();
             services.AddScoped<ILabelService, LabelService>();
             services.AddScoped<IComponentService, ComponentService>();
             services.AddScoped<IVersionService, VersionService>();
@@ -166,6 +181,8 @@ internal static class Program
             services.AddScoped<DashboardQueryService>();
             services.AddScoped<IRoadmapService, RoadmapService>();
 
+            RegisterIntegrationPlugins(services);
+            services.AddSingleton<GitHubIntegrationSyncWorker>();
             services.AddSingleton<AppSession>();
 
             using var serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions
@@ -176,6 +193,7 @@ internal static class Program
             var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
             var startupLogger = loggerFactory.CreateLogger("Startup");
             startupLogger.LogInformation("Starting Jira Clone in {EnvironmentName} mode.", environmentName);
+            _ = serviceProvider.GetRequiredService<GitHubIntegrationSyncWorker>();
 
             var startupForm = CreateStartupForm(serviceProvider, startupLogger);
             System.Windows.Forms.Application.Run(startupForm);
@@ -192,6 +210,25 @@ internal static class Program
         finally
         {
             Log.CloseAndFlush();
+        }
+    }
+
+    private static void RegisterIntegrationPlugins(ServiceCollection services)
+    {
+        var pluginAssemblies = new[]
+        {
+            typeof(IIntegrationPlugin).Assembly,
+            typeof(IntegrationPluginRegistrationMarker).Assembly
+        };
+
+        var pluginTypes = pluginAssemblies
+            .SelectMany(assembly => assembly.GetTypes())
+            .Where(type => typeof(IIntegrationPlugin).IsAssignableFrom(type) && type.IsClass && !type.IsAbstract)
+            .Distinct();
+
+        foreach (var pluginType in pluginTypes)
+        {
+            services.AddScoped(typeof(IIntegrationPlugin), pluginType);
         }
     }
 
@@ -259,4 +296,3 @@ internal static class Program
         }
     }
 }
-

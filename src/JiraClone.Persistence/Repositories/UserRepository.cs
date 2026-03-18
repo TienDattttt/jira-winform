@@ -26,6 +26,15 @@ public class UserRepository : IUserRepository
             .ThenInclude(x => x.Role)
             .FirstOrDefaultAsync(x => x.UserName == userName, cancellationToken);
 
+    public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = email.Trim();
+        return _dbContext.Users
+            .Include(x => x.UserRoles)
+            .ThenInclude(x => x.Role)
+            .FirstOrDefaultAsync(x => x.Email == normalizedEmail, cancellationToken);
+    }
+
     public Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default) =>
         _dbContext.Users
             .Include(x => x.UserRoles)
