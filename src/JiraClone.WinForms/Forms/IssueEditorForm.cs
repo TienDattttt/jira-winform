@@ -5,6 +5,7 @@ using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
+using Microsoft.Extensions.Logging;
 
 namespace JiraClone.WinForms.Forms;
 
@@ -13,7 +14,8 @@ public class IssueEditorForm : Form
     private readonly AppSession _session;
     private readonly int _projectId;
     private readonly int? _issueId;
-    private readonly IssueStatus? _defaultStatus;
+    private readonly int? _defaultStatusId;
+    private readonly ILogger<IssueEditorForm> _logger;
     private readonly TextBox _titleTextBox = JiraControlFactory.CreateTextBox();
     private readonly TextBox _descriptionTextBox = JiraControlFactory.CreateTextBox();
     private readonly ComboBox _typeComboBox = CreateCombo();
@@ -35,13 +37,15 @@ public class IssueEditorForm : Form
     private readonly Panel _parentRow;
     private readonly Button _saveButton = JiraControlFactory.CreatePrimaryButton("Save issue");
     private readonly Button _cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
+    private IReadOnlyList<WorkflowStatusOptionDto> _workflowStatuses = Array.Empty<WorkflowStatusOptionDto>();
 
-    public IssueEditorForm(AppSession session, int projectId, int? issueId, IssueStatus? defaultStatus = null)
+    public IssueEditorForm(AppSession session, int projectId, int? issueId, int? defaultStatusId = null)
     {
         _session = session;
         _projectId = projectId;
         _issueId = issueId;
-        _defaultStatus = defaultStatus;
+        _defaultStatusId = defaultStatusId;
+        _logger = session.CreateLogger<IssueEditorForm>();
 
         Text = issueId.HasValue ? "Edit Issue" : "Create Issue";
         AutoScaleMode = AutoScaleMode.Font;
@@ -59,7 +63,8 @@ public class IssueEditorForm : Form
         _descriptionTextBox.Height = 120;
 
         _typeComboBox.DataSource = Enum.GetValues(typeof(IssueType));
-        _statusComboBox.DataSource = Enum.GetValues(typeof(IssueStatus));
+        _statusComboBox.DisplayMember = nameof(WorkflowStatusOptionDto.Name);
+        _statusComboBox.ValueMember = nameof(WorkflowStatusOptionDto.Id);
         _priorityComboBox.DataSource = Enum.GetValues(typeof(IssuePriority));
 
         _saveButton.AutoSize = false;
@@ -186,6 +191,10 @@ public class IssueEditorForm : Form
     {
         try
         {
+            var workflow = await _session.Workflows.GetDefaultWorkflowAsync(_projectId);
+            _workflowStatuses = workflow?.Statuses.OrderBy(x => x.DisplayOrder).ToList() ?? [];
+            _statusComboBox.DataSource = _workflowStatuses.ToList();
+
             var users = await _session.Users.GetProjectUsersAsync(_projectId);
             _reporterComboBox.DataSource = users.ToList();
             _reporterComboBox.DisplayMember = nameof(User.DisplayName);
@@ -202,9 +211,13 @@ public class IssueEditorForm : Form
 
             if (_issueId is null)
             {
-                if (_defaultStatus.HasValue)
+                if (_defaultStatusId.HasValue)
                 {
-                    _statusComboBox.SelectedItem = _defaultStatus.Value;
+                    _statusComboBox.SelectedValue = _defaultStatusId.Value;
+                }
+                else if (_workflowStatuses.Count > 0)
+                {
+                    _statusComboBox.SelectedIndex = 0;
                 }
 
                 return;
@@ -221,7 +234,7 @@ public class IssueEditorForm : Form
             _titleTextBox.Text = details.Issue.Title;
             _descriptionTextBox.Text = details.Issue.DescriptionText;
             _typeComboBox.SelectedItem = details.Issue.Type;
-            _statusComboBox.SelectedItem = details.Issue.Status;
+            _statusComboBox.SelectedValue = details.Issue.WorkflowStatusId;
             _priorityComboBox.SelectedItem = details.Issue.Priority;
             _reporterComboBox.SelectedValue = details.Issue.ReporterId;
             if (details.Issue.SprintId.HasValue)
@@ -239,7 +252,6 @@ public class IssueEditorForm : Form
                 _assigneesList.SetItemChecked(index, details.Issue.Assignees.Any(a => a.UserId == user.Id));
             }
 
-            // Load parent info after type is set
             await RefreshParentListAsync();
             if (details.Issue.ParentIssueId.HasValue)
             {
@@ -265,12 +277,12 @@ public class IssueEditorForm : Form
                 Title = _titleTextBox.Text,
                 DescriptionText = _descriptionTextBox.Text,
                 Type = (IssueType)_typeComboBox.SelectedItem!,
-                Status = (IssueStatus)_statusComboBox.SelectedItem!,
+                WorkflowStatusId = _statusComboBox.SelectedValue is int workflowStatusId ? workflowStatusId : null,
                 Priority = (IssuePriority)_priorityComboBox.SelectedItem!,
                 ReporterId = _reporterComboBox.SelectedValue is int reporterId ? reporterId : 1,
                 CreatedById = currentUserId,
                 SprintId = _sprintSelector.SelectedValue is int sprintId ? sprintId : null,
-                ParentIssueId = _parentComboBox.Visible && _parentComboBox.SelectedValue is int parentId ? parentId : null,
+                ParentIssueId = _parentComboBox.Visible && _parentComboBox.SelectedValue is int parentId && parentId > 0 ? parentId : null,
                 AssigneeIds = _assigneesList.CheckedItems.Cast<User>().Select(x => x.Id).ToArray()
             };
 
@@ -317,7 +329,7 @@ public class IssueEditorForm : Form
                 return;
             }
 
-            var items = potentialParents.Select(p => new { p.Id, Display = $"{p.IssueKey} — {p.Title}" }).ToList();
+            var items = potentialParents.Select(p => new { p.Id, Display = $"{p.IssueKey} - {p.Title}" }).ToList();
 
             if (selectedType != IssueType.Subtask)
             {
@@ -331,9 +343,12 @@ public class IssueEditorForm : Form
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to load parent list: {ex.Message}");
+            _logger.LogDebug(ex, "Failed to load potential parent issues.");
             _parentRow.Visible = false;
         }
     }
 }
+
+
+
 

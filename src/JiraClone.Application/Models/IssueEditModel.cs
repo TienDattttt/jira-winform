@@ -9,7 +9,7 @@ public sealed class IssueEditModel
     public string Title { get; set; } = string.Empty;
     public string? DescriptionText { get; set; }
     public IssueType Type { get; set; } = IssueType.Task;
-    public IssueStatus Status { get; set; } = IssueStatus.Backlog;
+    public int? WorkflowStatusId { get; set; }
     public IssuePriority Priority { get; set; } = IssuePriority.Medium;
     public int ReporterId { get; set; }
     public int CreatedById { get; set; }

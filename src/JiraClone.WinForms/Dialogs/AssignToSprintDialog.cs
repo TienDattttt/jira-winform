@@ -88,7 +88,7 @@ public class AssignToSprintDialog : Form
         body.Controls.Add(title);
 
         _issuesList.DisplayMember = nameof(Issue.Title);
-        foreach (var issue in issues.OrderBy(x => x.Status).ThenBy(x => x.Title))
+        foreach (var issue in issues.OrderBy(x => x.WorkflowStatus.DisplayOrder).ThenBy(x => x.Title))
         {
             var index = _issuesList.Items.Add(issue);
             if (issue.SprintId == sprint.Id)
@@ -105,3 +105,4 @@ public class AssignToSprintDialog : Form
     public IReadOnlyList<Issue> Issues { get; }
     public IReadOnlyList<int> SelectedIssueIds { get; private set; } = Array.Empty<int>();
 }
+

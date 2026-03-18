@@ -34,7 +34,7 @@ public class DashboardQueryService
     {
         var activeSprint = await _sprints.GetActiveByProjectIdAsync(projectId, cancellationToken);
         var sprintBoard = activeSprint is null
-            ? BuildEmptyBoard()
+            ? []
             : await _boardQueries.GetBoardAsync(projectId, activeSprint.Id, cancellationToken);
         var projectIssues = await _issueQueries.GetProjectIssuesAsync(projectId, cancellationToken);
         var recentActivities = await _activityLogs.GetProjectActivityAsync(projectId, 10, cancellationToken);
@@ -52,12 +52,15 @@ public class DashboardQueryService
     private static DashboardSprintProgressDto BuildSprintProgress(Sprint? activeSprint, IReadOnlyList<BoardColumnDto> board)
     {
         var sprintIssues = board.SelectMany(column => column.Issues).ToList();
-        var doneIssues = sprintIssues.Count(issue => issue.Status == IssueStatus.Done);
+        var doneIssues = sprintIssues.Count(issue => issue.StatusCategory == StatusCategory.Done);
         var totalIssues = sprintIssues.Count;
-        var doneStoryPoints = sprintIssues.Where(issue => issue.Status == IssueStatus.Done).Sum(issue => issue.StoryPoints ?? 0);
+        var doneStoryPoints = sprintIssues.Where(issue => issue.StatusCategory == StatusCategory.Done).Sum(issue => issue.StoryPoints ?? 0);
         var totalStoryPoints = sprintIssues.Sum(issue => issue.StoryPoints ?? 0);
-        var counts = Enum.GetValues<IssueStatus>()
-            .Select(status => new DashboardStatusCountDto(status, sprintIssues.Count(issue => issue.Status == status)))
+        var counts = sprintIssues
+            .GroupBy(issue => new { issue.StatusId, issue.StatusName, issue.StatusColor, issue.StatusCategory })
+            .OrderBy(group => group.Key.StatusCategory)
+            .ThenBy(group => group.Key.StatusName)
+            .Select(group => new DashboardStatusCountDto(group.Key.StatusId, group.Key.StatusName, group.Key.StatusColor, group.Key.StatusCategory, group.Count()))
             .ToList();
 
         return new DashboardSprintProgressDto(
@@ -106,7 +109,7 @@ public class DashboardQueryService
 
     private static IReadOnlyList<DashboardIssueDto> BuildAssignedToMe(IEnumerable<DashboardIssueDto> issues, int? currentUserId) =>
         issues
-            .Where(issue => issue.Status == IssueStatus.InProgress && currentUserId.HasValue && issue.Assignees.Any(assignee => assignee.UserId == currentUserId.Value))
+            .Where(issue => issue.StatusCategory == StatusCategory.InProgress && currentUserId.HasValue && issue.Assignees.Any(assignee => assignee.UserId == currentUserId.Value))
             .OrderByDescending(issue => issue.Priority)
             .ThenBy(issue => issue.IssueKey)
             .ToList();
@@ -118,8 +121,8 @@ public class DashboardQueryService
             .Select(user =>
             {
                 var assigned = issueList.Where(issue => issue.Assignees.Any(assignee => assignee.UserId == user.Id)).ToList();
-                var openIssues = assigned.Count(issue => issue.Status is IssueStatus.Backlog or IssueStatus.Selected);
-                var inProgressIssues = assigned.Count(issue => issue.Status == IssueStatus.InProgress);
+                var openIssues = assigned.Count(issue => issue.StatusCategory == StatusCategory.ToDo);
+                var inProgressIssues = assigned.Count(issue => issue.StatusCategory == StatusCategory.InProgress);
                 return new DashboardTeamWorkloadDto(user.Id, user.DisplayName, user.AvatarPath, openIssues, inProgressIssues);
             })
             .OrderByDescending(item => item.InProgressIssues)
@@ -127,15 +130,6 @@ public class DashboardQueryService
             .ThenBy(item => item.DisplayName)
             .ToList();
     }
-
-    private static IReadOnlyList<BoardColumnDto> BuildEmptyBoard() =>
-        new[]
-        {
-            new BoardColumnDto(IssueStatus.Backlog, "Backlog", Array.Empty<IssueSummaryDto>()),
-            new BoardColumnDto(IssueStatus.Selected, "Selected", Array.Empty<IssueSummaryDto>()),
-            new BoardColumnDto(IssueStatus.InProgress, "In Progress", Array.Empty<IssueSummaryDto>()),
-            new BoardColumnDto(IssueStatus.Done, "Done", Array.Empty<IssueSummaryDto>())
-        };
 
     private static string FormatIssueType(IssueType type) => type switch
     {

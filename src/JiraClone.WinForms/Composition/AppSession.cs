@@ -6,6 +6,7 @@ using JiraClone.Application.Boards;
 using JiraClone.Application.Comments;
 using JiraClone.Application.Components;
 using JiraClone.Application.Issues;
+using JiraClone.Application.Jql;
 using JiraClone.Application.Labels;
 using JiraClone.Application.Models;
 using JiraClone.Application.Projects;
@@ -13,6 +14,7 @@ using JiraClone.Application.Roles;
 using JiraClone.Application.Sprints;
 using JiraClone.Application.Users;
 using JiraClone.Application.Versions;
+using JiraClone.Application.Workflows;
 using JiraClone.Domain.Entities;
 using ProjectLabel = JiraClone.Domain.Entities.Label;
 using ProjectComponent = JiraClone.Domain.Entities.Component;
@@ -23,30 +25,37 @@ using JiraClone.Infrastructure.Storage;
 using JiraClone.Persistence;
 using JiraClone.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace JiraClone.WinForms.Composition;
 
 public sealed class AppSession : IDisposable
 {
     private readonly IDbContextFactory<JiraCloneDbContext> _dbContextFactory;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger<AppSession> _logger;
     private readonly IPasswordHasher _passwordHasher;
     private readonly FileShareAttachmentService _attachmentStorage;
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private Project? _activeProject;
 
-    public AppSession(IDbContextFactory<JiraCloneDbContext> dbContextFactory, string attachmentRootPath)
+    public AppSession(IDbContextFactory<JiraCloneDbContext> dbContextFactory, ILoggerFactory loggerFactory, string attachmentRootPath, long maxAttachmentSizeBytes)
     {
         _dbContextFactory = dbContextFactory;
+        _loggerFactory = loggerFactory;
+        _logger = loggerFactory.CreateLogger<AppSession>();
         _passwordHasher = new Sha256PasswordHasher();
-        _attachmentStorage = new FileShareAttachmentService(attachmentRootPath);
+        _attachmentStorage = new FileShareAttachmentService(attachmentRootPath, maxAttachmentSizeBytes, loggerFactory.CreateLogger<FileShareAttachmentService>());
 
         try
         {
             using var migrationContext = _dbContextFactory.CreateDbContext();
             migrationContext.Database.Migrate();
+            _logger.LogInformation("Database migration check completed successfully.");
         }
         catch (Exception exception)
         {
+            _logger.LogCritical(exception, "Database migration failed during startup.");
             throw new InvalidOperationException("Database migration failed during startup. Verify the connection string and apply pending migrations.", exception);
         }
 
@@ -59,9 +68,12 @@ public sealed class AppSession : IDisposable
         Users = new UserQueryOperations(this);
         UserCommands = new UserCommandOperations(this);
         Issues = new IssueOperations(this);
+        Jql = new JqlOperations(this);
+        SavedFilters = new SavedFilterOperations(this);
         Labels = new LabelOperations(this);
         Components = new ComponentOperations(this);
         Versions = new VersionOperations(this);
+        Workflows = new WorkflowOperations(this);
         Comments = new CommentOperations(this);
         Sprints = new SprintOperations(this);
         ActivityLog = new ActivityLogOperations(this);
@@ -77,9 +89,12 @@ public sealed class AppSession : IDisposable
     public UserQueryOperations Users { get; }
     public UserCommandOperations UserCommands { get; }
     public IssueOperations Issues { get; }
+    public JqlOperations Jql { get; }
+    public SavedFilterOperations SavedFilters { get; }
     public LabelOperations Labels { get; }
     public ComponentOperations Components { get; }
     public VersionOperations Versions { get; }
+    public WorkflowOperations Workflows { get; }
     public CommentOperations Comments { get; }
     public SprintOperations Sprints { get; }
     public ActivityLogOperations ActivityLog { get; }
@@ -90,23 +105,43 @@ public sealed class AppSession : IDisposable
 
     internal JiraCloneDbContext CreateDbContext() => _dbContextFactory.CreateDbContext();
 
+    internal ILogger<T> CreateLogger<T>() => _loggerFactory.CreateLogger<T>();
+
     internal AuthenticationService CreateAuthenticationService(JiraCloneDbContext dbContext) =>
-        new(new UserRepository(dbContext), _passwordHasher, CurrentUserContext);
+        new(new UserRepository(dbContext), _passwordHasher, CurrentUserContext, CreateLogger<AuthenticationService>());
 
     internal ProjectQueryService CreateProjectQueryService(JiraCloneDbContext dbContext) =>
-        new(new ProjectRepository(dbContext));
+        new(new ProjectRepository(dbContext), CreateLogger<ProjectQueryService>());
 
     internal IProjectCommandService CreateProjectCommandService(JiraCloneDbContext dbContext) =>
-        new ProjectCommandService(new ProjectRepository(dbContext), new UserRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext));
+        new ProjectCommandService(new ProjectRepository(dbContext), new UserRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext), CreateLogger<ProjectCommandService>());
 
     internal BoardQueryService CreateBoardQueryService(JiraCloneDbContext dbContext) =>
-        new(new IssueRepository(dbContext));
+        new(new IssueRepository(dbContext), new ProjectRepository(dbContext), CreateLogger<BoardQueryService>());
 
     internal UserQueryService CreateUserQueryService(JiraCloneDbContext dbContext) =>
-        new(new UserRepository(dbContext));
+        new(new UserRepository(dbContext), CreateLogger<UserQueryService>());
 
     internal UserCommandService CreateUserCommandService(JiraCloneDbContext dbContext) =>
-        new(new UserRepository(dbContext), new ProjectRepository(dbContext), _passwordHasher, Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext));
+        new(new UserRepository(dbContext), new ProjectRepository(dbContext), _passwordHasher, Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext), CreateLogger<UserCommandService>());
+
+    internal IWorkflowService CreateWorkflowService(JiraCloneDbContext dbContext) =>
+        new WorkflowService(
+            new WorkflowRepository(dbContext),
+            new IssueRepository(dbContext),
+            new ProjectRepository(dbContext),
+            new UserRepository(dbContext),
+            Authorization,
+            new ActivityLogRepository(dbContext),
+            CurrentUserContext,
+            new UnitOfWork(dbContext),
+            CreateLogger<WorkflowService>());
+
+    internal IJqlService CreateJqlService(JiraCloneDbContext dbContext) =>
+        new JqlService(new IssueRepository(dbContext), CurrentUserContext, CreateLogger<JqlService>());
+
+    internal ISavedFilterService CreateSavedFilterService(JiraCloneDbContext dbContext) =>
+        new SavedFilterService(new SavedFilterRepository(dbContext), new ProjectRepository(dbContext), Authorization, new UnitOfWork(dbContext), CreateLogger<SavedFilterService>());
 
     internal IssueService CreateIssueService(JiraCloneDbContext dbContext) =>
         new(
@@ -117,7 +152,10 @@ public sealed class AppSession : IDisposable
             new AttachmentRepository(dbContext),
             Authorization,
             new ActivityLogRepository(dbContext),
-            new UnitOfWork(dbContext));
+            CreateWorkflowService(dbContext),
+            new WorkflowRepository(dbContext),
+            new UnitOfWork(dbContext),
+            CreateLogger<IssueService>());
 
     internal ILabelService CreateLabelService(JiraCloneDbContext dbContext) =>
         new LabelService(
@@ -127,7 +165,8 @@ public sealed class AppSession : IDisposable
             Authorization,
             new ActivityLogRepository(dbContext),
             CurrentUserContext,
-            new UnitOfWork(dbContext));
+            new UnitOfWork(dbContext),
+            CreateLogger<LabelService>());
 
     internal IComponentService CreateComponentService(JiraCloneDbContext dbContext) =>
         new ComponentService(
@@ -138,7 +177,8 @@ public sealed class AppSession : IDisposable
             Authorization,
             new ActivityLogRepository(dbContext),
             CurrentUserContext,
-            new UnitOfWork(dbContext));
+            new UnitOfWork(dbContext),
+            CreateLogger<ComponentService>());
 
     internal IVersionService CreateVersionService(JiraCloneDbContext dbContext) =>
         new VersionService(
@@ -148,19 +188,20 @@ public sealed class AppSession : IDisposable
             Authorization,
             new ActivityLogRepository(dbContext),
             CurrentUserContext,
-            new UnitOfWork(dbContext));
+            new UnitOfWork(dbContext),
+            CreateLogger<VersionService>());
 
     internal CommentService CreateCommentService(JiraCloneDbContext dbContext) =>
-        new(new CommentRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), new UnitOfWork(dbContext));
+        new(new CommentRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), new UnitOfWork(dbContext), CreateLogger<CommentService>());
 
     internal ISprintService CreateSprintService(JiraCloneDbContext dbContext) =>
-        new SprintService(new SprintRepository(dbContext), new IssueRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext));
+        new SprintService(new SprintRepository(dbContext), new IssueRepository(dbContext), new WorkflowRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), CurrentUserContext, new UnitOfWork(dbContext), CreateLogger<SprintService>());
 
     internal ActivityLogService CreateActivityLogService(JiraCloneDbContext dbContext) =>
-        new(new ActivityLogRepository(dbContext));
+        new(new ActivityLogRepository(dbContext), CreateLogger<ActivityLogService>());
 
     internal AttachmentFacade CreateAttachmentFacade(JiraCloneDbContext dbContext) =>
-        new(_attachmentStorage, new AttachmentRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), new UnitOfWork(dbContext));
+        new(_attachmentStorage, new AttachmentRepository(dbContext), Authorization, new ActivityLogRepository(dbContext), new UnitOfWork(dbContext), CreateLogger<AttachmentFacade>());
 
     public async Task<Project?> InitializeActiveProjectAsync(CancellationToken cancellationToken = default)
     {
@@ -510,10 +551,10 @@ public sealed class AppSession : IDisposable
             return await _session.CreateIssueService(dbContext).UpdateAsync(model, cancellationToken);
         }
 
-        public async Task<bool> MoveAsync(int issueId, IssueStatus targetStatus, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
+        public async Task<bool> MoveAsync(int issueId, int targetStatusId, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
         {
             await using var dbContext = _session.CreateDbContext();
-            return await _session.CreateIssueService(dbContext).MoveAsync(issueId, targetStatus, boardPosition, userId, cancellationToken);
+            return await _session.CreateIssueService(dbContext).MoveAsync(issueId, targetStatusId, boardPosition, userId, cancellationToken);
         }
 
         public async Task<IssueDetailsDto?> GetDetailsAsync(int issueId, CancellationToken cancellationToken = default)
@@ -538,6 +579,56 @@ public sealed class AppSession : IDisposable
         {
             await using var dbContext = _session.CreateDbContext();
             return await new IssueRepository(dbContext).GetSubIssuesAsync(issueId, cancellationToken);
+        }
+    }
+
+    public sealed class JqlOperations
+    {
+        private readonly AppSession _session;
+
+        internal JqlOperations(AppSession session) => _session = session;
+
+        public async Task<IReadOnlyList<IssueDto>> ExecuteQueryAsync(string? jql, int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateJqlService(dbContext).ExecuteQueryAsync(jql, projectId, cancellationToken);
+        }
+
+        public JqlQuery Parse(string? jql)
+        {
+            using var dbContext = _session.CreateDbContext();
+            return _session.CreateJqlService(dbContext).Parse(jql);
+        }
+    }
+
+    public sealed class SavedFilterOperations
+    {
+        private readonly AppSession _session;
+
+        internal SavedFilterOperations(AppSession session) => _session = session;
+
+        public async Task<IReadOnlyList<SavedFilterDto>> GetByProjectAsync(int projectId, int userId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateSavedFilterService(dbContext).GetByProjectAsync(projectId, userId, cancellationToken);
+        }
+
+        public async Task<SavedFilterDto> CreateAsync(int projectId, int userId, string name, string queryText, bool isFavorite = false, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateSavedFilterService(dbContext).CreateAsync(projectId, userId, name, queryText, isFavorite, cancellationToken);
+        }
+
+        public async Task<SavedFilterDto?> UpdateAsync(int savedFilterId, int userId, string name, string queryText, bool isFavorite = false, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateSavedFilterService(dbContext).UpdateAsync(savedFilterId, userId, name, queryText, isFavorite, cancellationToken);
+        }
+
+        public async Task<bool> DeleteAsync(int savedFilterId, int userId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateSavedFilterService(dbContext).DeleteAsync(savedFilterId, userId, cancellationToken);
         }
     }
 
@@ -658,6 +749,67 @@ public sealed class AppSession : IDisposable
         }
     }
 
+
+    public sealed class WorkflowOperations
+    {
+        private readonly AppSession _session;
+
+        internal WorkflowOperations(AppSession session) => _session = session;
+
+        public async Task<WorkflowDefinitionDto?> GetDefaultWorkflowAsync(int projectId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWorkflowService(dbContext).GetDefaultWorkflowAsync(projectId, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<WorkflowStatusOptionDto>> GetAllowedTransitionsAsync(int issueId, int userId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWorkflowService(dbContext).GetAllowedTransitionsAsync(issueId, userId, cancellationToken);
+        }
+
+        public async Task<WorkflowTransitionResult> ExecuteTransitionAsync(int issueId, int toStatusId, int userId, decimal? boardPosition = null, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWorkflowService(dbContext).ExecuteTransitionAsync(issueId, toStatusId, userId, boardPosition, cancellationToken);
+        }
+
+        public async Task<WorkflowStatus> CreateStatusAsync(int projectId, string name, string color, StatusCategory category, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWorkflowService(dbContext).CreateStatusAsync(projectId, name, color, category, cancellationToken);
+        }
+
+        public async Task<WorkflowStatus?> UpdateStatusAsync(int workflowStatusId, string name, string color, StatusCategory category, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWorkflowService(dbContext).UpdateStatusAsync(workflowStatusId, name, color, category, cancellationToken);
+        }
+
+        public async Task<bool> DeleteStatusAsync(int workflowStatusId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWorkflowService(dbContext).DeleteStatusAsync(workflowStatusId, cancellationToken);
+        }
+
+        public async Task<WorkflowTransition?> CreateTransitionAsync(int projectId, int fromStatusId, int toStatusId, string name, IReadOnlyCollection<string> allowedRoleNames, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWorkflowService(dbContext).CreateTransitionAsync(projectId, fromStatusId, toStatusId, name, allowedRoleNames, cancellationToken);
+        }
+
+        public async Task<WorkflowTransition?> UpdateTransitionAsync(int transitionId, string name, IReadOnlyCollection<string> allowedRoleNames, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWorkflowService(dbContext).UpdateTransitionAsync(transitionId, name, allowedRoleNames, cancellationToken);
+        }
+
+        public async Task<bool> DeleteTransitionAsync(int transitionId, CancellationToken cancellationToken = default)
+        {
+            await using var dbContext = _session.CreateDbContext();
+            return await _session.CreateWorkflowService(dbContext).DeleteTransitionAsync(transitionId, cancellationToken);
+        }
+    }
     public sealed class CommentOperations
     {
         private readonly AppSession _session;
@@ -788,6 +940,19 @@ public sealed class AppSession : IDisposable
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

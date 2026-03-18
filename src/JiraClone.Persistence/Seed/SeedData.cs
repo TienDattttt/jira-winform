@@ -77,11 +77,56 @@ public static class SeedData
             new { ProjectId = 1, UserId = 2, ProjectRole = ProjectRole.Developer, JoinedAtUtc = createdAt },
             new { ProjectId = 1, UserId = 3, ProjectRole = ProjectRole.ProjectManager, JoinedAtUtc = createdAt });
 
+        modelBuilder.Entity<WorkflowDefinition>().HasData(new WorkflowDefinition
+        {
+            Id = 1,
+            ProjectId = 1,
+            Name = "Default Workflow",
+            IsDefault = true,
+            CreatedAtUtc = createdAt,
+            UpdatedAtUtc = createdAt
+        });
+
+        modelBuilder.Entity<WorkflowStatus>().HasData(
+            new WorkflowStatus { Id = 1, WorkflowDefinitionId = 1, Name = "Backlog", Color = "#42526E", Category = StatusCategory.ToDo, DisplayOrder = 1, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
+            new WorkflowStatus { Id = 2, WorkflowDefinitionId = 1, Name = "Selected", Color = "#4C9AFF", Category = StatusCategory.ToDo, DisplayOrder = 2, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
+            new WorkflowStatus { Id = 3, WorkflowDefinitionId = 1, Name = "In Progress", Color = "#0052CC", Category = StatusCategory.InProgress, DisplayOrder = 3, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
+            new WorkflowStatus { Id = 4, WorkflowDefinitionId = 1, Name = "Done", Color = "#36B37E", Category = StatusCategory.Done, DisplayOrder = 4, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt });
+
+        var transitions = new List<object>();
+        var transitionRoles = new List<object>();
+        var transitionId = 1;
+        var statusIds = new[] { 1, 2, 3, 4 };
+        foreach (var fromStatusId in statusIds)
+        {
+            foreach (var toStatusId in statusIds.Where(x => x != fromStatusId))
+            {
+                transitions.Add(new
+                {
+                    Id = transitionId,
+                    WorkflowDefinitionId = 1,
+                    FromStatusId = fromStatusId,
+                    ToStatusId = toStatusId,
+                    Name = $"{ResolveStatusName(fromStatusId)} to {ResolveStatusName(toStatusId)}",
+                    CreatedAtUtc = createdAt,
+                    UpdatedAtUtc = createdAt
+                });
+
+                transitionRoles.Add(new { WorkflowTransitionId = transitionId, RoleId = 1 });
+                transitionRoles.Add(new { WorkflowTransitionId = transitionId, RoleId = 2 });
+                transitionRoles.Add(new { WorkflowTransitionId = transitionId, RoleId = 3 });
+                transitionId++;
+            }
+        }
+
+        modelBuilder.Entity<WorkflowTransition>().HasData(transitions.ToArray());
+        modelBuilder.Entity("WorkflowTransitionRole").HasData(transitionRoles.ToArray());
+
         modelBuilder.Entity<BoardColumn>().HasData(
-            new { Id = 1, ProjectId = 1, Name = "Backlog", StatusCode = IssueStatus.Backlog, DisplayOrder = 1, WipLimit = (int?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
-            new { Id = 2, ProjectId = 1, Name = "Selected", StatusCode = IssueStatus.Selected, DisplayOrder = 2, WipLimit = (int?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
-            new { Id = 3, ProjectId = 1, Name = "In Progress", StatusCode = IssueStatus.InProgress, DisplayOrder = 3, WipLimit = (int?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
-            new { Id = 4, ProjectId = 1, Name = "Done", StatusCode = IssueStatus.Done, DisplayOrder = 4, WipLimit = (int?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt });
+            new { Id = 1, ProjectId = 1, Name = "Backlog", WorkflowStatusId = 1, DisplayOrder = 1, WipLimit = (int?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
+            new { Id = 2, ProjectId = 1, Name = "Selected", WorkflowStatusId = 2, DisplayOrder = 2, WipLimit = (int?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
+            new { Id = 3, ProjectId = 1, Name = "In Progress", WorkflowStatusId = 3, DisplayOrder = 3, WipLimit = (int?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
+            new { Id = 4, ProjectId = 1, Name = "Done", WorkflowStatusId = 4, DisplayOrder = 4, WipLimit = (int?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt });
 
         modelBuilder.Entity<Label>().HasData(
             new Label { Id = 1, ProjectId = 1, Name = "Desktop", Color = "#4688EC", CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
@@ -122,7 +167,7 @@ public static class SeedData
                 DescriptionHtml = "Build the initial desktop solution.",
                 DescriptionText = "Build the initial desktop solution.",
                 Type = IssueType.Story,
-                Status = IssueStatus.Backlog,
+                WorkflowStatusId = 1,
                 Priority = IssuePriority.High,
                 ReporterId = 3,
                 CreatedById = 1,
@@ -147,7 +192,7 @@ public static class SeedData
                 DescriptionHtml = "Add EF Core context and mappings.",
                 DescriptionText = "Add EF Core context and mappings.",
                 Type = IssueType.Task,
-                Status = IssueStatus.Selected,
+                WorkflowStatusId = 2,
                 Priority = IssuePriority.High,
                 ReporterId = 1,
                 CreatedById = 1,
@@ -172,7 +217,7 @@ public static class SeedData
                 DescriptionHtml = "Render issue columns in the desktop app.",
                 DescriptionText = "Render issue columns in the desktop app.",
                 Type = IssueType.Story,
-                Status = IssueStatus.InProgress,
+                WorkflowStatusId = 3,
                 Priority = IssuePriority.Medium,
                 ReporterId = 1,
                 CreatedById = 2,
@@ -197,7 +242,7 @@ public static class SeedData
                 DescriptionHtml = "Provide an initial admin credential for local login.",
                 DescriptionText = "Provide an initial admin credential for local login.",
                 Type = IssueType.Task,
-                Status = IssueStatus.Done,
+                WorkflowStatusId = 4,
                 Priority = IssuePriority.Low,
                 ReporterId = 3,
                 CreatedById = 1,
@@ -235,6 +280,15 @@ public static class SeedData
 
         modelBuilder.Entity<ActivityLog>().HasData(
             new { Id = 1, ProjectId = 1, IssueId = 1, UserId = 1, ActionType = ActivityActionType.Created, FieldName = (string?)null, OldValue = (string?)null, NewValue = "Set up WinForms solution skeleton", OccurredAtUtc = createdAt, MetadataJson = (string?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt },
-            new { Id = 2, ProjectId = 1, IssueId = 3, UserId = 2, ActionType = ActivityActionType.StatusChanged, FieldName = "Status", OldValue = "Selected", NewValue = "InProgress", OccurredAtUtc = createdAt, MetadataJson = (string?)null, CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt });
+            new { Id = 2, ProjectId = 1, IssueId = 3, UserId = 2, ActionType = ActivityActionType.StatusChanged, FieldName = nameof(Issue.WorkflowStatusId), OldValue = "Selected", NewValue = "In Progress", OccurredAtUtc = createdAt, MetadataJson = "{\"OldStatusId\":2,\"OldStatusName\":\"Selected\",\"OldCategory\":1,\"NewStatusId\":3,\"NewStatusName\":\"In Progress\",\"NewCategory\":2}", CreatedAtUtc = createdAt, UpdatedAtUtc = createdAt });
     }
+
+    private static string ResolveStatusName(int statusId) => statusId switch
+    {
+        1 => "Backlog",
+        2 => "Selected",
+        3 => "In Progress",
+        4 => "Done",
+        _ => "Status"
+    };
 }

@@ -1,4 +1,4 @@
-﻿using JiraClone.Domain.Enums;
+using JiraClone.Domain.Enums;
 
 namespace JiraClone.Application.Models;
 
@@ -20,7 +20,7 @@ public sealed record DashboardSprintProgressDto(
     int TotalStoryPoints,
     IReadOnlyList<DashboardStatusCountDto> StatusCounts);
 
-public sealed record DashboardStatusCountDto(IssueStatus Status, int Count);
+public sealed record DashboardStatusCountDto(int StatusId, string StatusName, string Color, StatusCategory Category, int Count);
 
 public sealed record DashboardIssueStatisticsDto(
     IReadOnlyList<DashboardChartSliceDto> TypeBreakdown,
@@ -46,7 +46,10 @@ public sealed record DashboardIssueDto(
     string Title,
     IssueType Type,
     IssuePriority Priority,
-    IssueStatus Status,
+    int StatusId,
+    string StatusName,
+    string StatusColor,
+    StatusCategory StatusCategory,
     int? StoryPoints,
     string ReporterName,
     IReadOnlyList<DashboardAssigneeDto> Assignees);

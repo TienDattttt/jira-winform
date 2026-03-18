@@ -22,6 +22,7 @@ public class JiraCloneDbContext : DbContext
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<ProjectVersion> ProjectVersions => Set<ProjectVersion>();
+    public DbSet<SavedFilter> SavedFilters => Set<SavedFilter>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<Sprint> Sprints => Set<Sprint>();
     public DbSet<User> Users => Set<User>();
@@ -37,3 +38,5 @@ public class JiraCloneDbContext : DbContext
         base.OnModelCreating(modelBuilder);
     }
 }
+
+

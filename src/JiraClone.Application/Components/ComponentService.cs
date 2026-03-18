@@ -3,6 +3,8 @@ using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace JiraClone.Application.Components;
 
@@ -16,6 +18,7 @@ public class ComponentService : IComponentService
     private readonly IActivityLogRepository _activityLogs;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<ComponentService> _logger;
 
     public ComponentService(
         IComponentRepository components,
@@ -25,7 +28,8 @@ public class ComponentService : IComponentService
         IAuthorizationService authorization,
         IActivityLogRepository activityLogs,
         ICurrentUserContext currentUserContext,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ILogger<ComponentService>? logger = null)
     {
         _components = components;
         _issues = issues;
@@ -35,13 +39,18 @@ public class ComponentService : IComponentService
         _activityLogs = activityLogs;
         _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
+        _logger = logger ?? NullLogger<ComponentService>.Instance;
     }
 
-    public Task<IReadOnlyList<Component>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default) =>
-        _components.GetByProjectAsync(projectId, cancellationToken);
+    public Task<IReadOnlyList<Component>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Loading components for project {ProjectId}.", projectId);
+        return _components.GetByProjectAsync(projectId, cancellationToken);
+    }
 
     public async Task<Component> CreateAsync(int projectId, string name, string? description, int? leadUserId, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Creating component in project {ProjectId}.", projectId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var project = await RequireProjectAsync(projectId, cancellationToken);
         var normalizedName = NormalizeName(name);
@@ -65,10 +74,12 @@ public class ComponentService : IComponentService
 
     public async Task<Component?> UpdateAsync(int componentId, string name, string? description, int? leadUserId, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Updating component {ComponentId}.", componentId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var component = await _components.GetByIdAsync(componentId, cancellationToken);
         if (component is null)
         {
+            _logger.LogWarning("Component {ComponentId} was not found for update.", componentId);
             return null;
         }
 
@@ -91,10 +102,12 @@ public class ComponentService : IComponentService
 
     public async Task<bool> DeleteAsync(int componentId, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Deleting component {ComponentId}.", componentId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var component = await _components.GetByIdAsync(componentId, cancellationToken);
         if (component is null)
         {
+            _logger.LogWarning("Component {ComponentId} was not found for delete.", componentId);
             return false;
         }
 
@@ -106,10 +119,12 @@ public class ComponentService : IComponentService
 
     public async Task<bool> AssignToIssueAsync(int issueId, int? componentId, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager, RoleCatalog.Developer);
+        _logger.LogInformation("Assigning component {ComponentId} to issue {IssueId}.", componentId, issueId);
+        _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
         var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
         if (issue is null)
         {
+            _logger.LogWarning("Issue {IssueId} was not found for component assignment.", issueId);
             return false;
         }
 

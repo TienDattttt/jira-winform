@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using JiraClone.Application.Abstractions;
 using JiraClone.Application.Models;
 using JiraClone.Application.Projects;
+using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using Moq;
@@ -29,6 +30,11 @@ public class ProjectCommandServiceTests
             .Returns(Task.CompletedTask);
         projects.Setup(x => x.GetByIdAsync(10, default)).ReturnsAsync(() => createdProject!);
         users.Setup(x => x.GetByIdAsync(5, default)).ReturnsAsync(new User { Id = 5, UserName = "dev1", DisplayName = "Dev One", Email = "dev1@example.com", IsActive = true });
+        users.Setup(x => x.GetRolesAsync(default)).ReturnsAsync([
+            new Role { Id = 1, Name = RoleCatalog.Admin },
+            new Role { Id = 2, Name = RoleCatalog.ProjectManager },
+            new Role { Id = 3, Name = RoleCatalog.Developer },
+            new Role { Id = 4, Name = RoleCatalog.Viewer }]);
 
         var service = CreateService(projects: projects, users: users, currentUser: currentUser, unitOfWork: unitOfWork);
 
@@ -161,12 +167,21 @@ public class ProjectCommandServiceTests
         currentUserContext ??= new Mock<ICurrentUserContext>();
         currentUserContext.Setup(x => x.CurrentUser).Returns(currentUser ?? new User { Id = 99, UserName = "admin", DisplayName = "Admin User", Email = "admin@example.com", IsActive = true });
 
+        users ??= new Mock<IUserRepository>();
+        users.Setup(x => x.GetRolesAsync(default)).ReturnsAsync([
+            new Role { Id = 1, Name = RoleCatalog.Admin },
+            new Role { Id = 2, Name = RoleCatalog.ProjectManager },
+            new Role { Id = 3, Name = RoleCatalog.Developer },
+            new Role { Id = 4, Name = RoleCatalog.Viewer }]);
+
         return new ProjectCommandService(
             (projects ?? new Mock<IProjectRepository>()).Object,
-            (users ?? new Mock<IUserRepository>()).Object,
+            users.Object,
             (authorization ?? new Mock<IAuthorizationService>()).Object,
             (activityLogs ?? new Mock<IActivityLogRepository>()).Object,
             currentUserContext.Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
     }
 }
+
+

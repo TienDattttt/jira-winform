@@ -12,6 +12,7 @@ using JiraClone.WinForms.Controls;
 using JiraClone.WinForms.Dialogs;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
+using Microsoft.Extensions.Logging;
 
 namespace JiraClone.WinForms.Forms;
 
@@ -23,6 +24,7 @@ public class IssueDetailsForm : Form
     private readonly AppSession _session;
     private readonly int _issueId;
     private readonly int _projectId;
+    private readonly ILogger<IssueDetailsForm> _logger;
     private readonly SplitContainer _split = new() { Dock = DockStyle.Fill };
     private readonly Label _breadcrumb = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly Panel _typeHost = new() { Width = 120, Height = 24, BackColor = Color.Transparent };
@@ -68,6 +70,7 @@ public class IssueDetailsForm : Form
     private IReadOnlyList<JiraLabelEntity> _availableLabels = Array.Empty<JiraLabelEntity>();
     private IReadOnlyList<JiraComponentEntity> _availableComponents = Array.Empty<JiraComponentEntity>();
     private IReadOnlyList<JiraProjectVersionEntity> _availableVersions = Array.Empty<JiraProjectVersionEntity>();
+    private IReadOnlyList<WorkflowStatusOptionDto> _statusOptions = Array.Empty<WorkflowStatusOptionDto>();
     private HashSet<int> _selectedAssigneeIds = [];
     private HashSet<int> _selectedLabelIds = [];
     private bool _loading;
@@ -80,6 +83,7 @@ public class IssueDetailsForm : Form
         _session = session;
         _issueId = issueId;
         _projectId = projectId;
+        _logger = session.CreateLogger<IssueDetailsForm>();
         Text = "Issue Details";
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Font;
@@ -119,7 +123,8 @@ public class IssueDetailsForm : Form
         _saveComment.Size = new Size(90, 36);
         _saveComment.Click += async (_, _) => await AddCommentAsync();
 
-        _status.DataSource = Enum.GetValues<IssueStatus>();
+        _status.DisplayMember = nameof(WorkflowStatusOptionDto.Name);
+        _status.ValueMember = nameof(WorkflowStatusOptionDto.Id);
         _status.DrawItem += DrawStatus;
         _status.SelectedIndexChanged += async (_, _) => await SaveIssueAsync();
         _priority.DataSource = Enum.GetValues<IssuePriority>();
@@ -235,11 +240,11 @@ public class IssueDetailsForm : Form
         }
         catch (ArgumentOutOfRangeException ex)
         {
-            System.Diagnostics.Debug.WriteLine($"SplitLayout range error: {ex.Message}");
+            _logger.LogDebug(ex, "Split layout range error while sizing IssueDetailsForm.");
         }
         catch (InvalidOperationException ex)
         {
-            System.Diagnostics.Debug.WriteLine($"SplitLayout operation error: {ex.Message}");
+            _logger.LogDebug(ex, "Split layout operation error while sizing IssueDetailsForm.");
         }
     }
 
@@ -453,6 +458,7 @@ public class IssueDetailsForm : Form
 
             _details = await _session.Issues.GetDetailsAsync(_issueId);
             if (_details is null) { ErrorDialogService.Show("Issue not found."); Close(); return; }
+            await BindStatusOptionsAsync(_details.Issue);
             BindIssue(_details);
             _comments.Bind(_details.Comments);
             _attachments.Bind(_details.Attachments);
@@ -470,12 +476,9 @@ public class IssueDetailsForm : Form
         _title.Text = issue.Title;
         _titleEditor.Text = issue.Title;
         ApplyMetaBadge(_keyBadge, issue.IssueKey, JiraTheme.Blue100, JiraTheme.PrimaryActive);
-        ApplyMetaBadge(_statusBadge, issue.Status.ToString(), issue.Status switch
-        {
-            IssueStatus.Done => JiraTheme.StatusDone,
-            IssueStatus.InProgress => JiraTheme.StatusInProgress,
-            _ => JiraTheme.StatusTodo
-        }, issue.Status is IssueStatus.Done or IssueStatus.InProgress ? Color.White : JiraTheme.TextPrimary);
+        var statusCategory = issue.WorkflowStatus?.Category ?? StatusCategory.ToDo;
+        var statusColor = ParseStatusColor(issue.WorkflowStatus?.Color, statusCategory);
+        ApplyMetaBadge(_statusBadge, issue.WorkflowStatus?.Name ?? "Unknown", statusColor, GetStatusTextColor(statusCategory));
         ApplyMetaBadge(_priorityBadge, issue.Priority.ToString(), issue.Priority switch
         {
             IssuePriority.Low => JiraTheme.Success,
@@ -497,7 +500,7 @@ public class IssueDetailsForm : Form
 
         BindDescription(issue.DescriptionText);
 
-        _status.SelectedItem = issue.Status;
+        _status.SelectedValue = issue.WorkflowStatusId;
         _priority.SelectedItem = issue.Priority;
         if (issue.SprintId.HasValue) _sprint.SelectedValue = issue.SprintId.Value; else _sprint.SelectedIndex = -1;
         _storyPoints.Value = Math.Max(_storyPoints.Minimum, Math.Min(_storyPoints.Maximum, issue.StoryPoints ?? 0));
@@ -536,7 +539,7 @@ public class IssueDetailsForm : Form
             {
                 var row = new Label
                 {
-                    Text = $"  {child.IssueKey}  {child.Title}  [{child.Status}]",
+                    Text = $"  {child.IssueKey}  {child.Title}  [{child.WorkflowStatus.Name}]",
                     Font = JiraTheme.FontCaption,
                     ForeColor = JiraTheme.TextPrimary,
                     AutoSize = true,
@@ -555,6 +558,43 @@ public class IssueDetailsForm : Form
         }
     }
 
+
+    private async Task BindStatusOptionsAsync(Issue issue)
+    {
+        var currentUserId = _session.CurrentUserContext.RequireUserId();
+        var transitions = await _session.Workflows.GetAllowedTransitionsAsync(issue.Id, currentUserId);
+        _statusOptions = transitions
+            .Append(new WorkflowStatusOptionDto(issue.WorkflowStatusId, issue.WorkflowStatus.Name, issue.WorkflowStatus.Color, issue.WorkflowStatus.Category, issue.WorkflowStatus.DisplayOrder))
+            .GroupBy(x => x.Id)
+            .Select(x => x.First())
+            .OrderBy(x => x.DisplayOrder)
+            .ToList();
+        _status.DataSource = _statusOptions.ToList();
+        _status.SelectedValue = issue.WorkflowStatusId;
+    }
+
+    private static Color ParseStatusColor(string? value, StatusCategory category)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return ColorTranslator.FromHtml(value);
+            }
+        }
+        catch
+        {
+        }
+
+        return category switch
+        {
+            StatusCategory.Done => JiraTheme.StatusDone,
+            StatusCategory.InProgress => JiraTheme.StatusInProgress,
+            _ => JiraTheme.StatusTodo
+        };
+    }
+
+    private static Color GetStatusTextColor(StatusCategory category) => category == StatusCategory.ToDo ? JiraTheme.TextPrimary : Color.White;
     private static Label CreateMetaBadge()
     {
         var label = JiraControlFactory.CreateLabel(string.Empty, true);
@@ -767,7 +807,7 @@ public class IssueDetailsForm : Form
                 Title = _titleEditor.Visible ? _titleEditor.Text.Trim() : _title.Text.Trim(),
                 DescriptionText = NormalizeDescription(_descriptionMarkdown),
                 Type = _details.Issue.Type,
-                Status = _status.SelectedItem is IssueStatus s ? s : _details.Issue.Status,
+                WorkflowStatusId = _status.SelectedValue is int statusId ? statusId : _details.Issue.WorkflowStatusId,
                 Priority = _priority.SelectedItem is IssuePriority p ? p : _details.Issue.Priority,
                 ReporterId = _details.Issue.ReporterId,
                 CreatedById = currentUserId,
@@ -1007,13 +1047,8 @@ public class IssueDetailsForm : Form
     {
         if (e.Index < 0) return;
         e.DrawBackground();
-        var value = (IssueStatus)_status.Items[e.Index]!;
-        DrawChip(e, value.ToString(), value switch
-        {
-            IssueStatus.Done => JiraTheme.StatusDone,
-            IssueStatus.InProgress => JiraTheme.StatusInProgress,
-            _ => JiraTheme.StatusTodo
-        }, value is IssueStatus.Done or IssueStatus.InProgress ? Color.White : JiraTheme.TextPrimary);
+        var value = (WorkflowStatusOptionDto)_status.Items[e.Index]!;
+        DrawChip(e, value.Name, ParseStatusColor(value.Color, value.Category), GetStatusTextColor(value.Category));
     }
 
     private void DrawPriority(object? sender, DrawItemEventArgs e)
@@ -1357,6 +1392,12 @@ public class IssueDetailsForm : Form
         public IReadOnlyList<int> SelectedUserIds => _assignees.CheckedItems.Cast<User>().Select(x => x.Id).ToList();
     }
 }
+
+
+
+
+
+
 
 
 

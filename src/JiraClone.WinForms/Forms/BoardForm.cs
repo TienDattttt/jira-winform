@@ -20,7 +20,7 @@ public class BoardForm : UserControl
     private readonly ComboBox _typeFilter = CreateFilterCombo(130);
     private readonly TextBox _searchFilter = JiraControlFactory.CreateTextBox();
     private readonly Button _clearFiltersButton = JiraControlFactory.CreateSecondaryButton("Clear filters");
-    private readonly Dictionary<IssueStatus, BoardColumnControl> _columnControls = new();
+    private readonly Dictionary<int, BoardColumnControl> _columnControls = new();
     private readonly Panel _toastPanel = new();
     private readonly Label _toastLabel = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly System.Windows.Forms.Timer _toastTimer = new() { Interval = 2600 };
@@ -385,7 +385,7 @@ public class BoardForm : UserControl
 
         foreach (var column in columns)
         {
-            var control = GetOrCreateColumnControl(column.Status, column);
+            var control = GetOrCreateColumnControl(column.StatusId, column);
             control.Bind(column);
             totalWidth += control.Width + control.Margin.Horizontal;
         }
@@ -394,9 +394,9 @@ public class BoardForm : UserControl
         UpdateBoardScrollMetrics(totalWidth);
     }
 
-    private BoardColumnControl GetOrCreateColumnControl(IssueStatus status, BoardColumnDto column)
+    private BoardColumnControl GetOrCreateColumnControl(int statusId, BoardColumnDto column)
     {
-        if (_columnControls.TryGetValue(status, out var existing))
+        if (_columnControls.TryGetValue(statusId, out var existing))
         {
             return existing;
         }
@@ -407,26 +407,26 @@ public class BoardForm : UserControl
             Height = Math.Max(200, _boardScrollPanel.ClientSize.Height - 8),
         };
         control.IssueSelected += async (_, issueId) => await OpenIssueDetailsAsync(issueId);
-        control.CreateIssueRequested += async (_, issueStatus) => await CreateIssueAsync(issueStatus);
+        control.CreateIssueRequested += async (_, issueStatusId) => await CreateIssueAsync(issueStatusId);
         control.IssueMoveRequested += async (_, args) => await MoveIssueAsync(args);
-        _columnControls[status] = control;
+        _columnControls[statusId] = control;
         _boardColumnsPanel.Controls.Add(control);
         return control;
     }
 
-    private void RenderMovedColumns(IReadOnlyCollection<IssueStatus> statuses, int issueId, IssueStatus targetStatus)
+    private void RenderMovedColumns(IReadOnlyCollection<int> statusIds, int issueId, int targetStatusId)
     {
-        foreach (var status in statuses.Distinct())
+        foreach (var statusId in statusIds.Distinct())
         {
-            var column = _loadedColumns.FirstOrDefault(x => x.Status == status);
+            var column = _loadedColumns.FirstOrDefault(x => x.StatusId == statusId);
             if (column is null)
             {
                 continue;
             }
 
             var filteredColumn = GetFilteredColumn(column);
-            var control = GetOrCreateColumnControl(status, filteredColumn);
-            control.Bind(filteredColumn, status == targetStatus ? issueId : null);
+            var control = GetOrCreateColumnControl(statusId, filteredColumn);
+            control.Bind(filteredColumn, statusId == targetStatusId ? issueId : null);
         }
     }
 
@@ -475,11 +475,11 @@ public class BoardForm : UserControl
         }
     }
 
-    private async Task CreateIssueAsync(IssueStatus? defaultStatus = null)
+    private async Task CreateIssueAsync(int? defaultStatusId = null)
     {
         try
         {
-            using var dialog = new IssueEditorForm(_session, _projectId, null, defaultStatus);
+            using var dialog = new IssueEditorForm(_session, _projectId, null, defaultStatusId);
             if (dialog.ShowDialog(this) == DialogResult.OK)
             {
                 await LoadBoardAsync();
@@ -511,13 +511,13 @@ public class BoardForm : UserControl
     {
         try
         {
-            if (args.SourceStatus == args.TargetStatus)
+            if (args.SourceStatusId == args.TargetStatusId)
             {
                 return;
             }
 
             var currentUserId = _session.CurrentUserContext.RequireUserId();
-            var targetColumn = _loadedColumns.FirstOrDefault(x => x.Status == args.TargetStatus);
+            var targetColumn = _loadedColumns.FirstOrDefault(x => x.StatusId == args.TargetStatusId);
             var boardPosition = targetColumn?.Issues.OrderBy(x => x.BoardPosition).FirstOrDefault() is { } first
                 ? first.BoardPosition - 1m
                 : 1m;
@@ -525,7 +525,7 @@ public class BoardForm : UserControl
             var moved = await _session.RunSerializedAsync(async () =>
             {
                 await using var dbContext = _session.CreateDbContext();
-                return await _session.CreateIssueService(dbContext).UpdateStatusAsync(args.IssueId, args.TargetStatus, boardPosition, currentUserId);
+                return await _session.CreateIssueService(dbContext).UpdateStatusAsync(args.IssueId, args.TargetStatusId, boardPosition, currentUserId);
             });
 
             if (!moved)
@@ -533,8 +533,8 @@ public class BoardForm : UserControl
                 return;
             }
 
-            ApplyIssueMoveLocally(args.IssueId, args.SourceStatus, args.TargetStatus, boardPosition);
-            ShowMoveToast(args.TargetStatus);
+            ApplyIssueMoveLocally(args.IssueId, args.SourceStatusId, args.TargetStatusId, boardPosition);
+            ShowMoveToast(args.TargetStatusName);
         }
         catch (Exception exception)
         {
@@ -542,15 +542,16 @@ public class BoardForm : UserControl
         }
     }
 
-    private void ApplyIssueMoveLocally(int issueId, IssueStatus sourceStatus, IssueStatus targetStatus, decimal boardPosition)
+    private void ApplyIssueMoveLocally(int issueId, int sourceStatusId, int targetStatusId, decimal boardPosition)
     {
-        if (sourceStatus == targetStatus)
+        if (sourceStatusId == targetStatusId)
         {
             return;
         }
 
-        var sourceColumn = _loadedColumns.FirstOrDefault(x => x.Status == sourceStatus);
-        if (sourceColumn is null)
+        var sourceColumn = _loadedColumns.FirstOrDefault(x => x.StatusId == sourceStatusId);
+        var targetColumn = _loadedColumns.FirstOrDefault(x => x.StatusId == targetStatusId);
+        if (sourceColumn is null || targetColumn is null)
         {
             return;
         }
@@ -563,14 +564,17 @@ public class BoardForm : UserControl
 
         var updatedIssue = issue with
         {
-            Status = targetStatus,
+            StatusId = targetStatusId,
+            StatusName = targetColumn.Name,
+            StatusColor = targetColumn.Color,
+            StatusCategory = targetColumn.Category,
             BoardPosition = boardPosition,
         };
 
         _loadedColumns = _loadedColumns
             .Select(column =>
             {
-                if (column.Status == sourceStatus)
+                if (column.StatusId == sourceStatusId)
                 {
                     return column with
                     {
@@ -581,7 +585,7 @@ public class BoardForm : UserControl
                     };
                 }
 
-                if (column.Status == targetStatus)
+                if (column.StatusId == targetStatusId)
                 {
                     return column with
                     {
@@ -597,12 +601,12 @@ public class BoardForm : UserControl
             })
             .ToList();
 
-        RenderMovedColumns(new[] { sourceStatus, targetStatus }, issueId, targetStatus);
+        RenderMovedColumns(new[] { sourceStatusId, targetStatusId }, issueId, targetStatusId);
     }
 
-    private void ShowMoveToast(IssueStatus status)
+    private void ShowMoveToast(string statusName)
     {
-        _toastLabel.Text = $"Issue moved to {FormatStatus(status)}";
+        _toastLabel.Text = $"Issue moved to {statusName}";
         PositionToast();
         _toastPanel.Visible = true;
         _toastPanel.BringToFront();
@@ -622,12 +626,6 @@ public class BoardForm : UserControl
             Math.Max(16, Width - _toastPanel.Width - 24),
             80 + 72 + 12);
     }
-
-    private static string FormatStatus(IssueStatus status) => status switch
-    {
-        IssueStatus.InProgress => "In Progress",
-        _ => status.ToString()
-    };
 
     protected override void Dispose(bool disposing)
     {

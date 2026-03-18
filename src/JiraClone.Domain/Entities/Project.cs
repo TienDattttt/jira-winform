@@ -17,6 +17,9 @@ public class Project : AggregateRoot
     public ICollection<Label> Labels { get; set; } = new List<Label>();
     public ICollection<Component> Components { get; set; } = new List<Component>();
     public ICollection<ProjectVersion> Versions { get; set; } = new List<ProjectVersion>();
+    public ICollection<SavedFilter> SavedFilters { get; set; } = new List<SavedFilter>();
     public ICollection<Issue> Issues { get; set; } = new List<Issue>();
     public ICollection<Sprint> Sprints { get; set; } = new List<Sprint>();
 }
+
+

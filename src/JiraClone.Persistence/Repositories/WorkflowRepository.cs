@@ -37,6 +37,7 @@ public class WorkflowRepository : IWorkflowRepository
 
     public Task<WorkflowStatus?> GetStatusByIdAsync(int workflowStatusId, CancellationToken cancellationToken = default) =>
         _dbContext.WorkflowStatuses
+            .Include(x => x.BoardColumns)
             .Include(x => x.WorkflowDefinition)
             .ThenInclude(x => x.Project)
             .Include(x => x.WorkflowDefinition)
@@ -52,10 +53,19 @@ public class WorkflowRepository : IWorkflowRepository
         _dbContext.WorkflowTransitions
             .Include(x => x.AllowedRoles)
             .Include(x => x.FromStatus)
+            .ThenInclude(x => x.WorkflowDefinition)
             .Include(x => x.ToStatus)
             .FirstOrDefaultAsync(
                 x => x.WorkflowDefinitionId == workflowDefinitionId && x.FromStatusId == fromStatusId && x.ToStatusId == toStatusId,
                 cancellationToken);
+
+    public Task<WorkflowTransition?> GetTransitionByIdAsync(int transitionId, CancellationToken cancellationToken = default) =>
+        _dbContext.WorkflowTransitions
+            .Include(x => x.AllowedRoles)
+            .Include(x => x.FromStatus)
+            .ThenInclude(x => x.WorkflowDefinition)
+            .Include(x => x.ToStatus)
+            .FirstOrDefaultAsync(x => x.Id == transitionId, cancellationToken);
 
     public async Task<IReadOnlyList<WorkflowTransition>> GetTransitionsFromStatusAsync(int workflowDefinitionId, int fromStatusId, CancellationToken cancellationToken = default) =>
         await _dbContext.WorkflowTransitions

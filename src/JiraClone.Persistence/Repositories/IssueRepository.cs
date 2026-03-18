@@ -24,6 +24,7 @@ public class IssueRepository : IIssueRepository
             .Include(x => x.Assignees)
             .ThenInclude(x => x.User)
             .Include(x => x.ParentIssue)
+            .Include(x => x.WorkflowStatus)
             .Where(x => x.ProjectId == projectId && !x.IsDeleted);
 
         if (sprintId.HasValue)
@@ -32,24 +33,31 @@ public class IssueRepository : IIssueRepository
         }
 
         return await query
-            .OrderBy(x => x.Status)
+            .OrderBy(x => x.WorkflowStatus.DisplayOrder)
             .ThenBy(x => x.BoardPosition)
             .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Issue>> GetProjectIssuesAsync(int projectId, CancellationToken cancellationToken = default) =>
-        await _dbContext.Issues
-            .Include(x => x.Reporter)
+        await BuildNavigatorQuery()
             .Where(x => x.ProjectId == projectId && !x.IsDeleted)
-            .OrderBy(x => x.Status)
+            .OrderBy(x => x.WorkflowStatus.DisplayOrder)
             .ThenBy(x => x.Title)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Issue>> ExecuteQueryAsync(int projectId, Func<IQueryable<Issue>, IQueryable<Issue>> queryShaper, CancellationToken cancellationToken = default)
+    {
+        var query = BuildNavigatorQuery().Where(x => x.ProjectId == projectId && !x.IsDeleted);
+        query = (queryShaper ?? (source => source))(query);
+        return await query.ToListAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlyList<Issue>> GetIncompleteBySprintIdAsync(int sprintId, CancellationToken cancellationToken = default) =>
         await _dbContext.Issues
             .Include(x => x.Reporter)
-            .Where(x => x.SprintId == sprintId && x.Status != IssueStatus.Done && !x.IsDeleted)
-            .OrderBy(x => x.Status)
+            .Include(x => x.WorkflowStatus)
+            .Where(x => x.SprintId == sprintId && x.WorkflowStatus.Category != StatusCategory.Done && !x.IsDeleted)
+            .OrderBy(x => x.WorkflowStatus.DisplayOrder)
             .ThenBy(x => x.BoardPosition)
             .ToListAsync(cancellationToken);
 
@@ -61,16 +69,19 @@ public class IssueRepository : IIssueRepository
             .Include(x => x.Attachments)
             .Include(x => x.ParentIssue)
             .Include(x => x.FixVersion)
+            .Include(x => x.WorkflowStatus)
+            .ThenInclude(x => x.WorkflowDefinition)
+            .ThenInclude(x => x.Statuses)
             .Include(x => x.IssueLabels)
             .ThenInclude(x => x.Label)
             .Include(x => x.IssueComponents)
             .ThenInclude(x => x.Component)
             .FirstOrDefaultAsync(x => x.Id == issueId && !x.IsDeleted, cancellationToken);
 
-    public async Task<decimal> GetNextBoardPositionAsync(int projectId, IssueStatus status, CancellationToken cancellationToken = default)
+    public async Task<decimal> GetNextBoardPositionAsync(int projectId, int workflowStatusId, CancellationToken cancellationToken = default)
     {
         var first = await _dbContext.Issues
-            .Where(x => x.ProjectId == projectId && x.Status == status && !x.IsDeleted)
+            .Where(x => x.ProjectId == projectId && x.WorkflowStatusId == workflowStatusId && !x.IsDeleted)
             .OrderBy(x => x.BoardPosition)
             .Select(x => (decimal?)x.BoardPosition)
             .FirstOrDefaultAsync(cancellationToken);
@@ -122,8 +133,9 @@ public class IssueRepository : IIssueRepository
             .Include(x => x.Reporter)
             .Include(x => x.Assignees)
             .ThenInclude(x => x.User)
+            .Include(x => x.WorkflowStatus)
             .Where(x => x.ParentIssueId == parentIssueId && !x.IsDeleted)
-            .OrderBy(x => x.Status)
+            .OrderBy(x => x.WorkflowStatus.DisplayOrder)
             .ThenBy(x => x.Title)
             .ToListAsync(cancellationToken);
 
@@ -142,7 +154,25 @@ public class IssueRepository : IIssueRepository
         }
 
         return await query
+            .Include(x => x.WorkflowStatus)
             .OrderBy(x => x.IssueKey)
             .ToListAsync(cancellationToken);
     }
+
+    private IQueryable<Issue> BuildNavigatorQuery()
+    {
+        return _dbContext.Issues
+            .AsSplitQuery()
+            .Include(x => x.Project)
+            .Include(x => x.Reporter)
+            .Include(x => x.Sprint)
+            .Include(x => x.WorkflowStatus)
+            .Include(x => x.Assignees)
+            .ThenInclude(x => x.User)
+            .Include(x => x.IssueLabels)
+            .ThenInclude(x => x.Label)
+            .Include(x => x.IssueComponents)
+            .ThenInclude(x => x.Component);
+    }
 }
+

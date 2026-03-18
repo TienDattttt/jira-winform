@@ -238,7 +238,7 @@ public class MainForm : Form
         _boardItem.Click += (_, _) => NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
         _backlogItem.Click += (_, _) => NavigateTo(_backlogItem, () => new BoardForm(_session, activeSprintOnly: false));
         _sprintsItem.Click += (_, _) => NavigateTo(_sprintsItem, () => new SprintManagementForm(_session));
-        _issuesItem.Click += (_, _) => NavigateTo(_issuesItem, () => new IssueNavigatorView(_session));
+        _issuesItem.Click += (_, _) => NavigateTo(_issuesItem, () => new IssueNavigatorForm(_session));
         _reportsItem.Click += (_, _) => NavigateTo(_reportsItem, () => new ReportsForm(_session));
         _settingsItem.Click += (_, _) => NavigateTo(_settingsItem, () => new ProjectSettingsForm(_session));
     }
@@ -381,7 +381,7 @@ public class MainForm : Form
             case BoardForm boardForm:
                 await boardForm.RefreshBoardAsync();
                 break;
-            case IssueNavigatorView issueNavigator:
+            case IssueNavigatorForm issueNavigator:
                 await issueNavigator.RefreshIssuesAsync();
                 break;
             case SprintManagementForm sprintManagementForm:
@@ -409,7 +409,7 @@ public class MainForm : Form
             case BoardForm boardForm:
                 boardForm.SetShellSearch(_searchBox.Text);
                 break;
-            case IssueNavigatorView issueNavigator:
+            case IssueNavigatorForm issueNavigator:
                 issueNavigator.SetShellSearch(_searchBox.Text);
                 break;
             case SprintManagementForm sprintManagementForm:
@@ -681,7 +681,7 @@ public class MainForm : Form
                     .OrderByDescending(x => x.Id)
                     .ToList();
                 _subtitleLabel.Text = $"Browse every issue in {project.Name}.";
-                ResetFilter(_statusFilter, "All statuses", Enum.GetNames<IssueStatus>());
+                ResetFilter(_statusFilter, "All statuses", _issues.Select(x => x.StatusName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x));
                 ResetFilter(_priorityFilter, "All priorities", Enum.GetNames<IssuePriority>());
                 ResetFilter(_typeFilter, "All types", Enum.GetNames<IssueType>());
                 BindIssues();
@@ -887,14 +887,14 @@ public class MainForm : Form
                      issue.Title.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase) ||
                      issue.ReporterName.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase) ||
                      issue.AssigneeNames.Any(x => x.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase))) &&
-                    (string.IsNullOrWhiteSpace(status) || status.StartsWith("All ") || string.Equals(issue.Status.ToString(), status, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(status) || status.StartsWith("All ") || string.Equals(issue.StatusName, status, StringComparison.OrdinalIgnoreCase)) &&
                     (string.IsNullOrWhiteSpace(priority) || priority.StartsWith("All ") || string.Equals(issue.Priority.ToString(), priority, StringComparison.OrdinalIgnoreCase)) &&
                     (string.IsNullOrWhiteSpace(type) || type.StartsWith("All ") || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)))
                 .Select(issue => new IssueSummaryRow(
                     issue.Id,
                     issue.IssueKey,
                     issue.Title,
-                    FormatStatus(issue.Status),
+                    issue.StatusName,
                     FormatPriority(issue.Priority),
                     FormatType(issue.Type),
                     issue.AssigneeNames.Count == 0 ? "Unassigned" : string.Join(", ", issue.AssigneeNames)))
@@ -937,15 +937,7 @@ public class MainForm : Form
             Font = JiraTheme.FontBody,
             IntegralHeight = false,
             Margin = new Padding(0, 0, 12, 0),
-        };
-
-        private static string FormatStatus(IssueStatus status) => status switch
-        {
-            IssueStatus.InProgress => "In progress",
-            _ => status.ToString()
-        };
-
-        private static string FormatPriority(IssuePriority priority) => priority switch
+        };private static string FormatPriority(IssuePriority priority) => priority switch
         {
             IssuePriority.Highest => "Highest",
             _ => priority.ToString()
@@ -995,6 +987,8 @@ public class MainForm : Form
         private sealed record IssueSummaryRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
     }
 }
+
+
 
 
 

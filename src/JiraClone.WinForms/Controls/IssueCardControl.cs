@@ -3,7 +3,6 @@ using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
 using JiraClone.Application.Models;
-using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Theme;
 
@@ -154,6 +153,18 @@ public class IssueCardControl : UserControl
         using var priorityIcon = JiraIcons.GetPriorityIcon(Issue.Priority, 16);
         e.Graphics.DrawImage(priorityIcon, issueKeyBounds.Right + 4, bottomY + 2, 16, 16);
 
+        var statusBounds = new Rectangle(issueKeyBounds.Right + 24, bottomY - 1, Math.Max(90, Width - issueKeyBounds.Right - Padding.Right - 58), 22);
+        using var statusBack = new SolidBrush(ParseColor(Issue.StatusColor, JiraTheme.StatusTodo));
+        using var statusPath = GraphicsHelper.CreateRoundedPath(statusBounds, 10);
+        e.Graphics.FillPath(statusBack, statusPath);
+        TextRenderer.DrawText(
+            e.Graphics,
+            Issue.StatusName,
+            JiraTheme.FontCaption,
+            statusBounds,
+            Color.White,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
         var avatarBounds = new Rectangle(Width - Padding.Right - 24 - 4, bottomY - 2, 24, 24);
         using var avatarBrush = new SolidBrush(isPlaceholder ? JiraTheme.Neutral500 : JiraTheme.Blue600);
         e.Graphics.FillEllipse(avatarBrush, avatarBounds);
@@ -193,12 +204,8 @@ public class IssueCardControl : UserControl
     private void ConfigureContextMenu()
     {
         var menu = new ContextMenuStrip();
-        foreach (var status in Enum.GetValues<IssueStatus>().Where(x => x != Issue.Status))
-        {
-            menu.Items.Add($"Move to {FormatStatus(status)}", null, (_, _) =>
-                IssueMoveRequested?.Invoke(this, new IssueMoveRequestedEventArgs(Issue.Id, Issue.Status, status)));
-        }
-
+        menu.Items.Add($"Status: {Issue.StatusName}");
+        menu.Items[0].Enabled = false;
         ContextMenuStrip = menu;
     }
 
@@ -232,11 +239,17 @@ public class IssueCardControl : UserControl
         return initials.Length == 0 ? "?" : new string(initials);
     }
 
-    private static string FormatStatus(IssueStatus status) => status switch
+    private static Color ParseColor(string? value, Color fallback)
     {
-        IssueStatus.InProgress => "In Progress",
-        _ => status.ToString()
-    };
+        try
+        {
+            return string.IsNullOrWhiteSpace(value) ? fallback : ColorTranslator.FromHtml(value);
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
 
     private void OnCardMouseDown(object? sender, MouseEventArgs e)
     {
@@ -387,4 +400,4 @@ public class IssueCardControl : UserControl
 }
 
 public sealed record IssueCardDragData(IssueSummaryDto Issue);
-public sealed record IssueMoveRequestedEventArgs(int IssueId, IssueStatus SourceStatus, IssueStatus TargetStatus);
+public sealed record IssueMoveRequestedEventArgs(int IssueId, int SourceStatusId, string SourceStatusName, int TargetStatusId, string TargetStatusName);

@@ -3,6 +3,8 @@ using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace JiraClone.Application.Labels;
 
@@ -15,6 +17,7 @@ public class LabelService : ILabelService
     private readonly IActivityLogRepository _activityLogs;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<LabelService> _logger;
 
     public LabelService(
         ILabelRepository labels,
@@ -23,7 +26,8 @@ public class LabelService : ILabelService
         IAuthorizationService authorization,
         IActivityLogRepository activityLogs,
         ICurrentUserContext currentUserContext,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ILogger<LabelService>? logger = null)
     {
         _labels = labels;
         _issues = issues;
@@ -32,13 +36,18 @@ public class LabelService : ILabelService
         _activityLogs = activityLogs;
         _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
+        _logger = logger ?? NullLogger<LabelService>.Instance;
     }
 
-    public Task<IReadOnlyList<Label>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default) =>
-        _labels.GetByProjectAsync(projectId, cancellationToken);
+    public Task<IReadOnlyList<Label>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Loading labels for project {ProjectId}.", projectId);
+        return _labels.GetByProjectAsync(projectId, cancellationToken);
+    }
 
     public async Task<Label> CreateAsync(int projectId, string name, string color, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Creating label in project {ProjectId}.", projectId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var project = await RequireProjectAsync(projectId, cancellationToken);
         var normalizedName = NormalizeName(name);
@@ -60,10 +69,12 @@ public class LabelService : ILabelService
 
     public async Task<Label?> UpdateAsync(int labelId, string name, string color, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Updating label {LabelId}.", labelId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var label = await _labels.GetByIdAsync(labelId, cancellationToken);
         if (label is null)
         {
+            _logger.LogWarning("Label {LabelId} was not found for update.", labelId);
             return null;
         }
 
@@ -84,10 +95,12 @@ public class LabelService : ILabelService
 
     public async Task<bool> DeleteAsync(int labelId, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Deleting label {LabelId}.", labelId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var label = await _labels.GetByIdAsync(labelId, cancellationToken);
         if (label is null)
         {
+            _logger.LogWarning("Label {LabelId} was not found for delete.", labelId);
             return false;
         }
 
@@ -99,10 +112,12 @@ public class LabelService : ILabelService
 
     public async Task<bool> AssignToIssueAsync(int issueId, IReadOnlyCollection<int> labelIds, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Assigning {LabelCount} labels to issue {IssueId}.", labelIds.Count, issueId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager, RoleCatalog.Developer);
         var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
         if (issue is null)
         {
+            _logger.LogWarning("Issue {IssueId} was not found for label assignment.", issueId);
             return false;
         }
 

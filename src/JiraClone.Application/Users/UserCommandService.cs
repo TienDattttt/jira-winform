@@ -3,6 +3,8 @@ using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace JiraClone.Application.Users;
 
@@ -15,6 +17,7 @@ public class UserCommandService
     private readonly IActivityLogRepository _activityLogs;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<UserCommandService> _logger;
 
     public UserCommandService(
         IUserRepository users,
@@ -23,7 +26,8 @@ public class UserCommandService
         IAuthorizationService authorization,
         IActivityLogRepository activityLogs,
         ICurrentUserContext currentUserContext,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ILogger<UserCommandService>? logger = null)
     {
         _users = users;
         _projects = projects;
@@ -32,13 +36,20 @@ public class UserCommandService
         _activityLogs = activityLogs;
         _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
+        _logger = logger ?? NullLogger<UserCommandService>.Instance;
     }
 
-    public Task<IReadOnlyList<User>> GetAllAsync(CancellationToken cancellationToken = default) =>
-        _users.GetAllAsync(cancellationToken);
+    public Task<IReadOnlyList<User>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Loading all users.");
+        return _users.GetAllAsync(cancellationToken);
+    }
 
-    public Task<IReadOnlyList<Role>> GetRolesAsync(CancellationToken cancellationToken = default) =>
-        _users.GetRolesAsync(cancellationToken);
+    public Task<IReadOnlyList<Role>> GetRolesAsync(CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Loading available roles.");
+        return _users.GetRolesAsync(cancellationToken);
+    }
 
     public async Task<User> CreateAsync(
         int projectId,
@@ -50,6 +61,7 @@ public class UserCommandService
         IReadOnlyCollection<string> roleNames,
         CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Creating user {UserName} in project {ProjectId}.", userName, projectId);
         _authorization.EnsureInRole(RoleCatalog.Admin);
 
         var (hash, salt) = _passwordHasher.Hash(password);
@@ -105,10 +117,12 @@ public class UserCommandService
         IReadOnlyCollection<string> roleNames,
         CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Updating user {UserId}.", userId);
         _authorization.EnsureInRole(RoleCatalog.Admin);
         var user = await _users.GetByIdAsync(userId, cancellationToken);
         if (user is null)
         {
+            _logger.LogWarning("User {UserId} was not found for update.", userId);
             return null;
         }
 
@@ -146,10 +160,12 @@ public class UserCommandService
 
     public async Task<bool> ResetPasswordAsync(int userId, string newPassword, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Resetting password for user {UserId}.", userId);
         _authorization.EnsureInRole(RoleCatalog.Admin);
         var user = await _users.GetByIdAsync(userId, cancellationToken);
         if (user is null)
         {
+            _logger.LogWarning("User {UserId} was not found for password reset.", userId);
             return false;
         }
 
@@ -162,11 +178,17 @@ public class UserCommandService
         return true;
     }
 
-    public Task<User?> DeactivateAsync(int userId, CancellationToken cancellationToken = default) =>
-        UpdateStatusAsync(userId, false, cancellationToken);
+    public Task<User?> DeactivateAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deactivating user {UserId}.", userId);
+        return UpdateStatusAsync(userId, false, cancellationToken);
+    }
 
-    public Task<User?> ActivateAsync(int userId, CancellationToken cancellationToken = default) =>
-        UpdateStatusAsync(userId, true, cancellationToken);
+    public Task<User?> ActivateAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Activating user {UserId}.", userId);
+        return UpdateStatusAsync(userId, true, cancellationToken);
+    }
 
     private async Task<User?> UpdateStatusAsync(int userId, bool isActive, CancellationToken cancellationToken)
     {
@@ -174,6 +196,7 @@ public class UserCommandService
         var user = await _users.GetByIdAsync(userId, cancellationToken);
         if (user is null)
         {
+            _logger.LogWarning("User {UserId} was not found while changing active state to {IsActive}.", userId, isActive);
             return null;
         }
 

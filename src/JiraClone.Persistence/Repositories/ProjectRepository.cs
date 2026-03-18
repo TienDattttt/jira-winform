@@ -53,6 +53,7 @@ public class ProjectRepository : IProjectRepository
         return _dbContext.Projects
             .AsSplitQuery()
             .Include(x => x.BoardColumns)
+            .ThenInclude(x => x.WorkflowStatus)
             .Include(x => x.Members)
             .ThenInclude(x => x.User)
             .ThenInclude(x => x.UserRoles)
@@ -60,6 +61,17 @@ public class ProjectRepository : IProjectRepository
             .Include(x => x.Labels)
             .Include(x => x.Components)
             .ThenInclude(x => x.LeadUser)
-            .Include(x => x.Versions);
+            .Include(x => x.Versions)
+            .Include(x => x.WorkflowDefinitions)
+            .ThenInclude(x => x.Statuses)
+            .Include(x => x.WorkflowDefinitions)
+            .ThenInclude(x => x.Transitions)
+            .ThenInclude(x => x.FromStatus)
+            .Include(x => x.WorkflowDefinitions)
+            .ThenInclude(x => x.Transitions)
+            .ThenInclude(x => x.ToStatus)
+            .Include(x => x.WorkflowDefinitions)
+            .ThenInclude(x => x.Transitions)
+            .ThenInclude(x => x.AllowedRoles);
     }
 }

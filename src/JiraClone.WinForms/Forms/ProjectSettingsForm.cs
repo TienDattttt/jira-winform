@@ -2,6 +2,7 @@ using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
+using JiraClone.WinForms.Controls;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 using JiraComponentEntity = JiraClone.Domain.Entities.Component;
@@ -22,6 +23,7 @@ public class ProjectSettingsForm : UserControl
     private readonly ListView _labels = CreateListView();
     private readonly ListView _components = CreateListView();
     private readonly ListView _versions = CreateListView();
+    private readonly WorkflowSettingsControl _workflowSettings;
     private readonly Button _saveProject = JiraControlFactory.CreatePrimaryButton("Save Project");
     private readonly Button _archiveProject = JiraControlFactory.CreateSecondaryButton("Archive Project");
     private readonly Button _addMember = JiraControlFactory.CreateSecondaryButton("Add Member");
@@ -55,6 +57,7 @@ public class ProjectSettingsForm : UserControl
     public ProjectSettingsForm(AppSession session)
     {
         _session = session;
+        _workflowSettings = new WorkflowSettingsControl(_session);
         BackColor = JiraTheme.BgPage;
         Font = JiraTheme.FontBody;
         DoubleBuffered = true;
@@ -75,6 +78,7 @@ public class ProjectSettingsForm : UserControl
         tabs.TabPages.Add(BuildGeneralTab());
         tabs.TabPages.Add(BuildMembersTab());
         tabs.TabPages.Add(BuildColumnsTab());
+        tabs.TabPages.Add(BuildWorkflowTab());
         tabs.TabPages.Add(BuildLabelsTab());
         tabs.TabPages.Add(BuildComponentsTab());
         tabs.TabPages.Add(BuildVersionsTab());
@@ -96,6 +100,7 @@ public class ProjectSettingsForm : UserControl
     public void SetShellSearch(string value)
     {
         _shellSearch = value?.Trim() ?? string.Empty;
+        _workflowSettings.SetShellSearch(_shellSearch);
         BindProjectLists();
     }
 
@@ -187,7 +192,7 @@ public class ProjectSettingsForm : UserControl
         title.Font = JiraTheme.FontH1;
         title.Location = new Point(0, 0);
 
-        var caption = JiraControlFactory.CreateLabel("Adjust project details, members, board structure, labels, components, and release versions without leaving the desktop flow.", true);
+        var caption = JiraControlFactory.CreateLabel("Adjust project details, members, board structure, workflows, labels, components, and release versions without leaving the desktop flow.", true);
         caption.Location = new Point(0, 42);
 
         var badges = new FlowLayoutPanel
@@ -239,6 +244,13 @@ public class ProjectSettingsForm : UserControl
         var page = CreatePage("Board Columns");
         var actions = CreateActionBar(_editColumn);
         page.Controls.Add(WrapSurface(BuildListSurface(_columns, _columnsEmptyState, actions)));
+        return page;
+    }
+
+    private TabPage BuildWorkflowTab()
+    {
+        var page = CreatePage("Workflow");
+        page.Controls.Add(WrapSurface(_workflowSettings));
         return page;
     }
 
@@ -324,6 +336,7 @@ public class ProjectSettingsForm : UserControl
             _versionCountBadge.Text = _project.Versions.Count == 1 ? "1 version" : $"{_project.Versions.Count} versions";
             BindProjectLists();
             UpdateActionState();
+            await _workflowSettings.RefreshAsync();
         }
         catch (Exception exception)
         {
@@ -353,7 +366,7 @@ public class ProjectSettingsForm : UserControl
         var columns = _project.BoardColumns
             .Where(x => string.IsNullOrWhiteSpace(_shellSearch)
                 || x.Name.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase)
-                || x.StatusCode.ToString().Contains(_shellSearch, StringComparison.OrdinalIgnoreCase))
+                || x.WorkflowStatus.Name.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase))
             .OrderBy(x => x.DisplayOrder)
             .ToList();
 
@@ -421,7 +434,7 @@ public class ProjectSettingsForm : UserControl
         foreach (var column in columns)
         {
             var item = new ListViewItem(column.Name) { Tag = column };
-            item.SubItems.Add(column.StatusCode.ToString());
+            item.SubItems.Add(column.WorkflowStatus.Name);
             item.SubItems.Add(column.WipLimit?.ToString() ?? "-");
             _columns.Items.Add(item);
         }
@@ -1157,5 +1170,16 @@ public class ProjectSettingsForm : UserControl
         public bool IsReleased => _released.Checked;
     }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 

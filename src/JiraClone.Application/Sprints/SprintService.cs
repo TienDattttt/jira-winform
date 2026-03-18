@@ -1,8 +1,11 @@
+using System.Text.Json;
 using JiraClone.Application.Abstractions;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace JiraClone.Application.Sprints;
 
@@ -10,36 +13,50 @@ public class SprintService : ISprintService
 {
     private readonly ISprintRepository _sprints;
     private readonly IIssueRepository _issues;
+    private readonly IWorkflowRepository _workflows;
     private readonly IAuthorizationService _authorization;
     private readonly IActivityLogRepository _activityLogs;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<SprintService> _logger;
 
     public SprintService(
         ISprintRepository sprints,
         IIssueRepository issues,
+        IWorkflowRepository workflows,
         IAuthorizationService authorization,
         IActivityLogRepository activityLogs,
         ICurrentUserContext currentUserContext,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ILogger<SprintService>? logger = null)
     {
         _sprints = sprints;
         _issues = issues;
+        _workflows = workflows;
         _authorization = authorization;
         _activityLogs = activityLogs;
         _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
+        _logger = logger ?? NullLogger<SprintService>.Instance;
     }
 
-    public Task<IReadOnlyList<Sprint>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default) =>
-        _sprints.GetByProjectIdAsync(projectId, cancellationToken);
+        public Task<IReadOnlyList<Sprint>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Loading sprints for project {ProjectId}.", projectId);
+        return _sprints.GetByProjectIdAsync(projectId, cancellationToken);
+    }
 
-    public Task<Sprint?> GetActiveByProjectAsync(int projectId, CancellationToken cancellationToken = default) =>
-        _sprints.GetActiveByProjectIdAsync(projectId, cancellationToken);
+    public Task<Sprint?> GetActiveByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Loading active sprint for project {ProjectId}.", projectId);
+        return _sprints.GetActiveByProjectIdAsync(projectId, cancellationToken);
+    }
 
-    public Task<IReadOnlyList<Issue>> GetAssignableIssuesAsync(int projectId, CancellationToken cancellationToken = default) =>
-        _issues.GetProjectIssuesAsync(projectId, cancellationToken);
-
+    public Task<IReadOnlyList<Issue>> GetAssignableIssuesAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Loading assignable issues for project {ProjectId}.", projectId);
+        return _issues.GetProjectIssuesAsync(projectId, cancellationToken);
+    }
     public async Task<Sprint> CreateAsync(int projectId, string name, string? goal, DateOnly? startDate, DateOnly? endDate, CancellationToken cancellationToken = default)
     {
         _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager);
@@ -160,13 +177,25 @@ public class SprintService : ISprintService
 
         var actorUserId = GetActorUserId();
         var incompleteIssues = await _issues.GetIncompleteBySprintIdAsync(sprintId, cancellationToken);
+        var defaultWorkflow = await _workflows.GetDefaultByProjectAsync(sprint.ProjectId, cancellationToken);
+        var backlogStatus = defaultWorkflow?.Statuses
+            .Where(x => x.Category == StatusCategory.ToDo)
+            .OrderBy(x => x.DisplayOrder)
+            .FirstOrDefault();
+
         foreach (var issue in incompleteIssues)
         {
             issue.SprintId = moveToSprintId;
             if (!moveToSprintId.HasValue)
             {
-                var nextBacklogPosition = await _issues.GetNextBoardPositionAsync(issue.ProjectId, IssueStatus.Backlog, cancellationToken);
-                issue.MoveTo(IssueStatus.Backlog, nextBacklogPosition);
+                if (backlogStatus is null)
+                {
+                    throw new InvalidOperationException("A To Do status is required to move incomplete sprint issues back to the board.");
+                }
+
+                var nextBacklogPosition = await _issues.GetNextBoardPositionAsync(issue.ProjectId, backlogStatus.Id, cancellationToken);
+                issue.MoveTo(backlogStatus.Id, nextBacklogPosition);
+                issue.WorkflowStatus = backlogStatus;
             }
             else
             {
@@ -182,7 +211,7 @@ public class SprintService : ISprintService
                     UserId = actorUserId.Value,
                     ActionType = ActivityActionType.SprintAssigned,
                     OldValue = sprint.Name,
-                    NewValue = nextSprint?.Name ?? "Backlog"
+                    NewValue = nextSprint?.Name ?? backlogStatus?.Name ?? "Backlog"
                 }, cancellationToken);
             }
         }
@@ -200,7 +229,7 @@ public class SprintService : ISprintService
                 UserId = actorUserId.Value,
                 ActionType = ActivityActionType.SprintClosed,
                 OldValue = sprint.Name,
-                NewValue = nextSprint?.Name ?? "Backlog"
+                NewValue = nextSprint?.Name ?? backlogStatus?.Name ?? "Backlog"
             }, cancellationToken);
         }
 
@@ -243,10 +272,9 @@ public class SprintService : ISprintService
                 continue;
             }
 
-            var movedIntoDone = string.Equals(activity.NewValue, IssueStatus.Done.ToString(), StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(activity.OldValue, IssueStatus.Done.ToString(), StringComparison.OrdinalIgnoreCase);
-            var movedOutOfDone = string.Equals(activity.OldValue, IssueStatus.Done.ToString(), StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(activity.NewValue, IssueStatus.Done.ToString(), StringComparison.OrdinalIgnoreCase);
+            var (oldCategory, newCategory) = ResolveStatusCategories(activity);
+            var movedIntoDone = newCategory == StatusCategory.Done && oldCategory != StatusCategory.Done;
+            var movedOutOfDone = oldCategory == StatusCategory.Done && newCategory != StatusCategory.Done;
 
             if (movedIntoDone)
             {
@@ -370,7 +398,7 @@ public class SprintService : ISprintService
 
         if (latestStatusChange is not null)
         {
-            return string.Equals(latestStatusChange.NewValue, IssueStatus.Done.ToString(), StringComparison.OrdinalIgnoreCase);
+            return ResolveStatusCategories(latestStatusChange).NewCategory == StatusCategory.Done;
         }
 
         var movedOutBeforeClose = issueActivities.Any(x =>
@@ -384,7 +412,7 @@ public class SprintService : ISprintService
             return false;
         }
 
-        return issue.SprintId == sprint.Id && issue.Status == IssueStatus.Done;
+        return issue.SprintId == sprint.Id && issue.WorkflowStatus.Category == StatusCategory.Done;
     }
 
     private static IEnumerable<DateOnly> EnumerateDays(DateOnly startDate, DateOnly endDate)
@@ -440,5 +468,43 @@ public class SprintService : ISprintService
         return DateTime.MinValue;
     }
 
+    private static (StatusCategory OldCategory, StatusCategory NewCategory) ResolveStatusCategories(ActivityLogEntity activity)
+    {
+        if (!string.IsNullOrWhiteSpace(activity.MetadataJson))
+        {
+            try
+            {
+                var metadata = JsonSerializer.Deserialize<TransitionMetadata>(activity.MetadataJson);
+                if (metadata is not null)
+                {
+                    return (metadata.OldCategory, metadata.NewCategory);
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        var oldCategory = string.Equals(activity.OldValue, "Done", StringComparison.OrdinalIgnoreCase)
+            ? StatusCategory.Done
+            : StatusCategory.ToDo;
+        var newCategory = string.Equals(activity.NewValue, "Done", StringComparison.OrdinalIgnoreCase)
+            ? StatusCategory.Done
+            : StatusCategory.ToDo;
+        return (oldCategory, newCategory);
+    }
+
     private int? GetActorUserId() => _currentUserContext.CurrentUser?.Id;
+
+    private sealed record TransitionMetadata(
+        int OldStatusId,
+        string OldStatusName,
+        StatusCategory OldCategory,
+        int NewStatusId,
+        string NewStatusName,
+        StatusCategory NewCategory);
 }
+
+
+
+

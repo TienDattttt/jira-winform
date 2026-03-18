@@ -3,6 +3,8 @@ using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace JiraClone.Application.Versions;
 
@@ -15,6 +17,7 @@ public class VersionService : IVersionService
     private readonly IActivityLogRepository _activityLogs;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<VersionService> _logger;
 
     public VersionService(
         IProjectVersionRepository versions,
@@ -23,7 +26,8 @@ public class VersionService : IVersionService
         IAuthorizationService authorization,
         IActivityLogRepository activityLogs,
         ICurrentUserContext currentUserContext,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ILogger<VersionService>? logger = null)
     {
         _versions = versions;
         _issues = issues;
@@ -32,13 +36,18 @@ public class VersionService : IVersionService
         _activityLogs = activityLogs;
         _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
+        _logger = logger ?? NullLogger<VersionService>.Instance;
     }
 
-    public Task<IReadOnlyList<ProjectVersion>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default) =>
-        _versions.GetByProjectAsync(projectId, cancellationToken);
+    public Task<IReadOnlyList<ProjectVersion>> GetByProjectAsync(int projectId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Loading versions for project {ProjectId}.", projectId);
+        return _versions.GetByProjectAsync(projectId, cancellationToken);
+    }
 
     public async Task<ProjectVersion> CreateAsync(int projectId, string name, string? description, DateTime? releaseDate, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Creating version in project {ProjectId}.", projectId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var project = await RequireProjectAsync(projectId, cancellationToken);
         var normalizedName = NormalizeName(name);
@@ -61,10 +70,12 @@ public class VersionService : IVersionService
 
     public async Task<ProjectVersion?> UpdateAsync(int versionId, string name, string? description, DateTime? releaseDate, bool isReleased, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Updating version {VersionId}.", versionId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var version = await _versions.GetByIdAsync(versionId, cancellationToken);
         if (version is null)
         {
+            _logger.LogWarning("Version {VersionId} was not found for update.", versionId);
             return null;
         }
 
@@ -86,10 +97,12 @@ public class VersionService : IVersionService
 
     public async Task<bool> DeleteAsync(int versionId, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Deleting version {VersionId}.", versionId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var version = await _versions.GetByIdAsync(versionId, cancellationToken);
         if (version is null)
         {
+            _logger.LogWarning("Version {VersionId} was not found for delete.", versionId);
             return false;
         }
 
@@ -101,10 +114,12 @@ public class VersionService : IVersionService
 
     public async Task<bool> AssignToIssueAsync(int issueId, int? versionId, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Assigning version {VersionId} to issue {IssueId}.", versionId, issueId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager, RoleCatalog.Developer);
         var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
         if (issue is null)
         {
+            _logger.LogWarning("Issue {IssueId} was not found for fix version assignment.", issueId);
             return false;
         }
 
@@ -126,10 +141,12 @@ public class VersionService : IVersionService
 
     public async Task<ProjectVersion?> MarkReleasedAsync(int versionId, DateTime? releaseDate = null, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Marking version {VersionId} as released.", versionId);
         _authorization.EnsureInRole(RoleCatalog.Admin, RoleCatalog.ProjectManager);
         var version = await _versions.GetByIdAsync(versionId, cancellationToken);
         if (version is null)
         {
+            _logger.LogWarning("Version {VersionId} was not found for release.", versionId);
             return null;
         }
 

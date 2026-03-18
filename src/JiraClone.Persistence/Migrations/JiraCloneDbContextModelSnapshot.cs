@@ -94,9 +94,10 @@ namespace JiraClone.Persistence.Migrations
                             Id = 2,
                             ActionType = 4,
                             CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
-                            FieldName = "Status",
+                            FieldName = "WorkflowStatusId",
                             IssueId = 3,
-                            NewValue = "InProgress",
+                            MetadataJson = "{\"OldStatusId\":2,\"OldStatusName\":\"Selected\",\"OldCategory\":1,\"NewStatusId\":3,\"NewStatusName\":\"In Progress\",\"NewCategory\":2}",
+                            NewValue = "In Progress",
                             OccurredAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             OldValue = "Selected",
                             ProjectId = 1,
@@ -199,18 +200,23 @@ namespace JiraClone.Persistence.Migrations
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 
-                    b.Property<int>("StatusCode")
-                        .HasColumnType("int");
-
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<int?>("WipLimit")
                         .HasColumnType("int");
 
+                    b.Property<int>("WorkflowStatusId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("ProjectId", "StatusCode")
+                    b.HasIndex("WorkflowStatusId");
+
+                    b.HasIndex("ProjectId", "DisplayOrder")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId", "WorkflowStatusId")
                         .IsUnique();
 
                     b.ToTable("BoardColumns", (string)null);
@@ -223,8 +229,8 @@ namespace JiraClone.Persistence.Migrations
                             DisplayOrder = 1,
                             Name = "Backlog",
                             ProjectId = 1,
-                            StatusCode = 1,
-                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowStatusId = 1
                         },
                         new
                         {
@@ -233,8 +239,8 @@ namespace JiraClone.Persistence.Migrations
                             DisplayOrder = 2,
                             Name = "Selected",
                             ProjectId = 1,
-                            StatusCode = 2,
-                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowStatusId = 2
                         },
                         new
                         {
@@ -243,8 +249,8 @@ namespace JiraClone.Persistence.Migrations
                             DisplayOrder = 3,
                             Name = "In Progress",
                             ProjectId = 1,
-                            StatusCode = 3,
-                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowStatusId = 3
                         },
                         new
                         {
@@ -253,8 +259,8 @@ namespace JiraClone.Persistence.Migrations
                             DisplayOrder = 4,
                             Name = "Done",
                             ProjectId = 1,
-                            StatusCode = 4,
-                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowStatusId = 4
                         });
                 });
 
@@ -449,9 +455,6 @@ namespace JiraClone.Persistence.Migrations
                     b.Property<int?>("SprintId")
                         .HasColumnType("int");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
                     b.Property<int?>("StoryPoints")
                         .HasColumnType("int");
 
@@ -472,6 +475,9 @@ namespace JiraClone.Persistence.Migrations
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("WorkflowStatusId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedById");
@@ -486,12 +492,14 @@ namespace JiraClone.Persistence.Migrations
 
                     b.HasIndex("UpdatedAtUtc");
 
+                    b.HasIndex("WorkflowStatusId");
+
                     b.HasIndex("ProjectId", "IssueKey")
                         .IsUnique();
 
-                    b.HasIndex("ProjectId", "SprintId", "Status");
+                    b.HasIndex("ProjectId", "SprintId", "WorkflowStatusId");
 
-                    b.HasIndex("ProjectId", "Status", "BoardPosition");
+                    b.HasIndex("ProjectId", "WorkflowStatusId", "BoardPosition");
 
                     b.ToTable("Issues", (string)null);
 
@@ -513,13 +521,13 @@ namespace JiraClone.Persistence.Migrations
                             ProjectId = 1,
                             ReporterId = 3,
                             SprintId = 1,
-                            Status = 1,
                             StoryPoints = 5,
                             TimeRemainingHours = 6,
                             TimeSpentHours = 2,
                             Title = "Set up WinForms solution skeleton",
                             Type = 3,
-                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowStatusId = 1
                         },
                         new
                         {
@@ -538,13 +546,13 @@ namespace JiraClone.Persistence.Migrations
                             ProjectId = 1,
                             ReporterId = 1,
                             SprintId = 1,
-                            Status = 2,
                             StoryPoints = 3,
                             TimeRemainingHours = 9,
                             TimeSpentHours = 1,
                             Title = "Implement SQL Server persistence model",
                             Type = 1,
-                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowStatusId = 2
                         },
                         new
                         {
@@ -563,13 +571,13 @@ namespace JiraClone.Persistence.Migrations
                             ProjectId = 1,
                             ReporterId = 1,
                             SprintId = 1,
-                            Status = 3,
                             StoryPoints = 8,
                             TimeRemainingHours = 10,
                             TimeSpentHours = 6,
                             Title = "Build board screen",
                             Type = 3,
-                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowStatusId = 3
                         },
                         new
                         {
@@ -588,13 +596,13 @@ namespace JiraClone.Persistence.Migrations
                             ProjectId = 1,
                             ReporterId = 3,
                             SprintId = 1,
-                            Status = 4,
                             StoryPoints = 1,
                             TimeRemainingHours = 0,
                             TimeSpentHours = 2,
                             Title = "Seed admin login",
                             Type = 1,
-                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowStatusId = 4
                         });
                 });
 
@@ -1014,6 +1022,49 @@ namespace JiraClone.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.SavedFilter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsFavorite")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("QueryText")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ProjectId", "UserId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("SavedFilters", (string)null);
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.Sprint", b =>
                 {
                     b.Property<int>("Id")
@@ -1206,6 +1257,501 @@ namespace JiraClone.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowDefinition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "IsDefault");
+
+                    b.HasIndex("ProjectId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("WorkflowDefinitions", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsDefault = true,
+                            Name = "Default Workflow",
+                            ProjectId = 1,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc)
+                        });
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowStatus", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WorkflowDefinitionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkflowDefinitionId", "DisplayOrder")
+                        .IsUnique();
+
+                    b.HasIndex("WorkflowDefinitionId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("WorkflowStatuses", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Category = 1,
+                            Color = "#42526E",
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DisplayOrder = 1,
+                            Name = "Backlog",
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Category = 1,
+                            Color = "#4C9AFF",
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DisplayOrder = 2,
+                            Name = "Selected",
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Category = 2,
+                            Color = "#0052CC",
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DisplayOrder = 3,
+                            Name = "In Progress",
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Category = 3,
+                            Color = "#36B37E",
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DisplayOrder = 4,
+                            Name = "Done",
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        });
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowTransition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FromStatusId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("ToStatusId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WorkflowDefinitionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromStatusId");
+
+                    b.HasIndex("ToStatusId");
+
+                    b.HasIndex("WorkflowDefinitionId", "FromStatusId", "ToStatusId")
+                        .IsUnique();
+
+                    b.ToTable("WorkflowTransitions", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 1,
+                            Name = "Backlog to Selected",
+                            ToStatusId = 2,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 1,
+                            Name = "Backlog to In Progress",
+                            ToStatusId = 3,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 1,
+                            Name = "Backlog to Done",
+                            ToStatusId = 4,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 4,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 2,
+                            Name = "Selected to Backlog",
+                            ToStatusId = 1,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 5,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 2,
+                            Name = "Selected to In Progress",
+                            ToStatusId = 3,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 6,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 2,
+                            Name = "Selected to Done",
+                            ToStatusId = 4,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 7,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 3,
+                            Name = "In Progress to Backlog",
+                            ToStatusId = 1,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 8,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 3,
+                            Name = "In Progress to Selected",
+                            ToStatusId = 2,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 9,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 3,
+                            Name = "In Progress to Done",
+                            ToStatusId = 4,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 10,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 4,
+                            Name = "Done to Backlog",
+                            ToStatusId = 1,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 11,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 4,
+                            Name = "Done to Selected",
+                            ToStatusId = 2,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        },
+                        new
+                        {
+                            Id = 12,
+                            CreatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FromStatusId = 4,
+                            Name = "Done to In Progress",
+                            ToStatusId = 3,
+                            UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
+                            WorkflowDefinitionId = 1
+                        });
+                });
+
+            modelBuilder.Entity("WorkflowTransitionRole", b =>
+                {
+                    b.Property<int>("WorkflowTransitionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RoleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("WorkflowTransitionId", "RoleId");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("WorkflowTransitionRoles", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            WorkflowTransitionId = 1,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 1,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 1,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 2,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 2,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 2,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 3,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 3,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 3,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 4,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 4,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 4,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 5,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 5,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 5,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 6,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 6,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 6,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 7,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 7,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 7,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 8,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 8,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 8,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 9,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 9,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 9,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 10,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 10,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 10,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 11,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 11,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 11,
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 12,
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 12,
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            WorkflowTransitionId = 12,
+                            RoleId = 3
+                        });
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.ActivityLog", b =>
                 {
                     b.HasOne("JiraClone.Domain.Entities.Issue", "Issue")
@@ -1258,7 +1804,15 @@ namespace JiraClone.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("JiraClone.Domain.Entities.WorkflowStatus", "WorkflowStatus")
+                        .WithMany("BoardColumns")
+                        .HasForeignKey("WorkflowStatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Project");
+
+                    b.Navigation("WorkflowStatus");
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.Comment", b =>
@@ -1332,6 +1886,12 @@ namespace JiraClone.Persistence.Migrations
                         .WithMany("Issues")
                         .HasForeignKey("SprintId");
 
+                    b.HasOne("JiraClone.Domain.Entities.WorkflowStatus", "WorkflowStatus")
+                        .WithMany("Issues")
+                        .HasForeignKey("WorkflowStatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("CreatedBy");
 
                     b.Navigation("FixVersion");
@@ -1343,6 +1903,8 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("Reporter");
 
                     b.Navigation("Sprint");
+
+                    b.Navigation("WorkflowStatus");
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.IssueAssignee", b =>
@@ -1443,6 +2005,25 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("JiraClone.Domain.Entities.SavedFilter", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.Project", "Project")
+                        .WithMany("SavedFilters")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("JiraClone.Domain.Entities.User", "User")
+                        .WithMany("SavedFilters")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("JiraClone.Domain.Entities.Sprint", b =>
                 {
                     b.HasOne("JiraClone.Domain.Entities.Project", "Project")
@@ -1471,6 +2052,70 @@ namespace JiraClone.Persistence.Migrations
                     b.Navigation("Role");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowDefinition", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.Project", "Project")
+                        .WithMany("WorkflowDefinitions")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowStatus", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.WorkflowDefinition", "WorkflowDefinition")
+                        .WithMany("Statuses")
+                        .HasForeignKey("WorkflowDefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("WorkflowDefinition");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowTransition", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.WorkflowStatus", "FromStatus")
+                        .WithMany("OutgoingTransitions")
+                        .HasForeignKey("FromStatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("JiraClone.Domain.Entities.WorkflowStatus", "ToStatus")
+                        .WithMany("IncomingTransitions")
+                        .HasForeignKey("ToStatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("JiraClone.Domain.Entities.WorkflowDefinition", "WorkflowDefinition")
+                        .WithMany("Transitions")
+                        .HasForeignKey("WorkflowDefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FromStatus");
+
+                    b.Navigation("ToStatus");
+
+                    b.Navigation("WorkflowDefinition");
+                });
+
+            modelBuilder.Entity("WorkflowTransitionRole", b =>
+                {
+                    b.HasOne("JiraClone.Domain.Entities.Role", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("JiraClone.Domain.Entities.WorkflowTransition", null)
+                        .WithMany()
+                        .HasForeignKey("WorkflowTransitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.Component", b =>
@@ -1512,9 +2157,13 @@ namespace JiraClone.Persistence.Migrations
 
                     b.Navigation("Members");
 
+                    b.Navigation("SavedFilters");
+
                     b.Navigation("Sprints");
 
                     b.Navigation("Versions");
+
+                    b.Navigation("WorkflowDefinitions");
                 });
 
             modelBuilder.Entity("JiraClone.Domain.Entities.ProjectVersion", b =>
@@ -1542,7 +2191,27 @@ namespace JiraClone.Persistence.Migrations
 
                     b.Navigation("ProjectMemberships");
 
+                    b.Navigation("SavedFilters");
+
                     b.Navigation("UserRoles");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowDefinition", b =>
+                {
+                    b.Navigation("Statuses");
+
+                    b.Navigation("Transitions");
+                });
+
+            modelBuilder.Entity("JiraClone.Domain.Entities.WorkflowStatus", b =>
+                {
+                    b.Navigation("BoardColumns");
+
+                    b.Navigation("IncomingTransitions");
+
+                    b.Navigation("Issues");
+
+                    b.Navigation("OutgoingTransitions");
                 });
 #pragma warning restore 612, 618
         }

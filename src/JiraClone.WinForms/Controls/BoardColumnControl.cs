@@ -1,7 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
-using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Theme;
 
@@ -68,7 +67,7 @@ public class BoardColumnControl : UserControl
             AutoEllipsis = true,
         };
 
-        _createIssueLink.Click += (_, _) => CreateIssueRequested?.Invoke(this, _column.Status);
+        _createIssueLink.Click += (_, _) => CreateIssueRequested?.Invoke(this, _column.StatusId);
         _scrollHost.Controls.Add(_issuesPanel);
         _scrollHost.Controls.Add(_emptyState);
 
@@ -85,10 +84,10 @@ public class BoardColumnControl : UserControl
         Bind(column);
     }
 
-    public IssueStatus Status => _column.Status;
+    public int StatusId => _column.StatusId;
 
     public event EventHandler<int>? IssueSelected;
-    public event EventHandler<IssueStatus>? CreateIssueRequested;
+    public event EventHandler<int>? CreateIssueRequested;
     public event EventHandler<IssueMoveRequestedEventArgs>? IssueMoveRequested;
 
     public void Bind(BoardColumnDto column, int? animatedIssueId = null)
@@ -96,6 +95,7 @@ public class BoardColumnControl : UserControl
         _column = column;
         _headerPanel.Title = column.Name;
         _headerPanel.Count = column.Issues.Count;
+        _headerPanel.Accent = ParseColor(column.Color, JiraTheme.Blue600);
 
         RemoveDropPlaceholder();
         _issuesPanel.SuspendLayout();
@@ -180,7 +180,7 @@ public class BoardColumnControl : UserControl
 
     private void UpdateDropState(DragEventArgs e)
     {
-        if (TryGetDragData(e.Data, out var dragData) && dragData.Issue.Status != _column.Status)
+        if (TryGetDragData(e.Data, out var dragData) && dragData.Issue.StatusId != _column.StatusId)
         {
             e.Effect = DragDropEffects.Move;
             SetDropHighlight(true);
@@ -205,11 +205,11 @@ public class BoardColumnControl : UserControl
 
     private void OnDragDrop(object? sender, DragEventArgs e)
     {
-        var hasDrop = TryGetDragData(e.Data, out var dragData) && dragData.Issue.Status != _column.Status;
+        var hasDrop = TryGetDragData(e.Data, out var dragData) && dragData.Issue.StatusId != _column.StatusId;
         ClearDropState();
         if (hasDrop)
         {
-            IssueMoveRequested?.Invoke(this, new IssueMoveRequestedEventArgs(dragData.Issue.Id, dragData.Issue.Status, _column.Status));
+            IssueMoveRequested?.Invoke(this, new IssueMoveRequestedEventArgs(dragData.Issue.Id, dragData.Issue.StatusId, dragData.Issue.StatusName, _column.StatusId, _column.Name));
         }
     }
 
@@ -266,6 +266,18 @@ public class BoardColumnControl : UserControl
         }
     }
 
+    private static Color ParseColor(string? value, Color fallback)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(value) ? fallback : ColorTranslator.FromHtml(value);
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
     private sealed class HeaderPanel : Panel
     {
         public HeaderPanel()
@@ -278,6 +290,7 @@ public class BoardColumnControl : UserControl
 
         public string Title { get; set; } = string.Empty;
         public int Count { get; set; }
+        public Color Accent { get; set; } = JiraTheme.Blue600;
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -286,6 +299,8 @@ public class BoardColumnControl : UserControl
             e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             using var borderPen = new Pen(JiraTheme.Border);
+            using var accentBrush = new SolidBrush(Color.FromArgb(22, Accent));
+            e.Graphics.FillRectangle(accentBrush, 0, 0, Width, Height);
             e.Graphics.DrawLine(borderPen, 0, Height - 1, Width, Height - 1);
 
             var titleBounds = new Rectangle(12, 0, Width - 92, Height);

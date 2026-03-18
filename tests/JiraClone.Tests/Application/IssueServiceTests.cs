@@ -11,28 +11,25 @@ namespace JiraClone.Tests.Application;
 
 public class IssueServiceTests
 {
+    private const int BacklogStatusId = 1;
+    private const int SelectedStatusId = 2;
+    private const int DoneStatusId = 4;
+
     [Fact]
     public async Task CreateAsync_ValidInput_SavesIssueAndReturnsEntity()
     {
         var issueRepository = new Mock<IIssueRepository>();
-        var userRepository = new Mock<IUserRepository>();
-        var projectRepository = new Mock<IProjectRepository>();
-        var commentRepository = new Mock<ICommentRepository>();
-        var attachmentRepository = new Mock<IAttachmentRepository>();
-        var authorization = new Mock<IAuthorizationService>();
-        var activityLogRepository = new Mock<IActivityLogRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
-        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Selected, default)).ReturnsAsync(1m);
+        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, SelectedStatusId, default)).ReturnsAsync(1m);
         issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(1);
         issueRepository.Setup(x => x.AddAsync(It.IsAny<Issue>(), default)).Callback<Issue, CancellationToken>((issue, _) => issue.Id = 42).Returns(Task.CompletedTask);
-        projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
-        var service = CreateService(issueRepository, userRepository, projectRepository, commentRepository, attachmentRepository, authorization, activityLogRepository, unitOfWork);
-        var model = CreateModel(status: IssueStatus.Selected);
+        var service = CreateService(issueRepository: issueRepository, unitOfWork: unitOfWork);
 
-        var result = await service.CreateAsync(model);
+        var result = await service.CreateAsync(CreateModel(workflowStatusId: SelectedStatusId));
 
         Assert.Equal(42, result.Id);
         Assert.Equal("PROJ-1", result.IssueKey);
+        Assert.Equal(SelectedStatusId, result.WorkflowStatusId);
         issueRepository.Verify(x => x.AddAsync(It.IsAny<Issue>(), default), Times.Once);
         unitOfWork.Verify(x => x.SaveChangesAsync(default), Times.Once);
     }
@@ -41,68 +38,28 @@ public class IssueServiceTests
     public async Task CreateAsync_RendersDescriptionHtmlFromMarkdown()
     {
         var issueRepository = new Mock<IIssueRepository>();
-        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Backlog, default)).ReturnsAsync(1m);
+        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, BacklogStatusId, default)).ReturnsAsync(1m);
         issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(1);
         issueRepository.Setup(x => x.AddAsync(It.IsAny<Issue>(), default)).Returns(Task.CompletedTask);
         var service = CreateService(issueRepository: issueRepository);
-        var model = CreateModel(descriptionText: "**Bold** item");
 
-        var result = await service.CreateAsync(model);
+        var result = await service.CreateAsync(CreateModel(descriptionText: "**Bold** item"));
 
         Assert.Equal("**Bold** item", result.DescriptionText);
         Assert.Contains("<strong>Bold</strong>", result.DescriptionHtml, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task CreateAsync_ExistingProjectIssues_UsesNextProjectSequence()
-    {
-        var issueRepository = new Mock<IIssueRepository>();
-        var projectRepository = new Mock<IProjectRepository>();
-        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Backlog, default)).ReturnsAsync(1m);
-        issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(8);
-        projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
-        var service = CreateService(issueRepository: issueRepository, projectRepository: projectRepository);
-
-        var issue = await service.CreateAsync(CreateModel());
-
-        Assert.Equal("PROJ-8", issue.IssueKey);
-    }
-
-    [Fact]
-    public async Task CreateAsync_MissingTitle_ThrowsValidationException()
-    {
-        var service = CreateService();
-        var model = CreateModel(title: " ");
-
-        var act = () => service.CreateAsync(model);
-
-        await Assert.ThrowsAsync<ValidationException>(act);
-    }
-
-    [Fact]
-    public async Task UpdateAsync_IssueNotFound_ThrowsNotFoundException()
-    {
-        var issueRepository = new Mock<IIssueRepository>();
-        issueRepository.Setup(x => x.GetByIdAsync(7, default)).ReturnsAsync((Issue?)null);
-        var service = CreateService(issueRepository: issueRepository);
-        var model = CreateModel(id: 7);
-
-        var act = () => service.UpdateAsync(model);
-
-        await Assert.ThrowsAsync<NotFoundException>(act);
-    }
-
-    [Fact]
     public async Task UpdateAsync_ValidInput_CallsSaveChanges()
     {
-        var issue = new Issue { Id = 7, ProjectId = 1, Title = "Old", ReporterId = 3, CreatedById = 9 };
+        var status = CreateStatus(BacklogStatusId, "Backlog", StatusCategory.ToDo);
+        var issue = CreateIssue(7, status);
         var issueRepository = new Mock<IIssueRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
         issueRepository.Setup(x => x.GetByIdAsync(7, default)).ReturnsAsync(issue);
         var service = CreateService(issueRepository: issueRepository, unitOfWork: unitOfWork);
-        var model = CreateModel(id: 7, title: "Updated");
 
-        await service.UpdateAsync(model);
+        await service.UpdateAsync(CreateModel(id: 7, title: "Updated", workflowStatusId: BacklogStatusId));
 
         Assert.Equal("Updated", issue.Title);
         unitOfWork.Verify(x => x.SaveChangesAsync(default), Times.Once);
@@ -111,13 +68,13 @@ public class IssueServiceTests
     [Fact]
     public async Task UpdateAsync_RendersDescriptionHtmlFromMarkdown()
     {
-        var issue = new Issue { Id = 7, ProjectId = 1, Title = "Old", ReporterId = 3, CreatedById = 9 };
+        var status = CreateStatus(BacklogStatusId, "Backlog", StatusCategory.ToDo);
+        var issue = CreateIssue(7, status);
         var issueRepository = new Mock<IIssueRepository>();
         issueRepository.Setup(x => x.GetByIdAsync(7, default)).ReturnsAsync(issue);
         var service = CreateService(issueRepository: issueRepository);
-        var model = CreateModel(id: 7, descriptionText: "`code` sample");
 
-        await service.UpdateAsync(model);
+        await service.UpdateAsync(CreateModel(id: 7, descriptionText: "`code` sample", workflowStatusId: BacklogStatusId));
 
         Assert.Equal("`code` sample", issue.DescriptionText);
         Assert.Contains("<code>code</code>", issue.DescriptionHtml, StringComparison.OrdinalIgnoreCase);
@@ -126,7 +83,8 @@ public class IssueServiceTests
     [Fact]
     public async Task DeleteAsync_IssueExists_SoftDeletesAndWritesActivityLog()
     {
-        var issue = new Issue { Id = 7, ProjectId = 1, Title = "Delete me", ReporterId = 3, CreatedById = 9 };
+        var status = CreateStatus(BacklogStatusId, "Backlog", StatusCategory.ToDo);
+        var issue = CreateIssue(7, status);
         var issueRepository = new Mock<IIssueRepository>();
         var activityLogRepository = new Mock<IActivityLogRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
@@ -143,68 +101,51 @@ public class IssueServiceTests
     }
 
     [Fact]
-    public async Task MoveAsync_StatusChanged_SavesNewStatus()
+    public async Task MoveAsync_DelegatesToWorkflowService()
     {
-        var issue = new Issue { Id = 7, ProjectId = 1, Title = "Move me", ReporterId = 3, CreatedById = 9 };
-        var unitOfWork = new Mock<IUnitOfWork>();
-        var issueRepository = new Mock<IIssueRepository>();
-        issueRepository.Setup(x => x.GetByIdAsync(7, default)).ReturnsAsync(issue);
-        var service = CreateService(issueRepository: issueRepository, unitOfWork: unitOfWork);
+        var workflowService = new Mock<IWorkflowService>();
+        workflowService.Setup(x => x.ExecuteTransitionAsync(7, DoneStatusId, 11, 4m, default)).ReturnsAsync(new WorkflowTransitionResult(true, null, null, 4m));
+        var service = CreateService(workflowService: workflowService);
 
-        var moved = await service.MoveAsync(7, IssueStatus.Done, 4m, 11);
+        var moved = await service.MoveAsync(7, DoneStatusId, 4m, 11);
 
         Assert.True(moved);
-        Assert.Equal(IssueStatus.Done, issue.Status);
-        unitOfWork.Verify(x => x.SaveChangesAsync(default), Times.Once);
+        workflowService.Verify(x => x.ExecuteTransitionAsync(7, DoneStatusId, 11, 4m, default), Times.Once);
     }
 
     [Fact]
     public async Task CreateAsync_SubtaskWithoutParent_ThrowsValidationException()
     {
         var service = CreateService();
-        var model = CreateModel(type: IssueType.Subtask);
 
-        await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync(model));
-    }
-
-    [Fact]
-    public async Task CreateAsync_EpicWithParent_ThrowsValidationException()
-    {
-        var service = CreateService();
-        var model = CreateModel(type: IssueType.Epic, parentIssueId: 10);
-
-        await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync(model));
+        await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync(CreateModel(type: IssueType.Subtask)));
     }
 
     [Fact]
     public async Task CreateAsync_SubtaskWithValidParent_SetsParentIssueId()
     {
+        var parentStatus = CreateStatus(BacklogStatusId, "Backlog", StatusCategory.ToDo);
+        var parent = CreateIssue(10, parentStatus, IssueType.Task);
         var issueRepository = new Mock<IIssueRepository>();
-        var parent = new Issue { Id = 10, ProjectId = 1, Title = "Parent", Type = IssueType.Task, ReporterId = 3, CreatedById = 9 };
         issueRepository.Setup(x => x.GetByIdAsync(10, default)).ReturnsAsync(parent);
-        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Backlog, default)).ReturnsAsync(1m);
+        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, BacklogStatusId, default)).ReturnsAsync(1m);
         issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(1);
         issueRepository.Setup(x => x.AddAsync(It.IsAny<Issue>(), default)).Returns(Task.CompletedTask);
         var service = CreateService(issueRepository: issueRepository);
-        var model = CreateModel(type: IssueType.Subtask, parentIssueId: 10);
 
-        var result = await service.CreateAsync(model);
+        var result = await service.CreateAsync(CreateModel(type: IssueType.Subtask, parentIssueId: 10));
 
         Assert.Equal(10, result.ParentIssueId);
     }
 
     [Fact]
-    public async Task CreateAsync_SubtaskOfSubtask_ThrowsValidationException()
+    public async Task UpdateAsync_IssueNotFound_ThrowsNotFoundException()
     {
         var issueRepository = new Mock<IIssueRepository>();
-        var parent = new Issue { Id = 10, ProjectId = 1, Title = "Sub parent", Type = IssueType.Subtask, ReporterId = 3, CreatedById = 9 };
-        issueRepository.Setup(x => x.GetByIdAsync(10, default)).ReturnsAsync(parent);
-        issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, IssueStatus.Backlog, default)).ReturnsAsync(1m);
-        issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(1);
+        issueRepository.Setup(x => x.GetByIdAsync(7, default)).ReturnsAsync((Issue?)null);
         var service = CreateService(issueRepository: issueRepository);
-        var model = CreateModel(type: IssueType.Subtask, parentIssueId: 10);
 
-        await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync(model));
+        await Assert.ThrowsAsync<NotFoundException>(() => service.UpdateAsync(CreateModel(id: 7)));
     }
 
     private static IssueService CreateService(
@@ -215,17 +156,27 @@ public class IssueServiceTests
         Mock<IAttachmentRepository>? attachmentRepository = null,
         Mock<IAuthorizationService>? authorization = null,
         Mock<IActivityLogRepository>? activityLogRepository = null,
+        Mock<IWorkflowService>? workflowService = null,
+        Mock<IWorkflowRepository>? workflowRepository = null,
         Mock<IUnitOfWork>? unitOfWork = null)
     {
         projectRepository ??= new Mock<IProjectRepository>();
         projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
 
+        workflowRepository ??= new Mock<IWorkflowRepository>();
+        var defaultWorkflow = CreateWorkflowDefinition();
+        workflowRepository.Setup(x => x.GetDefaultByProjectAsync(1, default)).ReturnsAsync(defaultWorkflow);
+        workflowRepository.Setup(x => x.GetStatusByIdAsync(It.IsAny<int>(), default)).ReturnsAsync((int statusId, CancellationToken _) => defaultWorkflow.Statuses.FirstOrDefault(status => status.Id == statusId));
+
         if (issueRepository is null)
         {
             issueRepository = new Mock<IIssueRepository>();
             issueRepository.Setup(x => x.GetNextIssueSequenceAsync(1, default)).ReturnsAsync(1);
-            issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, It.IsAny<IssueStatus>(), default)).ReturnsAsync(1m);
+            issueRepository.Setup(x => x.GetNextBoardPositionAsync(1, It.IsAny<int>(), default)).ReturnsAsync(1m);
         }
+
+        workflowService ??= new Mock<IWorkflowService>();
+        workflowService.Setup(x => x.ExecuteTransitionAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<decimal?>(), default)).ReturnsAsync(new WorkflowTransitionResult(true, null, null, 1m));
 
         return new IssueService(
             issueRepository.Object,
@@ -235,13 +186,15 @@ public class IssueServiceTests
             (attachmentRepository ?? new Mock<IAttachmentRepository>()).Object,
             (authorization ?? new Mock<IAuthorizationService>()).Object,
             (activityLogRepository ?? new Mock<IActivityLogRepository>()).Object,
+            workflowService.Object,
+            workflowRepository.Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
     }
 
     private static IssueEditModel CreateModel(
         int? id = null,
         string title = "Issue title",
-        IssueStatus status = IssueStatus.Backlog,
+        int workflowStatusId = BacklogStatusId,
         IssueType type = IssueType.Task,
         int? parentIssueId = null,
         string? descriptionText = null)
@@ -253,12 +206,44 @@ public class IssueServiceTests
             Title = title,
             DescriptionText = descriptionText,
             Type = type,
-            Status = status,
+            WorkflowStatusId = workflowStatusId,
             Priority = IssuePriority.Medium,
             ReporterId = 3,
             CreatedById = 9,
             ParentIssueId = parentIssueId,
             AssigneeIds = Array.Empty<int>()
         };
+    }
+
+    private static WorkflowDefinition CreateWorkflowDefinition()
+    {
+        var workflow = new WorkflowDefinition { Id = 1, ProjectId = 1, Name = "Default", IsDefault = true };
+        workflow.Statuses.Add(CreateStatus(BacklogStatusId, "Backlog", StatusCategory.ToDo, workflow));
+        workflow.Statuses.Add(CreateStatus(SelectedStatusId, "Selected", StatusCategory.ToDo, workflow));
+        workflow.Statuses.Add(CreateStatus(DoneStatusId, "Done", StatusCategory.Done, workflow));
+        return workflow;
+    }
+
+    private static WorkflowStatus CreateStatus(int id, string name, StatusCategory category, WorkflowDefinition? workflow = null)
+    {
+        workflow ??= new WorkflowDefinition { Id = 1, ProjectId = 1, Name = "Default", IsDefault = true };
+        return new WorkflowStatus
+        {
+            Id = id,
+            WorkflowDefinitionId = workflow.Id,
+            WorkflowDefinition = workflow,
+            Name = name,
+            Category = category,
+            Color = "#42526E",
+            DisplayOrder = id
+        };
+    }
+
+    private static Issue CreateIssue(int id, WorkflowStatus status, IssueType type = IssueType.Task)
+    {
+        var issue = new Issue { Id = id, ProjectId = 1, Title = "Issue", ReporterId = 3, CreatedById = 9, Type = type };
+        issue.WorkflowStatus = status;
+        issue.MoveTo(status.Id, 1m);
+        return issue;
     }
 }

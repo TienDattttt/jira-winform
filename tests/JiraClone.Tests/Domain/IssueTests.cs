@@ -7,48 +7,39 @@ namespace JiraClone.Tests.Domain;
 public class IssueTests
 {
     [Fact]
-    public void Issue_DefaultState_StatusIsBacklog()
+    public void Issue_DefaultState_BoardPositionStartsAtOne()
     {
-        // Arrange
         var issue = new Issue();
 
-        // Act / Assert
-        Assert.Equal(IssueStatus.Backlog, issue.Status);
+        Assert.Equal(1m, issue.BoardPosition);
+        Assert.Equal(0, issue.WorkflowStatusId);
     }
 
     [Fact]
     public void Issue_DefaultState_PriorityIsMedium()
     {
-        // Arrange
         var issue = new Issue();
 
-        // Act / Assert
         Assert.Equal(IssuePriority.Medium, issue.Priority);
     }
 
     [Fact]
     public void StoryPoints_NegativeValue_ThrowsArgumentOutOfRangeException()
     {
-        // Arrange
         var issue = new Issue();
 
-        // Act
         Action act = () => issue.StoryPoints = -1;
 
-        // Assert
         Assert.Throws<ArgumentOutOfRangeException>(act);
     }
 
     [Fact]
     public void IssueKey_ProjectSequenceFormat_MatchesExpectedPattern()
     {
-        // Arrange
         var issue = new Issue { IssueKey = "PROJ-1" };
 
-        // Act
         var matches = Regex.IsMatch(issue.IssueKey, "^[A-Z]+-\\d+$");
 
-        // Assert
         Assert.True(matches);
     }
 }

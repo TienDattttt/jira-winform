@@ -1,10 +1,12 @@
+using System.ComponentModel.DataAnnotations;
 using JiraClone.Application.Abstractions;
 using JiraClone.Application.Common;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
-using System.ComponentModel.DataAnnotations;
 using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace JiraClone.Application.Issues;
 
@@ -17,7 +19,10 @@ public class IssueService
     private readonly IAttachmentRepository _attachments;
     private readonly IAuthorizationService _authorization;
     private readonly IActivityLogRepository _activityLogs;
+    private readonly IWorkflowService _workflowService;
+    private readonly IWorkflowRepository _workflows;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<IssueService> _logger;
 
     public IssueService(
         IIssueRepository issues,
@@ -27,7 +32,10 @@ public class IssueService
         IAttachmentRepository attachments,
         IAuthorizationService authorization,
         IActivityLogRepository activityLogs,
-        IUnitOfWork unitOfWork)
+        IWorkflowService workflowService,
+        IWorkflowRepository workflows,
+        IUnitOfWork unitOfWork,
+        ILogger<IssueService>? logger = null)
     {
         _issues = issues;
         _users = users;
@@ -36,7 +44,10 @@ public class IssueService
         _attachments = attachments;
         _authorization = authorization;
         _activityLogs = activityLogs;
+        _workflowService = workflowService;
+        _workflows = workflows;
         _unitOfWork = unitOfWork;
+        _logger = logger ?? NullLogger<IssueService>.Instance;
     }
 
     public async Task<Issue> CreateAsync(IssueEditModel model, CancellationToken cancellationToken = default)
@@ -50,6 +61,7 @@ public class IssueService
             throw new ValidationException($"Project with id {model.ProjectId} was not found.");
         }
 
+        var workflowStatus = await ResolveWorkflowStatusAsync(model.ProjectId, model.WorkflowStatusId, cancellationToken);
         var descriptionText = MarkdownHtmlRenderer.Normalize(model.DescriptionText);
         var issue = new Issue
         {
@@ -67,7 +79,8 @@ public class IssueService
             TimeRemainingHours = model.TimeRemainingHours,
             StoryPoints = model.StoryPoints,
             SprintId = model.SprintId,
-            ParentIssueId = model.ParentIssueId
+            ParentIssueId = model.ParentIssueId,
+            WorkflowStatus = workflowStatus
         };
 
         if (model.ParentIssueId.HasValue)
@@ -84,7 +97,7 @@ public class IssueService
             }
         }
 
-        issue.MoveTo(model.Status, await _issues.GetNextBoardPositionAsync(model.ProjectId, model.Status, cancellationToken));
+        issue.MoveTo(workflowStatus.Id, await _issues.GetNextBoardPositionAsync(model.ProjectId, workflowStatus.Id, cancellationToken));
         issue.Assignees = await BuildAssigneesAsync(model.AssigneeIds, issue, cancellationToken);
 
         await _issues.AddAsync(issue, cancellationToken);
@@ -116,7 +129,7 @@ public class IssueService
             throw new NotFoundException($"Issue with id {model.Id.Value} was not found.");
         }
 
-        var oldStatus = issue.Status;
+        var originalStatusId = issue.WorkflowStatusId;
         var descriptionText = MarkdownHtmlRenderer.Normalize(model.DescriptionText);
         issue.Title = model.Title.Trim();
         issue.DescriptionText = descriptionText;
@@ -133,57 +146,36 @@ public class IssueService
         issue.Assignees.Clear();
         issue.Assignees = await BuildAssigneesAsync(model.AssigneeIds, issue, cancellationToken);
 
-        if (oldStatus != model.Status)
+        var requestedStatus = await ResolveWorkflowStatusAsync(issue.ProjectId, model.WorkflowStatusId ?? issue.WorkflowStatusId, cancellationToken);
+        if (requestedStatus.Id != originalStatusId)
         {
-            var nextPosition = await _issues.GetNextBoardPositionAsync(issue.ProjectId, model.Status, cancellationToken);
-            issue.MoveTo(model.Status, nextPosition);
+            await _workflowService.ExecuteTransitionAsync(issue.Id, requestedStatus.Id, model.CreatedById, cancellationToken: cancellationToken);
         }
         else
         {
             issue.UpdatedAtUtc = DateTime.UtcNow;
+            await _activityLogs.AddAsync(new ActivityLogEntity
+            {
+                ProjectId = issue.ProjectId,
+                IssueId = issue.Id,
+                UserId = model.CreatedById,
+                ActionType = ActivityActionType.Updated,
+                OldValue = issue.Title,
+                NewValue = issue.Title
+            }, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        await _activityLogs.AddAsync(new ActivityLogEntity
-        {
-            ProjectId = issue.ProjectId,
-            IssueId = issue.Id,
-            UserId = model.CreatedById,
-            ActionType = oldStatus == model.Status ? ActivityActionType.Updated : ActivityActionType.StatusChanged,
-            OldValue = oldStatus.ToString(),
-            NewValue = issue.Status.ToString()
-        }, cancellationToken);
-
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
         return issue;
     }
 
-    public Task<bool> MoveAsync(int issueId, IssueStatus targetStatus, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
-        => UpdateStatusAsync(issueId, targetStatus, boardPosition, userId, cancellationToken);
+    public Task<bool> MoveAsync(int issueId, int targetStatusId, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
+        => UpdateStatusAsync(issueId, targetStatusId, boardPosition, userId, cancellationToken);
 
-    public async Task<bool> UpdateStatusAsync(int issueId, IssueStatus targetStatus, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
+    public async Task<bool> UpdateStatusAsync(int issueId, int targetStatusId, decimal boardPosition, int userId, CancellationToken cancellationToken = default)
     {
-        _authorization.EnsureInRole(Roles.RoleCatalog.Admin, Roles.RoleCatalog.ProjectManager, Roles.RoleCatalog.Developer);
-        var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
-        if (issue is null)
-        {
-            return false;
-        }
-
-        var oldStatus = issue.Status;
-        issue.MoveTo(targetStatus, boardPosition);
-
-        await _activityLogs.AddAsync(new ActivityLogEntity
-        {
-            ProjectId = issue.ProjectId,
-            IssueId = issue.Id,
-            UserId = userId,
-            ActionType = ActivityActionType.StatusChanged,
-            OldValue = oldStatus.ToString(),
-            NewValue = targetStatus.ToString()
-        }, cancellationToken);
-
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-        return true;
+        var result = await _workflowService.ExecuteTransitionAsync(issueId, targetStatusId, userId, boardPosition, cancellationToken);
+        return result.Succeeded;
     }
 
     public async Task<IssueDetailsDto?> GetDetailsAsync(int issueId, CancellationToken cancellationToken = default)
@@ -254,6 +246,28 @@ public class IssueService
         return $"{prefix}{nextSequence}";
     }
 
+    private async Task<WorkflowStatus> ResolveWorkflowStatusAsync(int projectId, int? workflowStatusId, CancellationToken cancellationToken)
+    {
+        if (workflowStatusId.HasValue)
+        {
+            var selectedStatus = await _workflows.GetStatusByIdAsync(workflowStatusId.Value, cancellationToken);
+            if (selectedStatus is null || selectedStatus.WorkflowDefinition.ProjectId != projectId)
+            {
+                throw new ValidationException("The selected workflow status was not found in this project.");
+            }
+
+            return selectedStatus;
+        }
+
+        var workflow = await _workflows.GetDefaultByProjectAsync(projectId, cancellationToken)
+            ?? throw new ValidationException("The project does not have a default workflow.");
+        var defaultStatus = workflow.Statuses
+            .OrderBy(x => x.Category)
+            .ThenBy(x => x.DisplayOrder)
+            .FirstOrDefault();
+        return defaultStatus ?? throw new ValidationException("The project workflow does not contain any statuses.");
+    }
+
     private async Task<ICollection<IssueAssignee>> BuildAssigneesAsync(IEnumerable<int> assigneeIds, Issue issue, CancellationToken cancellationToken)
     {
         var result = new List<IssueAssignee>();
@@ -277,3 +291,8 @@ public class IssueService
         return result;
     }
 }
+
+
+
+
+

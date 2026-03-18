@@ -6,18 +6,22 @@ using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using ActivityLogEntity = JiraClone.Domain.Entities.ActivityLog;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace JiraClone.Application.Projects;
 
 public class ProjectCommandService : IProjectCommandService
 {
-    private static readonly (IssueStatus Status, string Name)[] DefaultBoardColumns =
+    private static readonly (string Name, string Color, StatusCategory Category)[] DefaultWorkflowStatuses =
     [
-        (IssueStatus.Backlog, "Backlog"),
-        (IssueStatus.Selected, "Selected"),
-        (IssueStatus.InProgress, "In Progress"),
-        (IssueStatus.Done, "Done")
+        ("Backlog", "#42526E", StatusCategory.ToDo),
+        ("Selected", "#4C9AFF", StatusCategory.ToDo),
+        ("In Progress", "#0052CC", StatusCategory.InProgress),
+        ("Done", "#36B37E", StatusCategory.Done)
     ];
+
+    private static readonly string[] DefaultEditableRoles = [RoleCatalog.Admin, RoleCatalog.ProjectManager, RoleCatalog.Developer];
 
     private readonly IProjectRepository _projects;
     private readonly IUserRepository _users;
@@ -25,6 +29,7 @@ public class ProjectCommandService : IProjectCommandService
     private readonly IActivityLogRepository _activityLogs;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<ProjectCommandService> _logger;
 
     public ProjectCommandService(
         IProjectRepository projects,
@@ -32,7 +37,8 @@ public class ProjectCommandService : IProjectCommandService
         IAuthorizationService authorization,
         IActivityLogRepository activityLogs,
         ICurrentUserContext currentUserContext,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ILogger<ProjectCommandService>? logger = null)
     {
         _projects = projects;
         _users = users;
@@ -40,6 +46,7 @@ public class ProjectCommandService : IProjectCommandService
         _activityLogs = activityLogs;
         _currentUserContext = currentUserContext;
         _unitOfWork = unitOfWork;
+        _logger = logger ?? NullLogger<ProjectCommandService>.Instance;
     }
 
     public async Task<Project> CreateProjectAsync(string name, string key, ProjectCategory category, string? description, IReadOnlyCollection<ProjectMemberInput> members, CancellationToken cancellationToken = default)
@@ -76,17 +83,57 @@ public class ProjectCommandService : IProjectCommandService
             UpdatedAtUtc = now,
         };
 
-        for (var index = 0; index < DefaultBoardColumns.Length; index++)
+        var workflow = new WorkflowDefinition
         {
-            var column = DefaultBoardColumns[index];
+            Name = "Default Workflow",
+            IsDefault = true,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+        };
+        project.WorkflowDefinitions.Add(workflow);
+
+        foreach (var template in DefaultWorkflowStatuses.Select((value, index) => new { value, index }))
+        {
+            var status = new WorkflowStatus
+            {
+                Name = template.value.Name,
+                Color = template.value.Color,
+                Category = template.value.Category,
+                DisplayOrder = template.index + 1,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            };
+
+            workflow.Statuses.Add(status);
             project.BoardColumns.Add(new BoardColumn
             {
-                Name = column.Name,
-                StatusCode = column.Status,
-                DisplayOrder = index + 1,
+                Name = status.Name,
+                WorkflowStatus = status,
+                DisplayOrder = template.index + 1,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now,
             });
+        }
+
+        var allowedRoles = (await _users.GetRolesAsync(cancellationToken))
+            .Where(x => DefaultEditableRoles.Contains(x.Name, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(x => x.Name)
+            .ToList();
+        var statuses = workflow.Statuses.OrderBy(x => x.DisplayOrder).ToList();
+        foreach (var fromStatus in statuses)
+        {
+            foreach (var toStatus in statuses.Where(x => x != fromStatus))
+            {
+                workflow.Transitions.Add(new WorkflowTransition
+                {
+                    Name = $"{fromStatus.Name} to {toStatus.Name}",
+                    FromStatus = fromStatus,
+                    ToStatus = toStatus,
+                    AllowedRoles = allowedRoles.ToList(),
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                });
+            }
         }
 
         var uniqueMembers = (members ?? Array.Empty<ProjectMemberInput>())
@@ -249,6 +296,12 @@ public class ProjectCommandService : IProjectCommandService
         column.Name = normalizedName;
         column.WipLimit = wipLimit;
         column.UpdatedAtUtc = DateTime.UtcNow;
+        if (column.WorkflowStatus is not null)
+        {
+            column.WorkflowStatus.Name = normalizedName;
+            column.WorkflowStatus.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
         await AddProjectActivityAsync(projectId, ActivityActionType.Updated, nameof(BoardColumn.Name), oldValue, $"{column.Name}|{column.WipLimit}", cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return true;
@@ -294,4 +347,7 @@ public class ProjectCommandService : IProjectCommandService
         }, cancellationToken);
     }
 }
+
+
+
 
