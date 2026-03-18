@@ -61,6 +61,8 @@ public sealed class DashboardForm : UserControl
     private DashboardOverviewDto? _overview;
     private string _shellSearch = string.Empty;
     private bool _isLoading;
+    private readonly CancellationTokenSource _disposeCts = new();
+    private CancellationTokenSource? _loadCts;
 
     public DashboardForm(AppSession session)
     {
@@ -71,8 +73,9 @@ public sealed class DashboardForm : UserControl
 
         _titleLabel.Font = JiraTheme.FontH1;
         ConfigureActionButton(_refreshButton, 108);
-        _refreshButton.Click += async (_, _) => await LoadDashboardAsync();
-        _autoRefreshTimer.Tick += async (_, _) => await LoadDashboardAsync();
+        _refreshButton.Click += OnRefreshButtonClick;
+        _autoRefreshTimer.Tick += OnAutoRefreshTimerTick;
+
 
         _sprintCard.SetBody(_sprintPanel);
         _statisticsCard.SetBody(_statisticsPanel);
@@ -86,25 +89,42 @@ public sealed class DashboardForm : UserControl
         Controls.Add(BuildToolbar());
         Controls.Add(BuildHeader());
 
-        Load += async (_, _) =>
-        {
-            ApplyResponsiveLayout();
-            _autoRefreshTimer.Start();
-            await LoadDashboardAsync();
-        };
-        Resize += (_, _) => ApplyResponsiveLayout();
-        VisibleChanged += (_, _) =>
-        {
-            if (IsDisposed)
-            {
-                return;
-            }
-
-            _autoRefreshTimer.Enabled = Visible;
-        };
+        Load += OnDashboardLoad;
+        Resize += OnDashboardResize;
+        VisibleChanged += OnDashboardVisibleChanged;
     }
 
-    public Task RefreshDashboardAsync(CancellationToken cancellationToken = default) => LoadDashboardAsync(cancellationToken);
+    public Task RefreshDashboardAsync(CancellationToken cancellationToken = default) => ReloadDashboardAsync(cancellationToken);
+
+    private Task ReloadDashboardAsync(CancellationToken cancellationToken = default) =>
+        LoadDashboardAsync(RestartLoadCancellation(cancellationToken));
+
+    private CancellationToken RestartLoadCancellation(CancellationToken cancellationToken = default)
+    {
+        CancelPendingLoad();
+        _loadCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+        return _loadCts.Token;
+    }
+
+    private void CancelPendingLoad()
+    {
+        if (_loadCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _loadCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        _loadCts.Dispose();
+        _loadCts = null;
+    }
+
 
     public void SetShellSearch(string value)
     {
@@ -116,6 +136,14 @@ public sealed class DashboardForm : UserControl
     {
         if (disposing)
         {
+            CancelPendingLoad();
+            _disposeCts.Cancel();
+            _disposeCts.Dispose();
+            Load -= OnDashboardLoad;
+            Resize -= OnDashboardResize;
+            VisibleChanged -= OnDashboardVisibleChanged;
+            _refreshButton.Click -= OnRefreshButtonClick;
+            _autoRefreshTimer.Tick -= OnAutoRefreshTimerTick;
             _autoRefreshTimer.Stop();
             _autoRefreshTimer.Dispose();
         }
@@ -207,10 +235,12 @@ public sealed class DashboardForm : UserControl
 
     private async Task LoadDashboardAsync(CancellationToken cancellationToken = default)
     {
-        if (_isLoading || !Visible)
+        if (!Visible)
         {
             return;
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         try
         {
@@ -242,6 +272,9 @@ public sealed class DashboardForm : UserControl
             BindOverview();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
         {
         }
         catch (Exception exception)
@@ -411,6 +444,38 @@ public sealed class DashboardForm : UserControl
         }
     }
 
+    private async void OnDashboardLoad(object? sender, EventArgs e)
+    {
+        ApplyResponsiveLayout();
+        _autoRefreshTimer.Start();
+        await ReloadDashboardAsync(_disposeCts.Token);
+    }
+
+    private void OnDashboardResize(object? sender, EventArgs e)
+    {
+        ApplyResponsiveLayout();
+    }
+
+    private void OnDashboardVisibleChanged(object? sender, EventArgs e)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        _autoRefreshTimer.Enabled = Visible;
+    }
+
+    private async void OnRefreshButtonClick(object? sender, EventArgs e)
+    {
+        await ReloadDashboardAsync(_disposeCts.Token);
+    }
+
+    private async void OnAutoRefreshTimerTick(object? sender, EventArgs e)
+    {
+        await ReloadDashboardAsync(_disposeCts.Token);
+    }
+
     private async void HandleIssueRequested(object? sender, int issueId)
     {
         if (_project is null || IsDisposed)
@@ -423,8 +488,11 @@ public sealed class DashboardForm : UserControl
             using var dialog = new IssueDetailsForm(_session, issueId, _project.Id);
             if (dialog.ShowDialog(this) == DialogResult.OK)
             {
-                await LoadDashboardAsync();
+                await ReloadDashboardAsync(_disposeCts.Token);
             }
+        }
+        catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -476,18 +544,12 @@ public sealed class DashboardForm : UserControl
 
     private static Panel CreateTeamHeader()
     {
-        var header = new Panel
+        var header = new TeamHeaderPanel
         {
             Dock = DockStyle.Top,
             Height = 34,
             BackColor = JiraTheme.BgSurface,
             Padding = new Padding(16, 8, 16, 6)
-        };
-
-        header.Paint += (_, e) =>
-        {
-            using var pen = new Pen(JiraTheme.Border);
-            e.Graphics.DrawLine(pen, 0, header.Height - 1, header.Width, header.Height - 1);
         };
 
         header.Controls.Add(CreateHeaderLabel("In Progress", 520, 120, ContentAlignment.MiddleRight));
@@ -497,6 +559,7 @@ public sealed class DashboardForm : UserControl
         return header;
     }
 
+    private static Label CreateHeaderLabel(string text, int left, int width, ContentAlignment alignment)
     private static Label CreateHeaderLabel(string text, int left, int width, ContentAlignment alignment)
     {
         var label = JiraControlFactory.CreateLabel(text, true);
@@ -834,6 +897,16 @@ public sealed class DashboardForm : UserControl
         }
     }
 
+    private sealed class TeamHeaderPanel : Panel
+    {
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            using var pen = new Pen(JiraTheme.Border);
+            e.Graphics.DrawLine(pen, 0, Height - 1, Width, Height - 1);
+        }
+    }
+
     private sealed class ActivityRowControl : Control
     {
         private readonly DashboardActivityDto _activity;
@@ -852,16 +925,6 @@ public sealed class DashboardForm : UserControl
             DoubleBuffered = true;
             Margin = Padding.Empty;
             Padding = Padding.Empty;
-
-            MouseEnter += (_, _) => { _hovered = true; Invalidate(); };
-            MouseLeave += (_, _) => { _hovered = false; Invalidate(); };
-            Click += (_, _) =>
-            {
-                if (_activity.IssueId.HasValue)
-                {
-                    IssueRequested?.Invoke(this, _activity.IssueId.Value);
-                }
-            };
         }
 
         public event EventHandler<int>? IssueRequested;
@@ -897,13 +960,29 @@ public sealed class DashboardForm : UserControl
             BackColor = JiraTheme.BgSurface;
             DoubleBuffered = true;
             Margin = Padding.Empty;
-
-            MouseEnter += (_, _) => { _hovered = true; Invalidate(); };
-            MouseLeave += (_, _) => { _hovered = false; Invalidate(); };
-            Click += (_, _) => IssueRequested?.Invoke(this, _issue.Id);
         }
 
         public event EventHandler<int>? IssueRequested;
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hovered = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hovered = false;
+            Invalidate();
+        }
+
+        protected override void OnClick(EventArgs e)
+        {
+            base.OnClick(e);
+            IssueRequested?.Invoke(this, _issue.Id);
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -1030,5 +1109,8 @@ public sealed class DashboardForm : UserControl
         };
     }
 }
+
+
+
 
 

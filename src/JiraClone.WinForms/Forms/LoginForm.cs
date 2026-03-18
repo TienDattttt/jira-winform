@@ -19,6 +19,9 @@ public class LoginForm : Form
     private readonly Button _loginButton;
     private readonly Button _showPasswordButton;
     private readonly Button _closeButton;
+    private readonly Button _ssoButton;
+    private readonly bool _oauthEnabled;
+    private readonly string _oauthProviderName;
 
     private Point _dragOrigin;
     private Point _formOrigin;
@@ -29,6 +32,8 @@ public class LoginForm : Form
     {
         _session = session;
         _sessionPersistence = sessionPersistence;
+        _oauthEnabled = _session.OAuth.IsEnabled;
+        _oauthProviderName = _session.OAuth.ProviderName;
 
         Text = "Jira Clone Login";
         FormBorderStyle = FormBorderStyle.None;
@@ -42,7 +47,7 @@ public class LoginForm : Form
 
         _cardPanel = new ShadowPanel
         {
-            Size = new Size(480, 612),
+            Size = new Size(480, _oauthEnabled ? 684 : 612),
             BackColor = Color.Transparent,
             Anchor = AnchorStyles.None,
         };
@@ -102,6 +107,14 @@ public class LoginForm : Form
         _loginButton.Height = 44;
         _loginButton.Click += async (_, _) => await LoginAsync();
 
+        _ssoButton = JiraControlFactory.CreateSecondaryButton($"Sign in with {_oauthProviderName}");
+        _ssoButton.AutoSize = false;
+        _ssoButton.Dock = DockStyle.Fill;
+        _ssoButton.MinimumSize = new Size(0, 44);
+        _ssoButton.Height = 44;
+        _ssoButton.Visible = _oauthEnabled;
+        _ssoButton.Click += async (_, _) => await LoginWithSsoAsync();
+
         _closeButton = JiraControlFactory.CreateSecondaryButton("X");
         _closeButton.AutoSize = false;
         _closeButton.Size = new Size(36, 32);
@@ -146,7 +159,7 @@ public class LoginForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 11,
+            RowCount = 13,
             BackColor = JiraTheme.BgSurface,
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
@@ -158,7 +171,9 @@ public class LoginForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, _oauthEnabled ? 32 : 0));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, _oauthEnabled ? 52 : 0));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var logoHost = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
@@ -176,7 +191,7 @@ public class LoginForm : Form
         title.TextAlign = ContentAlignment.MiddleCenter;
         title.Dock = DockStyle.Fill;
 
-        var subtitle = JiraControlFactory.CreateLabel("Enter your credentials", true);
+        var subtitle = JiraControlFactory.CreateLabel(_oauthEnabled ? "Use your credentials or single sign-on" : "Enter your credentials", true);
         subtitle.Font = JiraTheme.FontSmall;
         subtitle.TextAlign = ContentAlignment.TopCenter;
         subtitle.Dock = DockStyle.Fill;
@@ -191,6 +206,11 @@ public class LoginForm : Form
         passwordLabel.TextAlign = ContentAlignment.BottomLeft;
         var passwordHost = BuildPasswordHost();
         var rememberHost = BuildRememberMeHost();
+        var ssoLabel = JiraControlFactory.CreateLabel($"Or sign in with {_oauthProviderName}", true);
+        ssoLabel.Font = JiraTheme.FontCaption;
+        ssoLabel.TextAlign = ContentAlignment.BottomCenter;
+        ssoLabel.Dock = DockStyle.Fill;
+        ssoLabel.Visible = _oauthEnabled;
 
         layout.Controls.Add(logoHost, 0, 0);
         layout.Controls.Add(title, 0, 1);
@@ -202,6 +222,11 @@ public class LoginForm : Form
         layout.Controls.Add(rememberHost, 0, 7);
         layout.Controls.Add(_errorLabel, 0, 8);
         layout.Controls.Add(_loginButton, 0, 9);
+        if (_oauthEnabled)
+        {
+            layout.Controls.Add(ssoLabel, 0, 10);
+            layout.Controls.Add(_ssoButton, 0, 11);
+        }
 
         content.Controls.Add(layout);
         _cardPanel.Controls.Add(content);
@@ -351,12 +376,7 @@ public class LoginForm : Form
                 return;
             }
 
-            await ApplyRememberMePreferenceAsync(result.User.Id);
-
-            Hide();
-            using var mainForm = new MainForm(_session, result.User.DisplayName, _sessionPersistence);
-            mainForm.ShowDialog(this);
-            Close();
+            await CompleteLoginAsync(result.User.Id, result.User.DisplayName);
         }
         catch (Exception exception)
         {
@@ -366,6 +386,48 @@ public class LoginForm : Form
         {
             SetBusyState(false);
         }
+    }
+
+    private async Task LoginWithSsoAsync()
+    {
+        try
+        {
+            SetBusyState(true);
+            HideError();
+
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            var oauthResult = await _session.OAuth.AuthenticateAsync(timeout.Token);
+            var result = await _session.Authentication.LoginWithSsoAsync(oauthResult.Email, oauthResult.DisplayName, oauthResult.UserName, timeout.Token);
+            if (!result.Succeeded || result.User is null)
+            {
+                ShowError(result.ErrorMessage ?? "Single sign-on failed.");
+                return;
+            }
+
+            await CompleteLoginAsync(result.User.Id, result.User.DisplayName);
+        }
+        catch (OperationCanceledException)
+        {
+            ShowError("Single sign-on timed out after 2 minutes. Please try again.");
+        }
+        catch (Exception exception)
+        {
+            ShowError(exception.Message);
+        }
+        finally
+        {
+            SetBusyState(false);
+        }
+    }
+
+    private async Task CompleteLoginAsync(int userId, string displayName)
+    {
+        await ApplyRememberMePreferenceAsync(userId);
+
+        Hide();
+        using var mainForm = new MainForm(_session, displayName, _sessionPersistence);
+        mainForm.ShowDialog(this);
+        Close();
     }
 
     private async Task ApplyRememberMePreferenceAsync(int userId)
@@ -419,6 +481,7 @@ public class LoginForm : Form
     {
         UseWaitCursor = isBusy;
         _loginButton.Enabled = !isBusy;
+        _ssoButton.Enabled = !isBusy && _oauthEnabled;
         _emailTextBox.Enabled = !isBusy;
         _passwordTextBox.Enabled = !isBusy;
         _rememberMeCheckBox.Enabled = !isBusy;

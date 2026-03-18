@@ -10,7 +10,13 @@ public static class GraphicsHelper
     /// </summary>
     public static GraphicsPath CreateRoundedPath(Rectangle bounds, int radius)
     {
-        var diameter = Math.Max(2, radius * 2);
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            return new GraphicsPath();
+        }
+
+        var clampedRadius = Math.Max(1, Math.Min(radius, Math.Min(bounds.Width, bounds.Height) / 2));
+        var diameter = Math.Max(2, clampedRadius * 2);
         var path = new GraphicsPath();
         path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
         path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
@@ -20,3 +26,4 @@ public static class GraphicsHelper
         return path;
     }
 }
+

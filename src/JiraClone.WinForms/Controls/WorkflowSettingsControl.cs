@@ -4,6 +4,7 @@ using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -521,7 +522,7 @@ public class WorkflowSettingsControl : UserControl
             var rect = layout[status.Id];
             var fill = ParseStatusColor(status.Color, status.Category);
             var stroke = selectedStatusId == status.Id ? JiraTheme.Primary : Color.FromArgb(120, fill);
-            using var path = CreateRoundRect(rect, 14);
+            using var path = GraphicsHelper.CreateRoundedPath(rect, 14);
             using var fillBrush = new SolidBrush(fill);
             using var borderPen = new Pen(stroke, selectedStatusId == status.Id ? 3f : 1.5f);
             e.Graphics.FillPath(fillBrush, path);
@@ -582,17 +583,6 @@ public class WorkflowSettingsControl : UserControl
         return label;
     }
 
-    private static GraphicsPath CreateRoundRect(Rectangle bounds, int radius)
-    {
-        var diameter = radius * 2;
-        var path = new GraphicsPath();
-        path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
-        path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
-        path.CloseFigure();
-        return path;
-    }
 
     private static Color ParseStatusColor(string? value, StatusCategory category)
     {
@@ -772,4 +762,7 @@ public class WorkflowSettingsControl : UserControl
         public IReadOnlyList<string> SelectedRoleNames => _roles.CheckedItems.Cast<string>().ToList();
     }
 }
+
+
+
 

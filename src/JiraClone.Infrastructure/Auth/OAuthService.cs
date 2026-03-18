@@ -290,11 +290,11 @@ public sealed class OAuthService : IOAuthService
             return;
         }
 
-        var html = $"""
+        var html = $@"
 <!DOCTYPE html>
-<html lang="en">
+<html lang=""en"">
 <head>
-    <meta charset="utf-8" />
+    <meta charset=""utf-8"" />
     <title>{WebUtility.HtmlEncode(title)}</title>
     <style>
         body {{ font-family: Segoe UI, Arial, sans-serif; margin: 40px; color: #172B4D; background: #F4F5F7; }}
@@ -304,13 +304,12 @@ public sealed class OAuthService : IOAuthService
     </style>
 </head>
 <body>
-    <div class="card">
+    <div class=""card"">
         <h1>{WebUtility.HtmlEncode(title)}</h1>
-        <p>{message}</p>
+        <p>{WebUtility.HtmlEncode(message)}</p>
     </div>
 </body>
-</html>
-""";
+</html>";
         var buffer = Encoding.UTF8.GetBytes(html);
         response.StatusCode = (int)statusCode;
         response.ContentType = "text/html; charset=utf-8";
@@ -362,3 +361,4 @@ public sealed class OAuthService : IOAuthService
         public int ExpiresIn { get; set; }
     }
 }
+

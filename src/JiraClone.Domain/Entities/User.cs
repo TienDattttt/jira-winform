@@ -22,4 +22,5 @@ public class User : AggregateRoot
     public ICollection<IssueAssignee> AssignedIssues { get; set; } = new List<IssueAssignee>();
     public ICollection<Watcher> WatchedIssues { get; set; } = new List<Watcher>();
     public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+    public ICollection<ApiToken> ApiTokens { get; set; } = new List<ApiToken>();
 }

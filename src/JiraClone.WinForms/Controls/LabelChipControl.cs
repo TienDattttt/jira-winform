@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Theme;
 
 namespace JiraClone.WinForms.Controls;
@@ -70,7 +71,7 @@ public class LabelChipControl : Control
         e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
         var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = CreateRoundedPath(bounds, 14);
+        using var path = GraphicsHelper.CreateRoundedPath(bounds, 14);
         using var fill = new SolidBrush(_chipColor);
         using var border = new Pen(ControlPaint.Dark(_chipColor, 0.08f));
         e.Graphics.FillPath(fill, path);
@@ -86,17 +87,6 @@ public class LabelChipControl : Control
         Size = GetPreferredSize(Size.Empty);
     }
 
-    private static GraphicsPath CreateRoundedPath(Rectangle bounds, int radius)
-    {
-        var diameter = radius * 2;
-        var path = new GraphicsPath();
-        path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
-        path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
-        path.CloseFigure();
-        return path;
-    }
 
     private static Color GetContrastColor(Color color)
     {
@@ -104,6 +94,9 @@ public class LabelChipControl : Control
         return luminance > 0.6 ? JiraTheme.TextPrimary : Color.White;
     }
 }
+
+
+
 
 
 

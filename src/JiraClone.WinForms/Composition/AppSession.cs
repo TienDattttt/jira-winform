@@ -1,4 +1,5 @@
 using JiraClone.Application.ActivityLog;
+using JiraClone.Application.ApiTokens;
 using JiraClone.Application.Abstractions;
 using JiraClone.Application.Attachments;
 using JiraClone.Application.Auth;
@@ -68,6 +69,8 @@ public sealed class AppSession : IDisposable
         CurrentUserContext = serviceProvider.GetRequiredService<CurrentUserContext>();
         Authorization = serviceProvider.GetRequiredService<AuthorizationService>();
         Authentication = new AuthenticationOperations(this);
+        OAuth = new OAuthOperations(this);
+        ApiTokens = new ApiTokenOperations(this);
         Projects = new ProjectQueryOperations(this);
         ProjectCommands = new ProjectCommandOperations(this);
         Permissions = new PermissionOperations(this);
@@ -96,6 +99,8 @@ public sealed class AppSession : IDisposable
     public CurrentUserContext CurrentUserContext { get; }
     public AuthorizationService Authorization { get; }
     public AuthenticationOperations Authentication { get; }
+    public OAuthOperations OAuth { get; }
+    public ApiTokenOperations ApiTokens { get; }
     public ProjectQueryOperations Projects { get; }
     public ProjectCommandOperations ProjectCommands { get; }
     public PermissionOperations Permissions { get; }
@@ -129,6 +134,15 @@ public sealed class AppSession : IDisposable
 
     internal AuthenticationService CreateAuthenticationService(IServiceProvider services) =>
         services.GetRequiredService<AuthenticationService>();
+
+    internal IOAuthService CreateOAuthService(IServiceProvider services) =>
+        services.GetRequiredService<IOAuthService>();
+
+    internal OAuthOptions GetOAuthOptions(IServiceProvider services) =>
+        services.GetRequiredService<OAuthOptions>();
+
+    internal IApiTokenService CreateApiTokenService(IServiceProvider services) =>
+        services.GetRequiredService<IApiTokenService>();
 
     internal ProjectQueryService CreateProjectQueryService(IServiceProvider services) =>
         services.GetRequiredService<ProjectQueryService>();
@@ -334,6 +348,18 @@ public sealed class AppSession : IDisposable
             return result;
         }
 
+        public async Task<AuthResult> LoginWithSsoAsync(string email, string? displayName = null, string? suggestedUserName = null, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            var result = await _session.CreateAuthenticationService(scope.ServiceProvider).LoginWithSsoAsync(email, displayName, suggestedUserName, cancellationToken);
+            if (result.Succeeded)
+            {
+                _session.SetActiveProjectInternal(null, raiseEvent: false);
+            }
+
+            return result;
+        }
+
         public async Task<SessionData> CreatePersistentSessionAsync(int userId, CancellationToken cancellationToken = default)
         {
             await using var scope = _session.CreateScope();
@@ -360,6 +386,55 @@ public sealed class AppSession : IDisposable
             {
                 _session.SetActiveProjectInternal(null, raiseEvent: false);
             }
+        }
+    }
+
+        public sealed class OAuthOperations
+    {
+        private readonly AppSession _session;
+
+        internal OAuthOperations(AppSession session) => _session = session;
+
+        public bool IsEnabled => _session.GetOAuthOptions(_session._serviceProvider).IsConfigured;
+
+        public string ProviderName => _session.GetOAuthOptions(_session._serviceProvider).ProviderName;
+
+        public async Task<OAuthResult> AuthenticateAsync(CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateOAuthService(scope.ServiceProvider).AuthenticateAsync(cancellationToken);
+        }
+    }
+
+
+        public sealed class ApiTokenOperations
+    {
+        private readonly AppSession _session;
+
+        internal ApiTokenOperations(AppSession session) => _session = session;
+
+        public async Task<GeneratedTokenResult> CreateAsync(int userId, string name, DateTime? expiresAtUtc, IReadOnlyCollection<ApiTokenScope> scopes, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateApiTokenService(scope.ServiceProvider).CreateTokenAsync(userId, name, expiresAtUtc, scopes, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<ApiToken>> GetUserTokensAsync(int userId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateApiTokenService(scope.ServiceProvider).GetUserTokensAsync(userId, cancellationToken);
+        }
+
+        public async Task<ApiToken?> ValidateAsync(string rawToken, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            return await _session.CreateApiTokenService(scope.ServiceProvider).ValidateTokenAsync(rawToken, cancellationToken);
+        }
+
+        public async Task RevokeAsync(int tokenId, int requestingUserId, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            await _session.CreateApiTokenService(scope.ServiceProvider).RevokeTokenAsync(tokenId, requestingUserId, cancellationToken);
         }
     }
 
@@ -1273,6 +1348,8 @@ public sealed class AppSession : IDisposable
         }
     }
 }
+
+
 
 
 

@@ -78,6 +78,8 @@ public class BoardForm : UserControl
     private BoardType _boardType = BoardType.Scrum;
     private TimeSpan? _averageCycleTime;
     private Color _toastAccentColor = JiraTheme.Blue600;
+    private readonly CancellationTokenSource _disposeCts = new();
+    private CancellationTokenSource? _loadCts;
 
     public BoardForm(AppSession session, bool activeSprintOnly = true)
     {
@@ -137,7 +139,38 @@ public class BoardForm : UserControl
         Resize += OnBoardResize;
     }
 
-    public Task RefreshBoardAsync(CancellationToken cancellationToken = default) => LoadBoardAsync(cancellationToken);
+    public Task RefreshBoardAsync(CancellationToken cancellationToken = default) => ReloadBoardAsync(cancellationToken);
+
+    private Task ReloadBoardAsync(CancellationToken cancellationToken = default) => LoadBoardAsync(RestartLoadCancellation(cancellationToken));
+
+    private CancellationToken RestartLoadCancellation(CancellationToken cancellationToken = default)
+    {
+        CancelPendingLoad();
+        _loadCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+        return _loadCts.Token;
+    }
+
+    private CancellationTokenSource CreateOperationSource(CancellationToken cancellationToken = default) =>
+        CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+
+    private void CancelPendingLoad()
+    {
+        if (_loadCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _loadCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        _loadCts.Dispose();
+        _loadCts = null;
+    }
 
     public void SetShellSearch(string searchText)
     {
@@ -251,10 +284,12 @@ public class BoardForm : UserControl
 
     private async Task LoadBoardAsync(CancellationToken cancellationToken = default)
     {
-        if (_isLoadingBoard || !Visible)
+        if (!Visible)
         {
             return;
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         try
         {
@@ -639,12 +674,15 @@ public class BoardForm : UserControl
         ApplyFilters();
     }
 
-    private async Task ToggleBoardModeAsync()
+    private async Task ToggleBoardModeAsync(CancellationToken cancellationToken = default)
     {
         if (_project is null)
         {
             return;
         }
+
+        using var operationCts = CreateOperationSource(cancellationToken);
+        var token = operationCts.Token;
 
         try
         {
@@ -655,7 +693,8 @@ public class BoardForm : UserControl
                 _project.Description,
                 _project.Category,
                 nextBoardType,
-                _project.Url);
+                _project.Url,
+                token);
             if (updatedProject is null)
             {
                 return;
@@ -664,7 +703,10 @@ public class BoardForm : UserControl
             _project = updatedProject;
             _boardType = updatedProject.BoardType;
             UpdateBoardModeButton();
-            await LoadBoardAsync();
+            await ReloadBoardAsync(token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -805,8 +847,11 @@ public class BoardForm : UserControl
         UpdateBoardScrollMetrics(_columnControls.Values.Sum(control => control.Width + control.Margin.Horizontal));
     }
 
-    private async Task StartSprintAsync()
+    private async Task StartSprintAsync(CancellationToken cancellationToken = default)
     {
+        using var operationCts = CreateOperationSource(cancellationToken);
+        var token = operationCts.Token;
+
         try
         {
             if (_boardType == BoardType.Kanban || _projectId == 0 || _activeSprint is not null)
@@ -814,7 +859,7 @@ public class BoardForm : UserControl
                 return;
             }
 
-            var nextSprint = (await _session.Sprints.GetByProjectAsync(_projectId))
+            var nextSprint = (await _session.Sprints.GetByProjectAsync(_projectId, token))
                 .Where(x => x.State == SprintState.Planned)
                 .OrderBy(x => x.StartDate ?? DateOnly.MaxValue)
                 .ThenBy(x => x.Name)
@@ -826,8 +871,11 @@ public class BoardForm : UserControl
                 return;
             }
 
-            await _session.Sprints.StartSprintAsync(nextSprint.Id);
-            await LoadBoardAsync();
+            await _session.Sprints.StartSprintAsync(nextSprint.Id, token);
+            await ReloadBoardAsync(token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -842,8 +890,11 @@ public class BoardForm : UserControl
             using var dialog = new IssueEditorForm(_session, _projectId, null, defaultStatusId, epicParentIssueId, preferredType);
             if (dialog.ShowDialog(this) == DialogResult.OK)
             {
-                await LoadBoardAsync();
+                await ReloadBoardAsync(_disposeCts.Token);
             }
+        }
+        catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -858,8 +909,11 @@ public class BoardForm : UserControl
             using var dialog = new IssueDetailsForm(_session, issueId, _projectId, openChildIssues);
             if (dialog.ShowDialog(this) == DialogResult.OK)
             {
-                await LoadBoardAsync();
+                await ReloadBoardAsync(_disposeCts.Token);
             }
+        }
+        catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -867,8 +921,11 @@ public class BoardForm : UserControl
         }
     }
 
-    private async Task MoveIssueAsync(IssueMoveRequestedEventArgs args)
+    private async Task MoveIssueAsync(IssueMoveRequestedEventArgs args, CancellationToken cancellationToken = default)
     {
+        using var operationCts = CreateOperationSource(cancellationToken);
+        var token = operationCts.Token;
+
         try
         {
             if (args.SourceStatusId == args.TargetStatusId)
@@ -904,7 +961,7 @@ public class BoardForm : UserControl
                 : 1m;
 
             var moved = await _session.RunSerializedAsync(() =>
-                _session.Issues.MoveAsync(args.IssueId, args.TargetStatusId, boardPosition, currentUserId));
+                _session.Issues.MoveAsync(args.IssueId, args.TargetStatusId, boardPosition, currentUserId, token), token);
 
             if (!moved)
             {
@@ -914,12 +971,16 @@ public class BoardForm : UserControl
             ApplyIssueMoveLocally(args.IssueId, args.SourceStatusId, args.TargetStatusId, boardPosition);
             ShowMoveToast(args.TargetStatusName);
         }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
         catch (Exception exception)
         {
             ErrorDialogService.Show(exception);
         }
     }
 
+    private bool ShouldConfirmWipOverride(BoardColumnDto targetColumn)
     private bool ShouldConfirmWipOverride(BoardColumnDto targetColumn)
     {
         return targetColumn.Category != StatusCategory.Done
@@ -1038,6 +1099,29 @@ public class BoardForm : UserControl
     {
         if (disposing)
         {
+            CancelPendingLoad();
+            _disposeCts.Cancel();
+            _disposeCts.Dispose();
+            Load -= OnBoardLoad;
+            Resize -= OnBoardResize;
+            _startSprintButton.Click -= OnStartSprintButtonClick;
+            _boardModeButton.Click -= OnBoardModeButtonClick;
+            _assigneeFilter.SelectedIndexChanged -= OnFilterChanged;
+            _priorityFilter.SelectedIndexChanged -= OnFilterChanged;
+            _typeFilter.SelectedIndexChanged -= OnFilterChanged;
+            _searchFilter.TextChanged -= OnFilterChanged;
+            _groupByEpicButton.Click -= OnGroupByEpicButtonClick;
+            _clearFiltersButton.Click -= OnClearFiltersButtonClick;
+            _toastPanel.Paint -= OnToastPanelPaint;
+            _topBar.Paint -= OnTopBarPaint;
+            _filterBar.Paint -= OnFilterBarPaint;
+            _toastTimer.Tick -= OnToastTimerTick;
+            foreach (var control in _columnControls.Values)
+            {
+                DetachColumnControl(control);
+            }
+
+            DetachAndDisposeSwimlanes();
             _toastTimer.Dispose();
         }
 
@@ -1046,7 +1130,7 @@ public class BoardForm : UserControl
 
     private async void OnBoardLoad(object? sender, EventArgs e)
     {
-        await LoadBoardAsync();
+        await ReloadBoardAsync(_disposeCts.Token);
     }
 
     private void OnBoardResize(object? sender, EventArgs e)
@@ -1057,12 +1141,12 @@ public class BoardForm : UserControl
 
     private async void OnStartSprintButtonClick(object? sender, EventArgs e)
     {
-        await StartSprintAsync();
+        await StartSprintAsync(_disposeCts.Token);
     }
 
     private async void OnBoardModeButtonClick(object? sender, EventArgs e)
     {
-        await ToggleBoardModeAsync();
+        await ToggleBoardModeAsync(_disposeCts.Token);
     }
 
     private void OnFilterChanged(object? sender, EventArgs e)
@@ -1117,7 +1201,7 @@ public class BoardForm : UserControl
 
     private async void OnSwimlaneIssueMoveRequested(object? sender, IssueMoveRequestedEventArgs args)
     {
-        await MoveIssueAsync(args);
+        await MoveIssueAsync(args, _disposeCts.Token);
     }
 
     private void OnSwimlaneCollapseChanged(object? sender, EpicSwimlaneCollapseChangedEventArgs args)
@@ -1137,7 +1221,7 @@ public class BoardForm : UserControl
 
     private async void OnColumnIssueMoveRequested(object? sender, IssueMoveRequestedEventArgs args)
     {
-        await MoveIssueAsync(args);
+        await MoveIssueAsync(args, _disposeCts.Token);
     }
     private static Color ParseColor(string? value, Color fallback)
     {
@@ -1153,6 +1237,8 @@ public class BoardForm : UserControl
 
     private const string NoEpicLaneKey = "no-epic";
 }
+
+
 
 
 

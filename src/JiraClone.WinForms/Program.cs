@@ -1,7 +1,10 @@
 using JiraClone.Application.ActivityLog;
+using JiraClone.Application.ApiTokens;
 using JiraClone.Application.Abstractions;
 using JiraClone.Application.Attachments;
 using JiraClone.Application.Auth;
+using JiraClone.Infrastructure.Auth;
+using JiraClone.Infrastructure.Api;
 using JiraClone.Application.Boards;
 using JiraClone.Application.Comments;
 using JiraClone.Application.Components;
@@ -128,6 +131,21 @@ internal static class Program
             services.AddSingleton<INotificationEmailTemplateRenderer, NotificationEmailTemplateRenderer>();
             services.AddSingleton<IIntegrationConfigProtector, DpapiIntegrationConfigProtector>();
 
+            var oauthOptions = new OAuthOptions
+            {
+                Enabled = bool.TryParse(configuration["OAuth:Enabled"], out var oauthEnabled) && oauthEnabled,
+                ProviderName = configuration["OAuth:ProviderName"] ?? "SSO",
+                AuthorizationEndpoint = configuration["OAuth:AuthorizationEndpoint"] ?? string.Empty,
+                TokenEndpoint = configuration["OAuth:TokenEndpoint"] ?? string.Empty,
+                ClientId = configuration["OAuth:ClientId"] ?? string.Empty,
+                RedirectUri = configuration["OAuth:RedirectUri"] ?? "http://localhost:8765/callback",
+                Scopes = configuration.GetSection("OAuth:Scopes").GetChildren().Select(child => child.Value).Where(value => !string.IsNullOrWhiteSpace(value)).Cast<string>().ToArray()
+            };
+            if (oauthOptions.Scopes.Length == 0)
+            {
+                oauthOptions.Scopes = ["openid", "profile", "email"];
+            }
+            services.AddSingleton(oauthOptions);
             services.AddSingleton(new SessionPersistenceOptions { SessionFilePath = sessionFilePath });
             services.AddSingleton<ISessionPersistenceService, DpapiSessionPersistenceService>();
             services.AddSingleton(new HttpClient());
@@ -152,6 +170,7 @@ internal static class Program
             services.AddScoped<IWorkflowRepository, WorkflowRepository>();
 
             services.AddScoped<AuthenticationService>();
+            services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ProjectQueryService>();
             services.AddScoped<IProjectCommandService, ProjectCommandService>();
             services.AddScoped<IPermissionService, PermissionService>();
@@ -296,3 +315,8 @@ internal static class Program
         }
     }
 }
+
+
+
+
+

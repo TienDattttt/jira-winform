@@ -10,6 +10,8 @@ public class JiraCloneDbContext : DbContext
     }
 
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+    public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
+    public DbSet<ApiTokenScopeGrant> ApiTokenScopeGrants => Set<ApiTokenScopeGrant>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<BoardColumn> BoardColumns => Set<BoardColumn>();
     public DbSet<Comment> Comments => Set<Comment>();

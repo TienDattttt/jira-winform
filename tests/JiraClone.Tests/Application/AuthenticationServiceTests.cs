@@ -67,6 +67,64 @@ public class AuthenticationServiceTests
     }
 
     [Fact]
+    public async Task LoginWithSsoAsync_ExistingActiveUser_ReturnsSuccessfulResult()
+    {
+        var user = CreateUser();
+        var users = new Mock<IUserRepository>();
+        var context = new Mock<ICurrentUserContext>();
+        users.Setup(x => x.GetByEmailAsync(user.Email, default)).ReturnsAsync(user);
+        var service = CreateService(users: users, currentUserContext: context);
+
+        var result = await service.LoginWithSsoAsync(user.Email, "Admin User", "admin");
+
+        Assert.True(result.Succeeded);
+        Assert.Same(user, result.User);
+        context.Verify(x => x.Set(user), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginWithSsoAsync_NewUser_ProvisionedWithViewerRole()
+    {
+        var users = new Mock<IUserRepository>();
+        var context = new Mock<ICurrentUserContext>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var hasher = new Mock<IPasswordHasher>();
+        var createdUser = default(User);
+        var viewerRole = new Role { Id = 4, Name = "Viewer", Description = "Read only" };
+
+        users.Setup(x => x.GetByEmailAsync("new.user@example.com", default)).ReturnsAsync((User?)null);
+        users.Setup(x => x.GetByUserNameAsync("new.user", default)).ReturnsAsync((User?)null);
+        users.Setup(x => x.GetRolesAsync(default)).ReturnsAsync([viewerRole]);
+        users.Setup(x => x.AddAsync(It.IsAny<User>(), default)).Callback<User, CancellationToken>((user, _) => createdUser = user).Returns(Task.CompletedTask);
+        hasher.Setup(x => x.Hash(It.IsAny<string>())).Returns(("hash", "salt"));
+        var service = CreateService(users: users, passwordHasher: hasher, currentUserContext: context, unitOfWork: unitOfWork);
+
+        var result = await service.LoginWithSsoAsync("New.User@example.com", "New User", "new.user");
+
+        Assert.True(result.Succeeded);
+        Assert.NotNull(createdUser);
+        Assert.Equal("new.user@example.com", createdUser!.Email);
+        Assert.Equal("new.user", createdUser.UserName);
+        Assert.Contains(createdUser.UserRoles, role => role.RoleId == viewerRole.Id);
+        unitOfWork.Verify(x => x.SaveChangesAsync(default), Times.Once);
+        context.Verify(x => x.Set(It.Is<User>(user => user.Email == "new.user@example.com")), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginWithSsoAsync_InactiveUser_ReturnsFailedResult()
+    {
+        var user = CreateUser();
+        user.IsActive = false;
+        var users = new Mock<IUserRepository>();
+        users.Setup(x => x.GetByEmailAsync(user.Email, default)).ReturnsAsync(user);
+        var service = CreateService(users: users);
+
+        var result = await service.LoginWithSsoAsync(user.Email, user.DisplayName, user.UserName);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
     public async Task CreatePersistentSessionAsync_StoresHashedTokenAndExpiry()
     {
         var user = CreateUser();
@@ -146,6 +204,7 @@ public class AuthenticationServiceTests
         context.Verify(x => x.Clear(), Times.Never);
         unitOfWork.Verify(x => x.SaveChangesAsync(default), Times.Once);
     }
+
     [Fact]
     public void GetPasswordValidationError_WeakPassword_ReturnsHelpfulMessage()
     {
@@ -187,4 +246,3 @@ public class AuthenticationServiceTests
             IsActive = true
         };
 }
-

@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
@@ -73,6 +73,8 @@ public class ReportsForm : UserControl
     private bool _isLoading;
     private bool _bindingSprintSelector;
     private bool _bindingSprintReportSelector;
+    private readonly CancellationTokenSource _disposeCts = new();
+    private CancellationTokenSource? _loadCts;
 
     public ReportsForm(AppSession session)
     {
@@ -93,27 +95,11 @@ public class ReportsForm : UserControl
         ConfigureActionButton(_refreshButton, 108);
         ConfigureActionButton(_exportButton, 118);
 
-        _refreshButton.Click += async (_, _) => await LoadReportsAsync();
-        _exportButton.Click += (_, _) => ExportCurrentReport();
-        _sprintSelector.SelectedIndexChanged += async (_, _) =>
-        {
-            if (_bindingSprintSelector || _isLoading)
-            {
-                return;
-            }
-
-            await LoadSelectedSprintBurndownAsync();
-        };
-        _sprintReportSelector.SelectedIndexChanged += async (_, _) =>
-        {
-            if (_bindingSprintReportSelector || _isLoading)
-            {
-                return;
-            }
-
-            await LoadSelectedSprintReportAsync();
-        };
-        _tabs.SelectedIndexChanged += (_, _) => UpdateToolbarState();
+        _refreshButton.Click += OnRefreshButtonClick;
+        _exportButton.Click += OnExportButtonClick;
+        _sprintSelector.SelectedIndexChanged += OnSprintSelectorSelectedIndexChanged;
+        _sprintReportSelector.SelectedIndexChanged += OnSprintReportSelectorSelectedIndexChanged;
+        _tabs.SelectedIndexChanged += OnTabsSelectedIndexChanged;
 
         _burndownTab.Controls.Add(BuildBurndownTabContent());
         _velocityTab.Controls.Add(BuildVelocityTabContent());
@@ -132,12 +118,47 @@ public class ReportsForm : UserControl
         _sprintReportBody.Controls.Add(_notCompletedBucket, 1, 0);
         _sprintReportBody.Controls.Add(_removedBucket, 2, 0);
 
-        Load += async (_, _) => await LoadReportsAsync();
+        Load += OnReportsLoad;
         ApplySprintReportData(null);
         UpdateToolbarState();
     }
 
-    public Task RefreshReportsAsync(CancellationToken cancellationToken = default) => LoadReportsAsync(cancellationToken);
+    public Task RefreshReportsAsync(CancellationToken cancellationToken = default) => ReloadReportsAsync(cancellationToken);
+
+    private Task ReloadReportsAsync(CancellationToken cancellationToken = default) => LoadReportsAsync(RestartLoadCancellation(cancellationToken));
+
+    private Task ReloadSelectedSprintBurndownAsync(CancellationToken cancellationToken = default) =>
+        LoadSelectedSprintBurndownAsync(RestartLoadCancellation(cancellationToken));
+
+    private Task ReloadSelectedSprintReportAsync(CancellationToken cancellationToken = default) =>
+        LoadSelectedSprintReportAsync(RestartLoadCancellation(cancellationToken));
+
+    private CancellationToken RestartLoadCancellation(CancellationToken cancellationToken = default)
+    {
+        CancelPendingLoad();
+        _loadCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+        return _loadCts.Token;
+    }
+
+    private void CancelPendingLoad()
+    {
+        if (_loadCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _loadCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        _loadCts.Dispose();
+        _loadCts = null;
+    }
+
 
     public void SetShellSearch(string value)
     {
@@ -153,7 +174,7 @@ public class ReportsForm : UserControl
         {
             if (SelectedSprintId.HasValue)
             {
-                _ = LoadSelectedSprintBurndownAsync();
+                _ = ReloadSelectedSprintBurndownAsync(_disposeCts.Token);
             }
             else
             {
@@ -165,13 +186,31 @@ public class ReportsForm : UserControl
         {
             if (SelectedSprintReportId.HasValue)
             {
-                _ = LoadSelectedSprintReportAsync();
+                _ = ReloadSelectedSprintReportAsync(_disposeCts.Token);
             }
             else
             {
                 ApplySprintReportData(null);
             }
         }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            CancelPendingLoad();
+            _disposeCts.Cancel();
+            _disposeCts.Dispose();
+            Load -= OnReportsLoad;
+            _refreshButton.Click -= OnRefreshButtonClick;
+            _exportButton.Click -= OnExportButtonClick;
+            _sprintSelector.SelectedIndexChanged -= OnSprintSelectorSelectedIndexChanged;
+            _sprintReportSelector.SelectedIndexChanged -= OnSprintReportSelectorSelectedIndexChanged;
+            _tabs.SelectedIndexChanged -= OnTabsSelectedIndexChanged;
+        }
+
+        base.Dispose(disposing);
     }
 
     private int? SelectedSprintId => _sprintSelector.SelectedValue is int sprintId
@@ -361,10 +400,12 @@ public class ReportsForm : UserControl
     }
     private async Task LoadReportsAsync(CancellationToken cancellationToken = default)
     {
-        if (_isLoading || !Visible)
+        if (!Visible)
         {
             return;
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         try
         {
@@ -464,6 +505,8 @@ public class ReportsForm : UserControl
             return;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             _isLoading = true;
@@ -497,6 +540,8 @@ public class ReportsForm : UserControl
             UpdateToolbarState();
             return;
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         try
         {
@@ -789,6 +834,46 @@ public class ReportsForm : UserControl
         _sprintReportSelector.Enabled = !isBusy && _sprintReportSelector.Items.Count > 0;
     }
 
+    private async void OnReportsLoad(object? sender, EventArgs e)
+    {
+        await ReloadReportsAsync(_disposeCts.Token);
+    }
+
+    private async void OnRefreshButtonClick(object? sender, EventArgs e)
+    {
+        await ReloadReportsAsync(_disposeCts.Token);
+    }
+
+    private void OnExportButtonClick(object? sender, EventArgs e)
+    {
+        ExportCurrentReport();
+    }
+
+    private async void OnSprintSelectorSelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (_bindingSprintSelector || _isLoading)
+        {
+            return;
+        }
+
+        await ReloadSelectedSprintBurndownAsync(_disposeCts.Token);
+    }
+
+    private async void OnSprintReportSelectorSelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (_bindingSprintReportSelector || _isLoading)
+        {
+            return;
+        }
+
+        await ReloadSelectedSprintReportAsync(_disposeCts.Token);
+    }
+
+    private void OnTabsSelectedIndexChanged(object? sender, EventArgs e)
+    {
+        UpdateToolbarState();
+    }
+
     private void ExportCurrentReport()
     {
         try
@@ -919,14 +1004,7 @@ public class ReportsForm : UserControl
         return layout;
     }
 
-    private static void ApplySurfaceBorder(Control control)
-    {
-        control.Paint += (_, e) =>
-        {
-            using var pen = new Pen(JiraTheme.Border);
-            e.Graphics.DrawRectangle(pen, 0, 0, control.Width - 1, control.Height - 1);
-        };
-    }
+    private static void ApplySurfaceBorder(DoubleBufferedPanel control) => control.DrawBorder = true;
 
     private static string FormatDateRange(DateOnly startDate, DateOnly endDate) =>
         $"{startDate:dd MMM yyyy} - {endDate:dd MMM yyyy}";
@@ -1019,10 +1097,24 @@ public class ReportsForm : UserControl
 
     private sealed class DoubleBufferedPanel : Panel
     {
+        public bool DrawBorder { get; set; }
+
         public DoubleBufferedPanel()
         {
             DoubleBuffered = true;
             ResizeRedraw = true;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (!DrawBorder)
+            {
+                return;
+            }
+
+            using var pen = new Pen(JiraTheme.Border);
+            e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
         }
     }
 
@@ -1137,7 +1229,12 @@ public class ReportsForm : UserControl
             Controls.Add(_listView);
             Controls.Add(_header);
 
-            Resize += (_, _) => UpdateColumnWidths();
+            UpdateColumnWidths();
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
             UpdateColumnWidths();
         }
 
@@ -1724,3 +1821,5 @@ public class ReportsForm : UserControl
     private static string TrimLabel(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..Math.Max(1, maxLength - 3)] + "...";
 }
+
+

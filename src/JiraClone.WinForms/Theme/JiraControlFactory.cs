@@ -1,5 +1,5 @@
 using System.Drawing;
-using System.Drawing.Drawing2D;
+using JiraClone.WinForms.Helpers;
 
 namespace JiraClone.WinForms.Theme;
 
@@ -103,21 +103,12 @@ public static class JiraControlFactory
             return;
         }
 
-        using var path = CreateRoundedRectanglePath(new Rectangle(0, 0, control.Width, control.Height), JiraTheme.BorderRadius);
+        using var path = GraphicsHelper.CreateRoundedPath(new Rectangle(0, 0, control.Width, control.Height), JiraTheme.BorderRadius);
         control.Region = new Region(path);
     }
 
-    private static GraphicsPath CreateRoundedRectanglePath(Rectangle bounds, int radius)
-    {
-        var diameter = radius * 2;
-        var path = new GraphicsPath();
 
-        path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
-        path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
-        path.CloseFigure();
-
-        return path;
-    }
 }
+
+
+

@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using JiraClone.Domain.Enums;
+using JiraClone.WinForms.Helpers;
 
 namespace JiraClone.WinForms.Theme;
 
@@ -71,7 +72,7 @@ public sealed class JiraBadge : UserControl
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
         var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = CreateRoundedRectanglePath(bounds, Height / 2);
+        using var path = GraphicsHelper.CreateRoundedPath(bounds, Height / 2);
         using var brush = new SolidBrush(_backColor);
         using var textBrush = new SolidBrush(_textColor);
 
@@ -88,17 +89,8 @@ public sealed class JiraBadge : UserControl
         Invalidate();
     }
 
-    private static GraphicsPath CreateRoundedRectanglePath(Rectangle bounds, int radius)
-    {
-        var diameter = radius * 2;
-        var path = new GraphicsPath();
 
-        path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
-        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
-        path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
-        path.CloseFigure();
-
-        return path;
-    }
 }
+
+
+

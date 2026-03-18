@@ -10,6 +10,7 @@ using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
 using JiraClone.WinForms.Dialogs;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 using Microsoft.Extensions.Logging;
@@ -94,6 +95,8 @@ public class IssueDetailsForm : Form
     private bool _dueDateEditing;
     private bool _isWatching;
     private readonly bool _openChildIssuesByDefault;
+    private readonly CancellationTokenSource _disposeCts = new();
+    private CancellationTokenSource? _loadCts;
 
     public IssueDetailsForm(AppSession session, int issueId, int projectId, bool openChildIssues = false)
     {
@@ -198,6 +201,42 @@ public class IssueDetailsForm : Form
         Shown += OnIssueDetailsShown;
         Resize += OnIssueDetailsResize;
         _split.SizeChanged += OnSplitSizeChanged;
+    }
+
+    private Task ReloadDetailsAsync(bool refreshReferenceData = true, CancellationToken cancellationToken = default) =>
+        LoadDetailsAsync(refreshReferenceData, RestartLoadCancellation(cancellationToken));
+
+    private CancellationToken RestartLoadCancellation(CancellationToken cancellationToken = default)
+    {
+        CancelPendingLoad();
+        _loadCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+        return _loadCts.Token;
+    }
+
+    private void CancelPendingLoad()
+    {
+        if (_loadCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _loadCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        _loadCts.Dispose();
+        _loadCts = null;
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        CancelPendingLoad();
+        _disposeCts.Cancel();
+        base.OnFormClosing(e);
     }
 
     private void OnTitleClicked(object? sender, EventArgs e)
@@ -366,7 +405,7 @@ public class IssueDetailsForm : Form
 
     private async void OnIntegrationsDataChanged(object? sender, EventArgs e)
     {
-        await LoadDetailsAsync(false);
+        await ReloadDetailsAsync(false, _disposeCts.Token);
     }
 
     private async void OnLogTimeClick(object? sender, EventArgs e)
@@ -392,7 +431,7 @@ public class IssueDetailsForm : Form
     private async void OnIssueDetailsShown(object? sender, EventArgs e)
     {
         QueueSafeUpdateSplitLayout();
-        await LoadDetailsAsync();
+        await ReloadDetailsAsync(cancellationToken: _disposeCts.Token);
         QueueSafeUpdateSplitLayout();
     }
 
@@ -703,36 +742,60 @@ public class IssueDetailsForm : Form
         return panel;
     }
 
-    private async Task LoadDetailsAsync(bool refreshReferenceData = true)
+    private async Task LoadDetailsAsync(bool refreshReferenceData = true, CancellationToken cancellationToken = default)
     {
+        if (IsDisposed || !Visible)
+        {
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             _loading = true;
             if (refreshReferenceData || _users.Count == 0)
             {
-                _users = await _session.Users.GetProjectUsersAsync(_projectId);
-                _availableLabels = await _session.Labels.GetByProjectAsync(_projectId);
-                _availableComponents = await _session.Components.GetByProjectAsync(_projectId);
-                _availableVersions = await _session.Versions.GetByProjectAsync(_projectId);
-                _sprint.Bind(await _session.Sprints.GetByProjectAsync(_projectId));
+                _users = await _session.Users.GetProjectUsersAsync(_projectId, cancellationToken);
+                _availableLabels = await _session.Labels.GetByProjectAsync(_projectId, cancellationToken);
+                _availableComponents = await _session.Components.GetByProjectAsync(_projectId, cancellationToken);
+                _availableVersions = await _session.Versions.GetByProjectAsync(_projectId, cancellationToken);
+                _sprint.Bind(await _session.Sprints.GetByProjectAsync(_projectId, cancellationToken));
                 BindMetadataOptions();
             }
 
-            _details = await _session.Issues.GetDetailsAsync(_issueId);
-            if (_details is null) { ErrorDialogService.Show("Issue not found."); Close(); return; }
-            _watchers = await _session.Watchers.GetWatchersAsync(_issueId);
+            _details = await _session.Issues.GetDetailsAsync(_issueId, cancellationToken);
+            if (_details is null)
+            {
+                ErrorDialogService.Show("Issue not found.");
+                Close();
+                return;
+            }
+
+            _watchers = await _session.Watchers.GetWatchersAsync(_issueId, cancellationToken);
             var currentUserId = _session.CurrentUserContext.CurrentUser?.Id ?? 0;
-            _isWatching = currentUserId > 0 && await _session.Watchers.IsWatchingAsync(_issueId, currentUserId);
+            _isWatching = currentUserId > 0 && await _session.Watchers.IsWatchingAsync(_issueId, currentUserId, cancellationToken);
             await BindStatusOptionsAsync(_details.Issue);
+            cancellationToken.ThrowIfCancellationRequested();
             BindIssue(_details);
             _comments.Bind(_details.Comments);
             _attachments.Bind(_details.Attachments);
             _history.Bind(_details.ActivityLogs);
-            await _integrations.LoadAsync(_issueId, _projectId, CancellationToken.None);
+            await _integrations.LoadAsync(_issueId, _projectId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             ActivateTab(ResolveInitialTab(_details));
         }
-        catch (Exception ex) { ErrorDialogService.Show(ex); }
-        finally { _loading = false; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || _disposeCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogService.Show(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void BindIssue(IssueDetailsDto details)
@@ -965,7 +1028,7 @@ public class IssueDetailsForm : Form
                 await _session.Issues.UpdateParentAsync(selectedIssueId, _details.Issue.Id, currentUserId);
             }
 
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
             ActivateTab(DetailsTab.ChildIssues);
             DialogResult = DialogResult.OK;
         }
@@ -990,7 +1053,7 @@ public class IssueDetailsForm : Form
                 return;
             }
 
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
             ActivateTab(DetailsTab.ChildIssues);
             DialogResult = DialogResult.OK;
         }
@@ -1149,7 +1212,7 @@ public class IssueDetailsForm : Form
                 await _session.Watchers.WatchIssueAsync(_issueId, currentUserId);
             }
 
-            _watchers = await _session.Watchers.GetWatchersAsync(_issueId);
+            _watchers = await _session.Watchers.GetWatchersAsync(_issueId, cancellationToken);
             _isWatching = await _session.Watchers.IsWatchingAsync(_issueId, currentUserId);
             RenderWatchers();
         }
@@ -1521,7 +1584,7 @@ public class IssueDetailsForm : Form
             await _session.Labels.AssignToIssueAsync(_issueId, dialog.SelectedLabelIds);
             _selectedLabelIds = dialog.SelectedLabelIds.ToHashSet();
             RenderLabelChips();
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
             DialogResult = DialogResult.OK;
         }
         catch (Exception ex)
@@ -1547,7 +1610,7 @@ public class IssueDetailsForm : Form
         try
         {
             await _session.Components.AssignToIssueAsync(_issueId, selectedComponentId);
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
             DialogResult = DialogResult.OK;
         }
         catch (Exception ex)
@@ -1572,7 +1635,7 @@ public class IssueDetailsForm : Form
         try
         {
             await _session.Versions.AssignToIssueAsync(_issueId, selectedVersionId);
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
             DialogResult = DialogResult.OK;
         }
         catch (Exception ex)
@@ -1588,7 +1651,7 @@ public class IssueDetailsForm : Form
         {
             await _session.Comments.AddAsync(_issueId, _session.CurrentUserContext.RequireUserId(), _projectId, body);
             _commentInput.Clear();
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
             DialogResult = DialogResult.OK;
         }
         catch (Exception ex) { ErrorDialogService.Show(ex); }
@@ -1601,7 +1664,7 @@ public class IssueDetailsForm : Form
         try
         {
             await _session.Comments.UpdateAsync(comment.Id, _session.CurrentUserContext.RequireUserId(), editDialog.Body);
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
             DialogResult = DialogResult.OK;
         }
         catch (Exception ex) { ErrorDialogService.Show(ex); }
@@ -1613,7 +1676,7 @@ public class IssueDetailsForm : Form
         try
         {
             await _session.Comments.SoftDeleteAsync(comment.Id, _session.CurrentUserContext.RequireUserId());
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
             DialogResult = DialogResult.OK;
         }
         catch (Exception ex) { ErrorDialogService.Show(ex); }
@@ -1624,7 +1687,7 @@ public class IssueDetailsForm : Form
         try
         {
             await _session.Attachments.AddAsync(_issueId, _projectId, _session.CurrentUserContext.RequireUserId(), path);
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
             DialogResult = DialogResult.OK;
         }
         catch (Exception ex) { ErrorDialogService.Show(ex); }
@@ -1652,7 +1715,7 @@ public class IssueDetailsForm : Form
         try
         {
             await _session.Attachments.SoftDeleteAsync(attachment.Id, _session.CurrentUserContext.RequireUserId(), _projectId);
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
             DialogResult = DialogResult.OK;
         }
         catch (Exception ex) { ErrorDialogService.Show(ex); }
@@ -1672,7 +1735,7 @@ public class IssueDetailsForm : Form
             {
                 await _session.Comments.AddAsync(_issueId, _session.CurrentUserContext.RequireUserId(), _projectId, $"Logged {dialog.Hours}h: {dialog.Comment.Trim()}");
             }
-            await LoadDetailsAsync(false);
+            await ReloadDetailsAsync(false, _disposeCts.Token);
         }
         catch (Exception ex) { ErrorDialogService.Show(ex); }
     }
@@ -1693,6 +1756,9 @@ public class IssueDetailsForm : Form
     {
         if (disposing)
         {
+            CancelPendingLoad();
+            _disposeCts.Cancel();
+            _disposeCts.Dispose();
             Load -= OnIssueDetailsLoad;
             Shown -= OnIssueDetailsShown;
             Resize -= OnIssueDetailsResize;
@@ -1761,7 +1827,7 @@ public class IssueDetailsForm : Form
     private static void DrawChip(DrawItemEventArgs e, string text, Color bg, Color fg)
     {
         var bounds = new Rectangle(e.Bounds.X + 6, e.Bounds.Y + 5, e.Bounds.Width - 12, e.Bounds.Height - 10);
-        using var path = Round(bounds, 10);
+        using var path = GraphicsHelper.CreateRoundedPath(bounds, 10);
         using var fill = new SolidBrush(bg);
         e.Graphics.FillPath(fill, path);
         TextRenderer.DrawText(e.Graphics, text, JiraTheme.FontCaption, bounds, fg, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
@@ -1840,18 +1906,6 @@ public class IssueDetailsForm : Form
         return chars.Length == 0 ? "U" : new string(chars);
     }
 
-    private static GraphicsPath Round(Rectangle bounds, int radius)
-    {
-        var d = radius * 2;
-        var path = new GraphicsPath();
-        path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
-        path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
-        path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
-        path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
-        path.CloseFigure();
-        return path;
-    }
-
     private sealed class TinyAvatar : Control
     {
         public TinyAvatar(string initials, int size)
@@ -1918,13 +1972,13 @@ public class IssueDetailsForm : Form
             e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var bounds = new Rectangle(0, 8, Width - 1, 14);
-            using var bg = Round(bounds, 7);
+            using var bg = GraphicsHelper.CreateRoundedPath(bounds, 7);
             using var fillBg = new SolidBrush(JiraTheme.BgPage);
             e.Graphics.FillPath(fillBg, bg);
             if (EstimatedHours > 0 && LoggedHours > 0)
             {
                 var width = Math.Min(bounds.Width, (int)Math.Round(bounds.Width * (LoggedHours / (double)EstimatedHours)));
-                using var progress = Round(new Rectangle(bounds.X, bounds.Y, Math.Max(8, width), bounds.Height), 7);
+                using var progress = GraphicsHelper.CreateRoundedPath(new Rectangle(bounds.X, bounds.Y, Math.Max(8, width), bounds.Height), 7);
                 using var fill = new SolidBrush(JiraTheme.Primary);
                 e.Graphics.FillPath(fill, progress);
             }
@@ -2221,6 +2275,10 @@ public class IssueDetailsForm : Form
         public IReadOnlyList<int> SelectedUserIds => _assignees.CheckedItems.Cast<User>().Select(x => x.Id).ToList();
     }
 }
+
+
+
+
 
 
 
