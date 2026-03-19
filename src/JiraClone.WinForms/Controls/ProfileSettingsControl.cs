@@ -24,7 +24,8 @@ public sealed class ProfileSettingsControl : UserControl
     private readonly Label _tokensEmptyState = JiraControlFactory.CreateLabel("No API tokens created yet.", true);
     private readonly DataGridView _tokensGrid = new();
     private readonly List<ApiToken> _tokens = [];
-    private bool _isLoading;
+    private readonly CancellationTokenSource _disposeCts = new();
+    private CancellationTokenSource? _loadCts;
 
     public ProfileSettingsControl(AppSession session)
     {
@@ -35,11 +36,11 @@ public sealed class ProfileSettingsControl : UserControl
 
         _saveButton.AutoSize = false;
         _saveButton.Size = new Size(156, 36);
-        _saveButton.Click += async (_, _) => await SaveAsync();
+        _saveButton.Click += OnSaveButtonClick;
 
         _createTokenButton.AutoSize = false;
         _createTokenButton.Size = new Size(156, 36);
-        _createTokenButton.Click += async (_, _) => await CreateTokenAsync();
+        _createTokenButton.Click += OnCreateTokenButtonClick;
 
         _status.AutoSize = true;
         _status.ForeColor = JiraTheme.TextSecondary;
@@ -48,10 +49,93 @@ public sealed class ProfileSettingsControl : UserControl
 
         ConfigureTokenGrid();
         Controls.Add(BuildLayout());
-        Load += async (_, _) => await RefreshProfileAsync();
+        Load += OnProfileSettingsLoad;
     }
 
-    public Task RefreshProfileAsync(CancellationToken cancellationToken = default) => LoadProfileAsync(cancellationToken);
+    public Task RefreshProfileAsync(CancellationToken cancellationToken = default) => LoadProfileAsync(RestartLoadCancellation(cancellationToken));
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            CancelPendingLoad();
+            _disposeCts.Cancel();
+            _saveButton.Click -= OnSaveButtonClick;
+            _createTokenButton.Click -= OnCreateTokenButtonClick;
+            _tokensGrid.CellContentClick -= OnTokensGridCellContentClick;
+            Load -= OnProfileSettingsLoad;
+            _disposeCts.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    private CancellationToken RestartLoadCancellation(CancellationToken cancellationToken = default)
+    {
+        CancelPendingLoad();
+        _loadCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+        return _loadCts.Token;
+    }
+
+    private CancellationTokenSource CreateOperationSource(CancellationToken cancellationToken = default) =>
+        CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+
+    private void CancelPendingLoad()
+    {
+        if (_loadCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _loadCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        _loadCts.Dispose();
+        _loadCts = null;
+    }
+
+    private void OnProfileSettingsLoad(object? sender, EventArgs e) => _ = RefreshProfileAsync();
+
+    private async void OnSaveButtonClick(object? sender, EventArgs e)
+    {
+        using var operationSource = CreateOperationSource();
+        try
+        {
+            await SaveAsync(operationSource.Token);
+        }
+        catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async void OnCreateTokenButtonClick(object? sender, EventArgs e)
+    {
+        using var operationSource = CreateOperationSource();
+        try
+        {
+            await CreateTokenAsync(operationSource.Token);
+        }
+        catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async void OnTokensGridCellContentClick(object? sender, DataGridViewCellEventArgs eventArgs)
+    {
+        using var operationSource = CreateOperationSource();
+        try
+        {
+            await HandleTokenGridCellContentClickAsync(eventArgs, operationSource.Token);
+        }
+        catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
+        {
+        }
+    }
 
     private Control BuildLayout()
     {
@@ -163,7 +247,7 @@ public sealed class ProfileSettingsControl : UserControl
         _tokensGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Expires", Width = 130 });
         _tokensGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Status", Width = 90 });
         _tokensGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = string.Empty, Text = "Revoke", UseColumnTextForButtonValue = true, Width = 88 });
-        _tokensGrid.CellContentClick += async (_, eventArgs) => await OnTokenGridCellContentClick(eventArgs);
+        _tokensGrid.CellContentClick += OnTokensGridCellContentClick;
 
         _tokensEmptyState.Dock = DockStyle.Fill;
         _tokensEmptyState.TextAlign = ContentAlignment.MiddleCenter;
@@ -172,15 +256,9 @@ public sealed class ProfileSettingsControl : UserControl
 
     private async Task LoadProfileAsync(CancellationToken cancellationToken)
     {
-        if (_isLoading)
-        {
-            return;
-        }
-
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _isLoading = true;
             var currentUser = _session.CurrentUserContext.CurrentUser;
             _emailNotifications.Enabled = currentUser is not null;
             _saveButton.Enabled = currentUser is not null;
@@ -196,6 +274,7 @@ public sealed class ProfileSettingsControl : UserControl
             }
 
             var tokens = await _session.ApiTokens.GetUserTokensAsync(currentUser.Id, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             BindTokens(tokens);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -203,11 +282,10 @@ public sealed class ProfileSettingsControl : UserControl
         }
         catch (Exception exception)
         {
-            ErrorDialogService.Show(exception);
-        }
-        finally
-        {
-            _isLoading = false;
+            if (!IsDisposed)
+            {
+                ErrorDialogService.Show(exception);
+            }
         }
     }
 
@@ -232,7 +310,7 @@ public sealed class ProfileSettingsControl : UserControl
         _tokensEmptyState.Visible = tokens.Count == 0;
     }
 
-    private async Task SaveAsync()
+    private async Task SaveAsync(CancellationToken cancellationToken)
     {
         var currentUser = _session.CurrentUserContext.CurrentUser;
         if (currentUser is null)
@@ -244,7 +322,7 @@ public sealed class ProfileSettingsControl : UserControl
         try
         {
             _saveButton.Enabled = false;
-            var updatedUser = await _session.UserCommands.UpdateEmailNotificationsPreferenceAsync(currentUser.Id, _emailNotifications.Checked);
+            var updatedUser = await _session.UserCommands.UpdateEmailNotificationsPreferenceAsync(currentUser.Id, _emailNotifications.Checked, cancellationToken);
             if (updatedUser is null)
             {
                 ErrorDialogService.Show("Unable to update email notification preferences.");
@@ -257,17 +335,26 @@ public sealed class ProfileSettingsControl : UserControl
                 : "Email notifications are disabled for your account.";
             _status.ForeColor = JiraTheme.Green700;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
         catch (Exception exception)
         {
-            ErrorDialogService.Show(exception);
+            if (!IsDisposed)
+            {
+                ErrorDialogService.Show(exception);
+            }
         }
         finally
         {
-            _saveButton.Enabled = true;
+            if (!IsDisposed)
+            {
+                _saveButton.Enabled = true;
+            }
         }
     }
 
-    private async Task CreateTokenAsync()
+    private async Task CreateTokenAsync(CancellationToken cancellationToken)
     {
         var currentUser = _session.CurrentUserContext.CurrentUser;
         if (currentUser is null)
@@ -285,24 +372,33 @@ public sealed class ProfileSettingsControl : UserControl
         try
         {
             _createTokenButton.Enabled = false;
-            var result = await _session.ApiTokens.CreateAsync(currentUser.Id, dialog.TokenName, dialog.ExpiresAtUtc, dialog.SelectedScopes);
-            await LoadProfileAsync(CancellationToken.None);
+            var result = await _session.ApiTokens.CreateAsync(currentUser.Id, dialog.TokenName, dialog.ExpiresAtUtc, dialog.SelectedScopes, cancellationToken);
+            await LoadProfileAsync(cancellationToken);
             using var generatedDialog = new GeneratedApiTokenDialog(result.RawToken);
             generatedDialog.ShowDialog(this);
             _status.Text = "API token created successfully.";
             _status.ForeColor = JiraTheme.Green700;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
         catch (Exception exception)
         {
-            ErrorDialogService.Show(exception);
+            if (!IsDisposed)
+            {
+                ErrorDialogService.Show(exception);
+            }
         }
         finally
         {
-            _createTokenButton.Enabled = true;
+            if (!IsDisposed)
+            {
+                _createTokenButton.Enabled = true;
+            }
         }
     }
 
-    private async Task OnTokenGridCellContentClick(DataGridViewCellEventArgs eventArgs)
+    private async Task HandleTokenGridCellContentClickAsync(DataGridViewCellEventArgs eventArgs, CancellationToken cancellationToken)
     {
         if (eventArgs.RowIndex < 0 || eventArgs.ColumnIndex != _tokensGrid.Columns.Count - 1 || eventArgs.RowIndex >= _tokens.Count)
         {
@@ -328,14 +424,20 @@ public sealed class ProfileSettingsControl : UserControl
 
         try
         {
-            await _session.ApiTokens.RevokeAsync(token.Id, currentUserId);
-            await LoadProfileAsync(CancellationToken.None);
+            await _session.ApiTokens.RevokeAsync(token.Id, currentUserId, cancellationToken);
+            await LoadProfileAsync(cancellationToken);
             _status.Text = "API token revoked.";
             _status.ForeColor = JiraTheme.Green700;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
         catch (Exception exception)
         {
-            ErrorDialogService.Show(exception);
+            if (!IsDisposed)
+            {
+                ErrorDialogService.Show(exception);
+            }
         }
     }
 

@@ -111,7 +111,7 @@ public class IssueService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         await QueueAssignmentNotificationsAsync(issue, [], model.AssigneeIds, model.CreatedById, cancellationToken);
-        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueCreated, CreateIssueWebhookPayload(issue, model.CreatedById), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(issue.ProjectId, WebhookEventType.IssueCreated, CreateIssueWebhookPayload(issue, model.CreatedById));
 
         return issue;
     }
@@ -182,7 +182,7 @@ public class IssueService
         }
 
         await QueueAssignmentNotificationsAsync(issue, previousAssigneeIds, nextAssigneeIds, model.CreatedById, cancellationToken);
-        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, model.CreatedById), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, model.CreatedById));
 
         return issue;
     }
@@ -215,7 +215,7 @@ public class IssueService
             issueId,
             previousDueDate,
             dueDate);
-        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, userId), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, userId));
         return issue;
     }
     public async Task<Issue?> UpdateScheduleAsync(int issueId, DateOnly? startDate, DateOnly? dueDate, int userId, CancellationToken cancellationToken = default)
@@ -259,7 +259,7 @@ public class IssueService
             previousDueDate,
             startDate,
             dueDate);
-        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, userId), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, userId));
         return issue;
     }
     public async Task<Issue?> UpdateParentAsync(int issueId, int? parentIssueId, int userId, CancellationToken cancellationToken = default)
@@ -294,7 +294,7 @@ public class IssueService
             NewValue = nextParent?.IssueKey ?? "Cleared"
         }, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, userId), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(issue.ProjectId, WebhookEventType.IssueUpdated, CreateIssueWebhookPayload(issue, userId));
 
         return issue;
     }
@@ -335,7 +335,7 @@ public class IssueService
 
         await _issues.RemoveAsync(issue, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueDeleted, CreateIssueWebhookPayload(issue, userId ?? issue.CreatedById), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(issue.ProjectId, WebhookEventType.IssueDeleted, CreateIssueWebhookPayload(issue, userId ?? issue.CreatedById));
         return true;
     }
 
@@ -513,7 +513,7 @@ public class IssueService
         }
 
         await QueueStatusChangeNotificationsAsync(issue, result.PreviousStatus, result.CurrentStatus, userId, cancellationToken);
-        await _webhookDispatcher.DispatchAsync(issue.ProjectId, WebhookEventType.IssueStatusChanged, CreateIssueStatusChangeWebhookPayload(issue, result.PreviousStatus, result.CurrentStatus, userId), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(issue.ProjectId, WebhookEventType.IssueStatusChanged, CreateIssueStatusChangeWebhookPayload(issue, result.PreviousStatus, result.CurrentStatus, userId));
 
         return true;
     }
@@ -643,6 +643,7 @@ public class IssueService
     private static string? FormatDateOnlyActivity(DateOnly? value) =>
         value.HasValue ? value.Value.ToString("yyyy-MM-dd") : null;
 }
+
 
 
 

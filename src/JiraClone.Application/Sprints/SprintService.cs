@@ -166,7 +166,7 @@ public class SprintService : ISprintService
 
         await QueueSprintNotificationsAsync(sprint, NotificationType.SprintStarted, actorUserId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _webhookDispatcher.DispatchAsync(sprint.ProjectId, WebhookEventType.SprintStarted, CreateSprintWebhookPayload(sprint, actorUserId), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(sprint.ProjectId, WebhookEventType.SprintStarted, CreateSprintWebhookPayload(sprint, actorUserId));
         return true;
     }
 
@@ -255,7 +255,7 @@ public class SprintService : ISprintService
 
         await QueueSprintNotificationsAsync(sprint, NotificationType.SprintCompleted, actorUserId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _webhookDispatcher.DispatchAsync(sprint.ProjectId, WebhookEventType.SprintCompleted, CreateSprintWebhookPayload(sprint, actorUserId), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(sprint.ProjectId, WebhookEventType.SprintCompleted, CreateSprintWebhookPayload(sprint, actorUserId));
         return true;
     }
 
@@ -1013,6 +1013,7 @@ public class SprintService : ISprintService
         string NewStatusName,
         StatusCategory NewCategory);
 }
+
 
 
 

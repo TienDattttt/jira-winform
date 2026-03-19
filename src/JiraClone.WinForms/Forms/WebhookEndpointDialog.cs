@@ -24,6 +24,7 @@ public sealed class WebhookEndpointDialog : Form
     };
     private readonly Label _validation = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly Button _okButton = JiraControlFactory.CreatePrimaryButton("Save");
+    private readonly Button _cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
 
     public WebhookEndpointDialog(WebhookEndpoint? endpoint = null)
     {
@@ -50,32 +51,17 @@ public sealed class WebhookEndpointDialog : Form
         _secret.Width = 360;
         _secret.UseSystemPasswordChar = true;
 
-        _generateSecret.Click += (_, _) => GenerateSecret();
-        _name.TextChanged += (_, _) => { ValidateInput(); };
-        _url.TextChanged += (_, _) => { ValidateInput(); };
-        _secret.TextChanged += (_, _) => { ValidateInput(); };
-        _active.CheckedChanged += (_, _) => { ValidateInput(); };
-        _events.ItemCheck += (_, _) => { BeginInvoke(new Action(() => ValidateInput())); };
+        _generateSecret.Click += OnGenerateSecretClick;
+        _name.TextChanged += OnInputChanged;
+        _url.TextChanged += OnInputChanged;
+        _secret.TextChanged += OnInputChanged;
+        _active.CheckedChanged += OnInputChanged;
+        _events.ItemCheck += OnEventsItemCheck;
 
         _okButton.Enabled = false;
         _okButton.Text = endpoint is null ? "Add" : "Save";
-        _okButton.Click += (_, _) =>
-        {
-            if (!ValidateInput())
-            {
-                return;
-            }
-
-            DialogResult = DialogResult.OK;
-            Close();
-        };
-
-        var cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
-        cancelButton.Click += (_, _) =>
-        {
-            DialogResult = DialogResult.Cancel;
-            Close();
-        };
+        _okButton.Click += OnOkButtonClick;
+        _cancelButton.Click += OnCancelButtonClick;
 
         if (endpoint is null)
         {
@@ -119,7 +105,7 @@ public sealed class WebhookEndpointDialog : Form
             BackColor = JiraTheme.BgSurface,
         };
         buttons.Controls.Add(_okButton);
-        buttons.Controls.Add(cancelButton);
+        buttons.Controls.Add(_cancelButton);
 
         var layout = new FlowLayoutPanel
         {
@@ -153,6 +139,52 @@ public sealed class WebhookEndpointDialog : Form
     public bool IsActive => _active.Checked;
     public IReadOnlyList<WebhookEventType> SubscribedEvents => _events.CheckedItems.Cast<WebhookEventType>().ToList();
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _generateSecret.Click -= OnGenerateSecretClick;
+            _name.TextChanged -= OnInputChanged;
+            _url.TextChanged -= OnInputChanged;
+            _secret.TextChanged -= OnInputChanged;
+            _active.CheckedChanged -= OnInputChanged;
+            _events.ItemCheck -= OnEventsItemCheck;
+            _okButton.Click -= OnOkButtonClick;
+            _cancelButton.Click -= OnCancelButtonClick;
+        }
+
+        base.Dispose(disposing);
+    }
+
+    private void OnGenerateSecretClick(object? sender, EventArgs e) => GenerateSecret();
+
+    private void OnInputChanged(object? sender, EventArgs e) => ValidateInput();
+
+    private void OnEventsItemCheck(object? sender, ItemCheckEventArgs e)
+    {
+        if (!IsDisposed && IsHandleCreated)
+        {
+            BeginInvoke(new Action(() => _ = ValidateInput()));
+        }
+    }
+
+    private void OnOkButtonClick(object? sender, EventArgs e)
+    {
+        if (!ValidateInput())
+        {
+            return;
+        }
+
+        DialogResult = DialogResult.OK;
+        Close();
+    }
+
+    private void OnCancelButtonClick(object? sender, EventArgs e)
+    {
+        DialogResult = DialogResult.Cancel;
+        Close();
+    }
+
     private void GenerateSecret()
     {
         _secret.Text = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
@@ -183,5 +215,4 @@ public sealed class WebhookEndpointDialog : Form
         return string.IsNullOrWhiteSpace(error);
     }
 }
-
 

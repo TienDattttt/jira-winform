@@ -5,6 +5,6 @@ namespace JiraClone.Application.Abstractions;
 
 public interface IWebhookDispatcher
 {
-    Task DispatchAsync(int projectId, WebhookEventType eventType, object payload, CancellationToken cancellationToken = default);
+    void EnqueueDispatch(int projectId, WebhookEventType eventType, object payload);
     Task<WebhookDelivery?> SendTestAsync(int endpointId, object payload, CancellationToken cancellationToken = default);
 }

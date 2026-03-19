@@ -29,6 +29,7 @@ public sealed class RoadmapForm : UserControl
     private readonly ProgressBar _detailProgress = new() { Dock = DockStyle.Top, Height = 14, Style = ProgressBarStyle.Continuous };
     private readonly Label _detailProgressCaption = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly Button _openEpicButton = JiraControlFactory.CreateSecondaryButton("Open Epic");
+    private readonly Panel _detailActionHost = new() { Dock = DockStyle.Top, Height = 40, BackColor = JiraTheme.BgSurface };
     private readonly ListView _childIssuesList = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, HeaderStyle = ColumnHeaderStyle.Nonclickable, HideSelection = false, MultiSelect = false };
     private readonly Label _childIssuesEmpty = JiraControlFactory.CreateLabel("This epic has no linked child issues yet.", true);
 
@@ -88,6 +89,7 @@ public sealed class RoadmapForm : UserControl
         _timelineCanvas.ScheduleChanged += OnTimelineScheduleChanged;
         _timelineCanvas.ZoomChanged += OnTimelineZoomChanged;
         _openEpicButton.Click += OnOpenEpicButtonClick;
+        _detailActionHost.Resize += OnDetailActionHostResize;
         _childIssuesList.DoubleClick += OnChildIssuesListDoubleClick;
         Load += OnRoadmapFormLoad;
         UpdateZoomLabel();
@@ -155,6 +157,7 @@ public sealed class RoadmapForm : UserControl
             _timelineCanvas.ScheduleChanged -= OnTimelineScheduleChanged;
             _timelineCanvas.ZoomChanged -= OnTimelineZoomChanged;
             _openEpicButton.Click -= OnOpenEpicButtonClick;
+            _detailActionHost.Resize -= OnDetailActionHostResize;
             _childIssuesList.DoubleClick -= OnChildIssuesListDoubleClick;
             Load -= OnRoadmapFormLoad;
         }
@@ -229,11 +232,10 @@ public sealed class RoadmapForm : UserControl
         _detailMeta.Dock = DockStyle.Top;
         _detailProgress.Dock = DockStyle.Top;
         _openEpicButton.Dock = DockStyle.Right;
-        var actionHost = new Panel { Dock = DockStyle.Top, Height = 40, BackColor = JiraTheme.BgSurface };
-        actionHost.Controls.Add(_openEpicButton);
-        _openEpicButton.Location = new Point(Math.Max(0, actionHost.Width - _openEpicButton.Width), 0);
-        actionHost.Resize += (_, _) => _openEpicButton.Location = new Point(Math.Max(0, actionHost.Width - _openEpicButton.Width), 0);
-        header.Controls.Add(actionHost);
+        _detailActionHost.Controls.Clear();
+        _detailActionHost.Controls.Add(_openEpicButton);
+        UpdateDetailActionButtonLayout();
+        header.Controls.Add(_detailActionHost);
         header.Controls.Add(_detailProgressCaption);
         header.Controls.Add(_detailProgress);
         header.Controls.Add(_detailMeta);
@@ -267,6 +269,7 @@ public sealed class RoadmapForm : UserControl
     private void OnTimelineEpicDoubleClicked(object? sender, int epicId) => _ = OpenEpicAsync(epicId);
     private void OnTimelineZoomChanged(object? sender, float e) => UpdateZoomLabel();
     private void OnOpenEpicButtonClick(object? sender, EventArgs e) { if (_selectedEpicId.HasValue) _ = OpenEpicAsync(_selectedEpicId.Value); }
+    private void OnDetailActionHostResize(object? sender, EventArgs e) => UpdateDetailActionButtonLayout();
 
     private async void OnTimelineScheduleChanged(object? sender, RoadmapScheduleChangedEventArgs e)
     {
@@ -458,6 +461,7 @@ public sealed class RoadmapForm : UserControl
     }
 
     private void UpdateZoomLabel() => _zoomLabel.Text = $"Zoom: {_timelineCanvas.GetScaleLabel()}";
+    private void UpdateDetailActionButtonLayout() => _openEpicButton.Location = new Point(Math.Max(0, _detailActionHost.Width - _openEpicButton.Width), 0);
     private static ComboBox CreateFilterCombo(int width) => new() { Width = width, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody, Margin = new Padding(6, 0, 16, 0) };
     private static Label MakeFilterLabel(string text) { var label = JiraControlFactory.CreateLabel(text, true); label.Margin = new Padding(0, 10, 6, 0); return label; }
     private static string BuildDateRangeText(RoadmapEpicDto epic) => epic.StartDate.HasValue && epic.DueDate.HasValue ? $"{epic.StartDate:dd MMM} - {epic.DueDate:dd MMM}" : epic.StartDate.HasValue ? $"Starts {epic.StartDate:dd MMM}" : epic.DueDate.HasValue ? $"Due {epic.DueDate:dd MMM}" : "Unscheduled";

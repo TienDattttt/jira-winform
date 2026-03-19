@@ -105,7 +105,7 @@ public class CommentService
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _webhookDispatcher.DispatchAsync(
+        _webhookDispatcher.EnqueueDispatch(
             issue.ProjectId,
             WebhookEventType.CommentAdded,
             new
@@ -121,8 +121,7 @@ public class CommentService
                 AuthorName = actorName,
                 MentionedUserIds = mentionedUserIds.OrderBy(x => x).ToArray(),
                 CreatedAtUtc = comment.CreatedAtUtc,
-            },
-            cancellationToken);
+            });
         return comment;
     }
 

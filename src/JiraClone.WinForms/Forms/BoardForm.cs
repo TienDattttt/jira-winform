@@ -73,7 +73,6 @@ public class BoardForm : UserControl
     private int _projectId;
     private Sprint? _activeSprint;
     private IReadOnlyList<BoardColumnDto> _loadedColumns = Array.Empty<BoardColumnDto>();
-    private bool _isLoadingBoard;
     private bool _groupByEpic;
     private BoardType _boardType = BoardType.Scrum;
     private TimeSpan? _averageCycleTime;
@@ -292,9 +291,7 @@ public class BoardForm : UserControl
         cancellationToken.ThrowIfCancellationRequested();
 
         try
-        {
-            _isLoadingBoard = true;
-            Project? project = null;
+        {            Project? project = null;
             Sprint? activeSprint = null;
             IReadOnlyList<BoardColumnDto> columns = Array.Empty<BoardColumnDto>();
             TimeSpan? averageCycleTime = null;
@@ -347,9 +344,7 @@ public class BoardForm : UserControl
             ErrorDialogService.Show(exception);
         }
         finally
-        {
-            _isLoadingBoard = false;
-        }
+        {        }
     }
 
     private void PopulateHeader()
@@ -981,7 +976,7 @@ public class BoardForm : UserControl
     }
 
     private bool ShouldConfirmWipOverride(BoardColumnDto targetColumn)
-    private bool ShouldConfirmWipOverride(BoardColumnDto targetColumn)
+
     {
         return targetColumn.Category != StatusCategory.Done
             && targetColumn.WipLimit is int wipLimit
@@ -1237,6 +1232,9 @@ public class BoardForm : UserControl
 
     private const string NoEpicLaneKey = "no-epic";
 }
+
+
+
 
 
 

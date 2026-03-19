@@ -32,11 +32,16 @@ public sealed class LocalApiServer : IDisposable
         _logger = logger ?? NullLogger<LocalApiServer>.Instance;
         _listener.Prefixes.Add("http://127.0.0.1:47892/");
         _listener.Prefixes.Add("http://localhost:47892/");
-        TryStart();
     }
 
-    private void TryStart()
+    public Task StartAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_started)
+        {
+            return Task.CompletedTask;
+        }
+
         try
         {
             _listener.Start();
@@ -47,6 +52,40 @@ public sealed class LocalApiServer : IDisposable
         catch (HttpListenerException exception)
         {
             _logger.LogWarning(exception, "Local API server could not start on port 47892. External API access is disabled for this session.");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_started)
+        {
+            return;
+        }
+
+        _started = false;
+        _cts.Cancel();
+        if (_listener.IsListening)
+        {
+            _listener.Stop();
+        }
+
+        if (_serverTask is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _serverTask.WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
         }
     }
 
@@ -270,12 +309,7 @@ public sealed class LocalApiServer : IDisposable
 
     public void Dispose()
     {
-        _cts.Cancel();
-        if (_started && _listener.IsListening)
-        {
-            _listener.Stop();
-        }
-
+        StopAsync().GetAwaiter().GetResult();
         _listener.Close();
         _cts.Dispose();
     }
@@ -291,5 +325,3 @@ public sealed class LocalApiServer : IDisposable
         public int? StoryPoints { get; set; }
     }
 }
-
-

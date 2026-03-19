@@ -257,7 +257,7 @@ public class ProjectCommandService : IProjectCommandService
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _webhookDispatcher.DispatchAsync(project.Id, WebhookEventType.ProjectUpdated, CreateProjectWebhookPayload(project, "ProjectUpdated"), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(project.Id, WebhookEventType.ProjectUpdated, CreateProjectWebhookPayload(project, "ProjectUpdated"));
         return project;
     }
 
@@ -477,7 +477,7 @@ public class ProjectCommandService : IProjectCommandService
 
         await AddProjectActivityAsync(projectId, ActivityActionType.Updated, nameof(BoardColumn.Name), oldValue, $"{column.Name}|{column.WipLimit}", cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _webhookDispatcher.DispatchAsync(projectId, WebhookEventType.ProjectUpdated, CreateProjectWebhookPayload(project!, "BoardColumnUpdated"), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(projectId, WebhookEventType.ProjectUpdated, CreateProjectWebhookPayload(project!, "BoardColumnUpdated"));
         return true;
     }
 
@@ -535,7 +535,7 @@ public class ProjectCommandService : IProjectCommandService
                 Grants = scheme.Grants.Select(x => new { x.Permission, x.ProjectRole }).ToArray()
             }));
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _webhookDispatcher.DispatchAsync(projectId, WebhookEventType.ProjectUpdated, CreateProjectWebhookPayload(project, "PermissionSchemeUpdated"), cancellationToken);
+        _webhookDispatcher.EnqueueDispatch(projectId, WebhookEventType.ProjectUpdated, CreateProjectWebhookPayload(project, "PermissionSchemeUpdated"));
         return true;
     }
 

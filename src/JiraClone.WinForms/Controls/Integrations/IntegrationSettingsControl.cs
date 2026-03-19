@@ -22,6 +22,8 @@ public sealed class IntegrationSettingsControl : UserControl
     };
 
     private readonly Dictionary<string, IntegrationCard> _cardByName = new(StringComparer.OrdinalIgnoreCase);
+    private readonly CancellationTokenSource _disposeCts = new();
+    private CancellationTokenSource? _refreshCts;
     private Project? _project;
 
     public IntegrationSettingsControl(AppSession session)
@@ -35,14 +37,66 @@ public sealed class IntegrationSettingsControl : UserControl
         AddCard(IntegrationNames.Confluence, "Confluence", "Create and link knowledge-base pages from issues.");
     }
 
-    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    public Task RefreshAsync(CancellationToken cancellationToken = default) => LoadAsync(RestartRefreshCancellation(cancellationToken));
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            CancelPendingRefresh();
+            _disposeCts.Cancel();
+            foreach (var card in _cardByName.Values)
+            {
+                card.ConfigureRequested -= OnConfigureRequested;
+                card.DisconnectRequested -= OnDisconnectRequested;
+            }
+
+            _disposeCts.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    private CancellationToken RestartRefreshCancellation(CancellationToken cancellationToken = default)
+    {
+        CancelPendingRefresh();
+        _refreshCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+        return _refreshCts.Token;
+    }
+
+    private CancellationTokenSource CreateOperationSource(CancellationToken cancellationToken = default) =>
+        CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+
+    private void CancelPendingRefresh()
+    {
+        if (_refreshCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _refreshCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        _refreshCts.Dispose();
+        _refreshCts = null;
+    }
+
+    private async Task LoadAsync(CancellationToken cancellationToken)
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             _project = await _session.Projects.GetActiveProjectAsync(cancellationToken);
             var statuses = _project is null
                 ? []
                 : await _session.Integrations.GetProjectStatusesAsync(_project.Id, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
             var statusByName = statuses.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
             var currentMembership = GetCurrentMembership();
             var canManage = currentMembership?.ProjectRole is ProjectRole.Admin or ProjectRole.ProjectManager;
@@ -58,9 +112,15 @@ public sealed class IntegrationSettingsControl : UserControl
                 card.ApplyStatus(status, canManage);
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
         catch (Exception exception)
         {
-            ErrorDialogService.Show(exception);
+            if (!IsDisposed)
+            {
+                ErrorDialogService.Show(exception);
+            }
         }
     }
 
@@ -80,6 +140,18 @@ public sealed class IntegrationSettingsControl : UserControl
 
     private async void OnConfigureRequested(object? sender, EventArgs e)
     {
+        using var operationSource = CreateOperationSource();
+        try
+        {
+            await HandleConfigureRequestedAsync(sender, operationSource.Token);
+        }
+        catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task HandleConfigureRequestedAsync(object? sender, CancellationToken cancellationToken)
+    {
         if (_project is null || sender is not IntegrationCard card)
         {
             return;
@@ -91,39 +163,59 @@ public sealed class IntegrationSettingsControl : UserControl
             {
                 case IntegrationNames.GitHub:
                 {
-                    var config = await _session.Integrations.GetGitHubConfigAsync(_project.Id);
+                    var config = await _session.Integrations.GetGitHubConfigAsync(_project.Id, cancellationToken);
                     using var dialog = new GitHubIntegrationConfigDialog(config, card.CurrentStatus?.IsEnabled ?? true);
                     if (dialog.ShowDialog(this) != DialogResult.OK)
                     {
                         return;
                     }
 
-                    await _session.Integrations.SaveGitHubConfigAsync(_project.Id, dialog.Config, dialog.IsEnabled);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await _session.Integrations.SaveGitHubConfigAsync(_project.Id, dialog.Config, dialog.IsEnabled, cancellationToken);
                     break;
                 }
                 case IntegrationNames.Confluence:
                 {
-                    var config = await _session.Integrations.GetConfluenceConfigAsync(_project.Id);
+                    var config = await _session.Integrations.GetConfluenceConfigAsync(_project.Id, cancellationToken);
                     using var dialog = new ConfluenceIntegrationConfigDialog(config, card.CurrentStatus?.IsEnabled ?? true);
                     if (dialog.ShowDialog(this) != DialogResult.OK)
                     {
                         return;
                     }
 
-                    await _session.Integrations.SaveConfluenceConfigAsync(_project.Id, dialog.Config, dialog.IsEnabled);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await _session.Integrations.SaveConfluenceConfigAsync(_project.Id, dialog.Config, dialog.IsEnabled, cancellationToken);
                     break;
                 }
             }
 
-            await RefreshAsync();
+            await RefreshAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
-            ErrorDialogService.Show(exception);
+            if (!IsDisposed)
+            {
+                ErrorDialogService.Show(exception);
+            }
         }
     }
 
     private async void OnDisconnectRequested(object? sender, EventArgs e)
+    {
+        using var operationSource = CreateOperationSource();
+        try
+        {
+            await HandleDisconnectRequestedAsync(sender, operationSource.Token);
+        }
+        catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task HandleDisconnectRequestedAsync(object? sender, CancellationToken cancellationToken)
     {
         if (_project is null || sender is not IntegrationCard card)
         {
@@ -140,18 +232,24 @@ public sealed class IntegrationSettingsControl : UserControl
             switch (card.IntegrationName)
             {
                 case IntegrationNames.GitHub:
-                    await _session.Integrations.DisconnectGitHubAsync(_project.Id);
+                    await _session.Integrations.DisconnectGitHubAsync(_project.Id, cancellationToken);
                     break;
                 case IntegrationNames.Confluence:
-                    await _session.Integrations.DisconnectConfluenceAsync(_project.Id);
+                    await _session.Integrations.DisconnectConfluenceAsync(_project.Id, cancellationToken);
                     break;
             }
 
-            await RefreshAsync();
+            await RefreshAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
-            ErrorDialogService.Show(exception);
+            if (!IsDisposed)
+            {
+                ErrorDialogService.Show(exception);
+            }
         }
     }
 
@@ -185,12 +283,6 @@ public sealed class IntegrationSettingsControl : UserControl
             Padding = new Padding(20);
             Margin = new Padding(0);
 
-            Paint += (_, e) =>
-            {
-                using var pen = new Pen(JiraTheme.Border);
-                e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
-            };
-
             _logo.Text = title[..1].ToUpperInvariant();
             _logo.TextAlign = ContentAlignment.MiddleCenter;
             _logo.Size = new Size(40, 40);
@@ -220,13 +312,13 @@ public sealed class IntegrationSettingsControl : UserControl
             _configure.Size = new Size(110, 38);
             _configure.Location = new Point(Width - 250, 58);
             _configure.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            _configure.Click += (_, _) => ConfigureRequested?.Invoke(this, EventArgs.Empty);
+            _configure.Click += OnConfigureClick;
 
             _disconnect.AutoSize = false;
             _disconnect.Size = new Size(110, 38);
             _disconnect.Location = new Point(Width - 128, 58);
             _disconnect.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            _disconnect.Click += (_, _) => DisconnectRequested?.Invoke(this, EventArgs.Empty);
+            _disconnect.Click += OnDisconnectClick;
 
             Controls.Add(_logo);
             Controls.Add(_title);
@@ -256,7 +348,27 @@ public sealed class IntegrationSettingsControl : UserControl
             _configure.Enabled = canManage;
             _disconnect.Enabled = canManage && status.IsConfigured;
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _configure.Click -= OnConfigureClick;
+                _disconnect.Click -= OnDisconnectClick;
+            }
+
+            base.Dispose(disposing);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            using var pen = new Pen(JiraTheme.Border);
+            e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+        }
+
+        private void OnConfigureClick(object? sender, EventArgs e) => ConfigureRequested?.Invoke(this, EventArgs.Empty);
+
+        private void OnDisconnectClick(object? sender, EventArgs e) => DisconnectRequested?.Invoke(this, EventArgs.Empty);
     }
 }
-
-

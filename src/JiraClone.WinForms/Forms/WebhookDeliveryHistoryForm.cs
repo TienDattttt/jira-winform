@@ -11,6 +11,8 @@ public sealed class WebhookDeliveryHistoryForm : Form
     private readonly WebhookEndpoint _endpoint;
     private readonly DataGridView _grid = new();
     private readonly Label _emptyState = JiraControlFactory.CreateLabel("No delivery attempts recorded yet.", true);
+    private readonly CancellationTokenSource _disposeCts = new();
+    private CancellationTokenSource? _loadCts;
 
     public WebhookDeliveryHistoryForm(AppSession session, WebhookEndpoint endpoint)
     {
@@ -63,14 +65,58 @@ public sealed class WebhookDeliveryHistoryForm : Form
         Controls.Add(_emptyState);
         Controls.Add(header);
 
-        Load += async (_, _) => await LoadHistoryAsync();
+        Load += OnWebhookDeliveryHistoryFormLoad;
     }
 
-    private async Task LoadHistoryAsync()
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            CancelPendingLoad();
+            _disposeCts.Cancel();
+            Load -= OnWebhookDeliveryHistoryFormLoad;
+            _disposeCts.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    private CancellationToken RestartLoadCancellation(CancellationToken cancellationToken = default)
+    {
+        CancelPendingLoad();
+        _loadCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+        return _loadCts.Token;
+    }
+
+    private void CancelPendingLoad()
+    {
+        if (_loadCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _loadCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        _loadCts.Dispose();
+        _loadCts = null;
+    }
+
+    private void OnWebhookDeliveryHistoryFormLoad(object? sender, EventArgs e) => _ = RefreshHistoryAsync();
+
+    private Task RefreshHistoryAsync(CancellationToken cancellationToken = default) => LoadHistoryAsync(RestartLoadCancellation(cancellationToken));
+
+    private async Task LoadHistoryAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var deliveries = await _session.Webhooks.GetDeliveryHistoryAsync(_endpoint.Id, 100);
+            var deliveries = await _session.Webhooks.GetDeliveryHistoryAsync(_endpoint.Id, 100, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             _grid.Rows.Clear();
             foreach (var delivery in deliveries)
             {
@@ -87,10 +133,16 @@ public sealed class WebhookDeliveryHistoryForm : Form
             _grid.Visible = deliveries.Count > 0;
             _emptyState.Visible = deliveries.Count == 0;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
         catch (Exception exception)
         {
-            ErrorDialogService.Show(exception);
-            Close();
+            if (!IsDisposed)
+            {
+                ErrorDialogService.Show(exception);
+                Close();
+            }
         }
     }
 }

@@ -130,6 +130,8 @@ internal static class Program
             services.AddSingleton<IEmailService, MailKitEmailService>();
             services.AddSingleton<INotificationEmailTemplateRenderer, NotificationEmailTemplateRenderer>();
             services.AddSingleton<IIntegrationConfigProtector, DpapiIntegrationConfigProtector>();
+            services.AddSingleton<IWebhookSecretProtector, DpapiWebhookSecretProtector>();
+            services.AddSingleton(new WebhookDispatcherOptions());
 
             var oauthOptions = new OAuthOptions
             {
@@ -137,6 +139,8 @@ internal static class Program
                 ProviderName = configuration["OAuth:ProviderName"] ?? "SSO",
                 AuthorizationEndpoint = configuration["OAuth:AuthorizationEndpoint"] ?? string.Empty,
                 TokenEndpoint = configuration["OAuth:TokenEndpoint"] ?? string.Empty,
+                Issuer = configuration["OAuth:Issuer"] ?? string.Empty,
+                JwksUri = configuration["OAuth:JwksUri"] ?? string.Empty,
                 ClientId = configuration["OAuth:ClientId"] ?? string.Empty,
                 RedirectUri = configuration["OAuth:RedirectUri"] ?? "http://localhost:8765/callback",
                 Scopes = configuration.GetSection("OAuth:Scopes").GetChildren().Select(child => child.Value).Where(value => !string.IsNullOrWhiteSpace(value)).Cast<string>().ToArray()
@@ -153,6 +157,7 @@ internal static class Program
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<IActivityLogRepository, ActivityLogRepository>();
             services.AddScoped<IAttachmentRepository, AttachmentRepository>();
+            services.AddScoped<IApiTokenRepository, ApiTokenRepository>();
             services.AddScoped<ICommentRepository, CommentRepository>();
             services.AddScoped<IComponentRepository, ComponentRepository>();
             services.AddScoped<IIssueRepository, IssueRepository>();
@@ -170,6 +175,7 @@ internal static class Program
             services.AddScoped<IWorkflowRepository, WorkflowRepository>();
 
             services.AddScoped<AuthenticationService>();
+            services.AddScoped<IApiTokenService, ApiTokenService>();
             services.AddScoped<IOAuthService, OAuthService>();
             services.AddScoped<ProjectQueryService>();
             services.AddScoped<IProjectCommandService, ProjectCommandService>();
@@ -187,7 +193,7 @@ internal static class Program
             services.AddScoped<IssueService>();
             services.AddScoped<IWatcherService, WatcherService>();
             services.AddScoped<INotificationService, NotificationService>();
-            services.AddScoped<IWebhookDispatcher, WebhookDispatcher>();
+            services.AddSingleton<IWebhookDispatcher, WebhookDispatcher>();
             services.AddScoped<IWebhookService, WebhookService>();
             services.AddScoped<ILabelService, LabelService>();
             services.AddScoped<IComponentService, ComponentService>();
@@ -202,6 +208,7 @@ internal static class Program
 
             RegisterIntegrationPlugins(services);
             services.AddSingleton<GitHubIntegrationSyncWorker>();
+            services.AddSingleton<LocalApiServer>();
             services.AddSingleton<AppSession>();
 
             using var serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions
@@ -213,6 +220,21 @@ internal static class Program
             var startupLogger = loggerFactory.CreateLogger("Startup");
             startupLogger.LogInformation("Starting Jira Clone in {EnvironmentName} mode.", environmentName);
             _ = serviceProvider.GetRequiredService<GitHubIntegrationSyncWorker>();
+            var apiServer = serviceProvider.GetRequiredService<LocalApiServer>();
+            apiServer.StartAsync().GetAwaiter().GetResult();
+            System.Windows.Forms.Application.ApplicationExit += HandleApplicationExit;
+
+            void HandleApplicationExit(object? sender, EventArgs e)
+            {
+                try
+                {
+                    apiServer.StopAsync().GetAwaiter().GetResult();
+                }
+                catch (Exception exception)
+                {
+                    startupLogger.LogWarning(exception, "Unable to stop local API server cleanly during application exit.");
+                }
+            }
 
             var startupForm = CreateStartupForm(serviceProvider, startupLogger);
             System.Windows.Forms.Application.Run(startupForm);

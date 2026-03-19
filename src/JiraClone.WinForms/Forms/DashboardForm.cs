@@ -60,7 +60,6 @@ public sealed class DashboardForm : UserControl
     private Project? _project;
     private DashboardOverviewDto? _overview;
     private string _shellSearch = string.Empty;
-    private bool _isLoading;
     private readonly CancellationTokenSource _disposeCts = new();
     private CancellationTokenSource? _loadCts;
 
@@ -243,9 +242,7 @@ public sealed class DashboardForm : UserControl
         cancellationToken.ThrowIfCancellationRequested();
 
         try
-        {
-            _isLoading = true;
-            SetBusyState(true);
+        {            SetBusyState(true);
 
             Project? project = null;
             DashboardOverviewDto? overview = null;
@@ -282,9 +279,7 @@ public sealed class DashboardForm : UserControl
             ErrorDialogService.Show(exception);
         }
         finally
-        {
-            _isLoading = false;
-            SetBusyState(false);
+        {            SetBusyState(false);
         }
     }
 
@@ -560,7 +555,7 @@ public sealed class DashboardForm : UserControl
     }
 
     private static Label CreateHeaderLabel(string text, int left, int width, ContentAlignment alignment)
-    private static Label CreateHeaderLabel(string text, int left, int width, ContentAlignment alignment)
+
     {
         var label = JiraControlFactory.CreateLabel(text, true);
         label.AutoSize = false;
@@ -929,6 +924,29 @@ public sealed class DashboardForm : UserControl
 
         public event EventHandler<int>? IssueRequested;
 
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hovered = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hovered = false;
+            Invalidate();
+        }
+
+        protected override void OnClick(EventArgs e)
+        {
+            base.OnClick(e);
+            if (_activity.IssueId.HasValue)
+            {
+                IssueRequested?.Invoke(this, _activity.IssueId.Value);
+            }
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -1109,6 +1127,9 @@ public sealed class DashboardForm : UserControl
         };
     }
 }
+
+
+
 
 
 

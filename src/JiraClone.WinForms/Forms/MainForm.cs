@@ -8,6 +8,7 @@ using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
+using Microsoft.Extensions.Logging;
 
 namespace JiraClone.WinForms.Forms;
 
@@ -50,11 +51,13 @@ public class MainForm : Form
     private int _notificationPollInFlight;
     private bool _isUiBusy;
     private Panel? _navbarRightPanel;
+    private readonly ILogger<MainForm> _logger;
 
     public MainForm(AppSession session, string displayName, ISessionPersistenceService sessionPersistence)
     {
         _session = session;
         _sessionPersistence = sessionPersistence;
+        _logger = session.CreateLogger<MainForm>();
         _displayName = session.CurrentUserContext.CurrentUser?.DisplayName ?? displayName;
         _projectSwitcher = new ProjectSwitcherControl(session);
 
@@ -122,7 +125,12 @@ public class MainForm : Form
             _logoutButton.Click -= OnLogoutButtonClick;
             _createIssueButton.Click -= OnCreateIssueButtonClick;
             _cancelButton.Click -= OnCancelButtonClick;
-            _notificationButton.Click -= OnNotificationButtonClick;`r`n            _markAllReadButton.Click -= OnMarkAllReadButtonClick;`r`n            if (_navbarRightPanel is not null)`r`n            {`r`n                _navbarRightPanel.Resize -= OnNavbarRightPanelResize;`r`n            }
+            _notificationButton.Click -= OnNotificationButtonClick;
+            _markAllReadButton.Click -= OnMarkAllReadButtonClick;
+            if (_navbarRightPanel is not null)
+            {
+                _navbarRightPanel.Resize -= OnNavbarRightPanelResize;
+            }
             _notificationTimer?.Dispose();
             Shown -= OnMainFormShown;
             _projectsItem.Click -= OnProjectsItemClick;
@@ -323,7 +331,11 @@ public class MainForm : Form
 
     private void StartNotificationWorker()
     {
-        _notificationTimer ??= new System.Threading.Timer(_ => _ = PollNotificationsAsync(), null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
+        _notificationTimer ??= new System.Threading.Timer(
+            async _ => await PollNotificationsAsync(),
+            null,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(30));
     }
 
     private async Task PollNotificationsAsync()
@@ -348,8 +360,9 @@ public class MainForm : Form
                 BeginInvoke((MethodInvoker)(() => BindNotifications(notifications, unreadCount)));
             }
         }
-        catch
+        catch (Exception exception)
         {
+            _logger.LogWarning(exception, "Notification poll failed.");
         }
         finally
         {
@@ -366,6 +379,11 @@ public class MainForm : Form
         {
             foreach (Control control in _notificationList.Controls)
             {
+                if (control is NotificationRowControl row)
+                {
+                    row.NotificationRequested -= OnNotificationRowRequested;
+                }
+
                 control.Dispose();
             }
 
@@ -730,6 +748,7 @@ public class MainForm : Form
     }
     private async void OnMainFormShown(object? sender, EventArgs e)
     {
+        StartNotificationWorker();
         await RunCancelableUiOperationAsync(LoadProjectContextAsync);
     }
 
@@ -1034,8 +1053,8 @@ public class MainForm : Form
             Margin = new Padding(0);
             BackColor = Color.Transparent;
 
-            MouseEnter += (_, _) => { _hovered = true; Invalidate(); };
-            MouseLeave += (_, _) => { _hovered = false; Invalidate(); };
+
+
         }
 
         public string TextLabel { get; }
@@ -1044,6 +1063,20 @@ public class MainForm : Form
         public void SetActive(bool active)
         {
             _active = active;
+            Invalidate();
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hovered = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hovered = false;
             Invalidate();
         }
 
@@ -1196,9 +1229,9 @@ public class MainForm : Form
             _countBadge.Padding = new Padding(10, 6, 10, 6);
             _countBadge.Margin = new Padding(12, 0, 0, 0);
 
-            _statusFilter.SelectedIndexChanged += (_, _) => BindIssues();
-            _priorityFilter.SelectedIndexChanged += (_, _) => BindIssues();
-            _typeFilter.SelectedIndexChanged += (_, _) => BindIssues();
+            _statusFilter.SelectedIndexChanged += OnFilterSelectedIndexChanged;
+            _priorityFilter.SelectedIndexChanged += OnFilterSelectedIndexChanged;
+            _typeFilter.SelectedIndexChanged += OnFilterSelectedIndexChanged;
             _clearFiltersButton.AutoSize = false;
             _clearFiltersButton.Size = new Size(118, 36);
             _clearFiltersButton.Click += OnClearFiltersButtonClick;
@@ -1327,18 +1360,13 @@ public class MainForm : Form
                 Padding = new Padding(0, 0, 0, 12),
             };
 
-            var filterBar = new FlowLayoutPanel
+            var filterBar = new BorderFlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 BackColor = JiraTheme.BgSurface,
                 Padding = new Padding(12, 8, 12, 8),
                 WrapContents = false,
                 Margin = new Padding(0),
-            };
-            filterBar.Paint += (_, e) =>
-            {
-                using var pen = new Pen(JiraTheme.Border);
-                e.Graphics.DrawRectangle(pen, 0, 0, filterBar.Width - 1, filterBar.Height - 1);
             };
             filterBar.Controls.Add(_statusFilter);
             filterBar.Controls.Add(_priorityFilter);
@@ -1350,16 +1378,11 @@ public class MainForm : Form
 
         private Control BuildSurface()
         {
-            var surface = new DoubleBufferedPanel
+            var surface = new BorderPanel
             {
                 Dock = DockStyle.Fill,
                 BackColor = JiraTheme.BgSurface,
                 Padding = new Padding(0),
-            };
-            surface.Paint += (_, e) =>
-            {
-                using var pen = new Pen(JiraTheme.Border);
-                e.Graphics.DrawRectangle(pen, 0, 0, surface.Width - 1, surface.Height - 1);
             };
 
             _emptyState.Dock = DockStyle.Fill;
@@ -1389,14 +1412,8 @@ public class MainForm : Form
             _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
             _grid.ColumnHeadersHeight = 42;
             _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            _grid.SelectionChanged += (_, _) => _openButton.Enabled = _grid.CurrentRow?.DataBoundItem is IssueSummaryRow;
-            _grid.CellDoubleClick += async (_, eventArgs) =>
-            {
-                if (eventArgs.RowIndex >= 0)
-                {
-                    await OpenSelectedIssueAsync();
-                }
-            };
+            _grid.SelectionChanged += OnGridSelectionChanged;
+            _grid.CellDoubleClick += OnGridCellDoubleClick;
 
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -1440,6 +1457,56 @@ public class MainForm : Form
                 Width = 220,
                 MinimumWidth = 180,
             });
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _statusFilter.SelectedIndexChanged -= OnFilterSelectedIndexChanged;
+                _priorityFilter.SelectedIndexChanged -= OnFilterSelectedIndexChanged;
+                _typeFilter.SelectedIndexChanged -= OnFilterSelectedIndexChanged;
+                _clearFiltersButton.Click -= OnClearFiltersButtonClick;
+                _openButton.Click -= OnOpenButtonClick;
+                _grid.SelectionChanged -= OnGridSelectionChanged;
+                _grid.CellDoubleClick -= OnGridCellDoubleClick;
+                Load -= OnIssueNavigatorLoad;
+            }
+
+            base.Dispose(disposing);
+        }
+
+        private async void OnIssueNavigatorLoad(object? sender, EventArgs e)
+        {
+            await RefreshIssuesAsync();
+        }
+
+        private void OnFilterSelectedIndexChanged(object? sender, EventArgs e)
+        {
+            BindIssues();
+        }
+
+        private void OnClearFiltersButtonClick(object? sender, EventArgs e)
+        {
+            ClearFilters();
+        }
+
+        private async void OnOpenButtonClick(object? sender, EventArgs e)
+        {
+            await OpenSelectedIssueAsync();
+        }
+
+        private void OnGridSelectionChanged(object? sender, EventArgs e)
+        {
+            _openButton.Enabled = _grid.CurrentRow?.DataBoundItem is IssueSummaryRow;
+        }
+
+        private async void OnGridCellDoubleClick(object? sender, DataGridViewCellEventArgs eventArgs)
+        {
+            if (eventArgs.RowIndex >= 0)
+            {
+                await OpenSelectedIssueAsync();
+            }
         }
 
         private void BindIssues()
@@ -1504,7 +1571,9 @@ public class MainForm : Form
             Font = JiraTheme.FontBody,
             IntegralHeight = false,
             Margin = new Padding(0, 0, 12, 0),
-        };`r`n`r`n        private static string FormatPriority(IssuePriority priority) => priority switch
+        };
+
+        private static string FormatPriority(IssuePriority priority) => priority switch
         {
             IssuePriority.Highest => "Highest",
             _ => priority.ToString()
@@ -1554,6 +1623,17 @@ public class MainForm : Form
         private sealed record IssueSummaryRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

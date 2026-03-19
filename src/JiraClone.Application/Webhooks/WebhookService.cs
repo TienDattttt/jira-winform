@@ -15,6 +15,7 @@ public class WebhookService : IWebhookService
     private readonly IPermissionService _permissionService;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IWebhookDispatcher _dispatcher;
+    private readonly IWebhookSecretProtector _secretProtector;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<WebhookService> _logger;
 
@@ -25,6 +26,7 @@ public class WebhookService : IWebhookService
         IPermissionService permissionService,
         ICurrentUserContext currentUserContext,
         IWebhookDispatcher dispatcher,
+        IWebhookSecretProtector secretProtector,
         IUnitOfWork unitOfWork,
         ILogger<WebhookService>? logger = null)
     {
@@ -34,6 +36,7 @@ public class WebhookService : IWebhookService
         _permissionService = permissionService;
         _currentUserContext = currentUserContext;
         _dispatcher = dispatcher;
+        _secretProtector = secretProtector;
         _unitOfWork = unitOfWork;
         _logger = logger ?? NullLogger<WebhookService>.Instance;
     }
@@ -43,13 +46,14 @@ public class WebhookService : IWebhookService
         await EnsurePermissionAsync(projectId, Permission.ManageProject, cancellationToken);
 
         var endpoints = await _endpoints.GetByProjectIdAsync(projectId, cancellationToken);
+        var result = new List<WebhookEndpoint>(endpoints.Count);
         foreach (var endpoint in endpoints)
         {
             var latestDelivery = await _deliveries.GetLatestByEndpointIdAsync(endpoint.Id, cancellationToken);
-            endpoint.Deliveries = latestDelivery is null ? [] : [latestDelivery];
+            result.Add(CloneEndpointForView(endpoint, latestDelivery));
         }
 
-        return endpoints;
+        return result;
     }
 
     public async Task<WebhookEndpoint> CreateAsync(int projectId, string name, string url, string secret, bool isActive, IReadOnlyCollection<WebhookEventType> subscribedEvents, CancellationToken cancellationToken = default)
@@ -62,7 +66,7 @@ public class WebhookService : IWebhookService
             ProjectId = projectId,
             Name = NormalizeName(name),
             Url = NormalizeUrl(url),
-            Secret = NormalizeSecret(secret),
+            Secret = _secretProtector.Protect(NormalizeSecret(secret)),
             IsActive = isActive,
             CreatedAtUtc = DateTime.UtcNow,
             UpdatedAtUtc = DateTime.UtcNow,
@@ -72,7 +76,7 @@ public class WebhookService : IWebhookService
         await _endpoints.AddAsync(endpoint, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Created webhook endpoint {WebhookEndpointId} for project {ProjectId}.", endpoint.Id, projectId);
-        return endpoint;
+        return CloneEndpointForView(endpoint, null);
     }
 
     public async Task<WebhookEndpoint?> UpdateAsync(int endpointId, string name, string url, string secret, bool isActive, IReadOnlyCollection<WebhookEventType> subscribedEvents, CancellationToken cancellationToken = default)
@@ -86,14 +90,14 @@ public class WebhookService : IWebhookService
         await EnsurePermissionAsync(endpoint.ProjectId, Permission.ManageProject, cancellationToken);
         endpoint.Name = NormalizeName(name);
         endpoint.Url = NormalizeUrl(url);
-        endpoint.Secret = NormalizeSecret(secret);
+        endpoint.Secret = _secretProtector.Protect(NormalizeSecret(secret));
         endpoint.IsActive = isActive;
         endpoint.UpdatedAtUtc = DateTime.UtcNow;
         ApplySubscriptions(endpoint, subscribedEvents);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Updated webhook endpoint {WebhookEndpointId} for project {ProjectId}.", endpoint.Id, endpoint.ProjectId);
-        return endpoint;
+        return CloneEndpointForView(endpoint, null);
     }
 
     public async Task<bool> DeleteAsync(int endpointId, CancellationToken cancellationToken = default)
@@ -152,6 +156,48 @@ public class WebhookService : IWebhookService
     {
         return await _projects.GetByIdAsync(projectId, cancellationToken)
             ?? throw new ValidationException($"Project {projectId} was not found.");
+    }
+
+    private WebhookEndpoint CloneEndpointForView(WebhookEndpoint endpoint, WebhookDelivery? latestDelivery)
+    {
+        return new WebhookEndpoint
+        {
+            Id = endpoint.Id,
+            ProjectId = endpoint.ProjectId,
+            Name = endpoint.Name,
+            Url = endpoint.Url,
+            Secret = _secretProtector.Unprotect(endpoint.Secret),
+            IsActive = endpoint.IsActive,
+            CreatedAtUtc = endpoint.CreatedAtUtc,
+            UpdatedAtUtc = endpoint.UpdatedAtUtc,
+            Subscriptions = endpoint.Subscriptions
+                .OrderBy(x => x.EventType)
+                .Select(x => new WebhookEndpointSubscription
+                {
+                    WebhookEndpointId = endpoint.Id,
+                    EventType = x.EventType,
+                })
+                .ToList(),
+            Deliveries = latestDelivery is null ? [] : [CloneDelivery(latestDelivery)]
+        };
+    }
+
+    private static WebhookDelivery CloneDelivery(WebhookDelivery delivery)
+    {
+        return new WebhookDelivery
+        {
+            Id = delivery.Id,
+            WebhookEndpointId = delivery.WebhookEndpointId,
+            EventType = delivery.EventType,
+            Payload = delivery.Payload,
+            ResponseCode = delivery.ResponseCode,
+            Success = delivery.Success,
+            AttemptedAtUtc = delivery.AttemptedAtUtc,
+            RetryCount = delivery.RetryCount,
+            ErrorMessage = delivery.ErrorMessage,
+            CreatedAtUtc = delivery.CreatedAtUtc,
+            UpdatedAtUtc = delivery.UpdatedAtUtc,
+        };
     }
 
     private static void ApplySubscriptions(WebhookEndpoint endpoint, IReadOnlyCollection<WebhookEventType> subscribedEvents)

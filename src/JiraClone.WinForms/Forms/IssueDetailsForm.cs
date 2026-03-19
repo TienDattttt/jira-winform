@@ -772,7 +772,7 @@ public class IssueDetailsForm : Form
                 return;
             }
 
-            _watchers = await _session.Watchers.GetWatchersAsync(_issueId, cancellationToken);
+            _watchers = await _session.Watchers.GetWatchersAsync(_issueId, _disposeCts.Token);
             var currentUserId = _session.CurrentUserContext.CurrentUser?.Id ?? 0;
             _isWatching = currentUserId > 0 && await _session.Watchers.IsWatchingAsync(_issueId, currentUserId, cancellationToken);
             await BindStatusOptionsAsync(_details.Issue);
@@ -1212,8 +1212,8 @@ public class IssueDetailsForm : Form
                 await _session.Watchers.WatchIssueAsync(_issueId, currentUserId);
             }
 
-            _watchers = await _session.Watchers.GetWatchersAsync(_issueId, cancellationToken);
-            _isWatching = await _session.Watchers.IsWatchingAsync(_issueId, currentUserId);
+            _watchers = await _session.Watchers.GetWatchersAsync(_issueId, _disposeCts.Token);
+            _isWatching = await _session.Watchers.IsWatchingAsync(_issueId, currentUserId, _disposeCts.Token);
             RenderWatchers();
         }
         catch (Exception ex)
@@ -2275,6 +2275,7 @@ public class IssueDetailsForm : Form
         public IReadOnlyList<int> SelectedUserIds => _assignees.CheckedItems.Cast<User>().Select(x => x.Id).ToList();
     }
 }
+
 
 
 

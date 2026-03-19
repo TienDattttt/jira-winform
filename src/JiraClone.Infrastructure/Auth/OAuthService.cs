@@ -1,12 +1,16 @@
 using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Security;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using JiraClone.Application.Auth;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.IdentityModel.Tokens;
 
 namespace JiraClone.Infrastructure.Auth;
 
@@ -17,6 +21,11 @@ public sealed class OAuthService : IOAuthService
     private readonly OAuthOptions _options;
     private readonly HttpClient _httpClient;
     private readonly ILogger<OAuthService> _logger;
+    private readonly SemaphoreSlim _jwksLock = new(1, 1);
+
+    private JsonWebKeySet? _cachedJwks;
+    private DateTime _jwksExpiresAtUtc = DateTime.MinValue;
+    private string? _pendingNonce;
 
     public OAuthService(OAuthOptions options, HttpClient httpClient, ILogger<OAuthService>? logger = null)
     {
@@ -35,7 +44,8 @@ public sealed class OAuthService : IOAuthService
         var codeVerifier = GenerateCodeVerifier();
         var codeChallenge = GenerateCodeChallenge(codeVerifier);
         var state = GenerateNonce();
-        var authorizationUrl = BuildAuthorizationUrl(redirectUri, codeChallenge, state);
+        _pendingNonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+        var authorizationUrl = BuildAuthorizationUrl(redirectUri, codeChallenge, state, _pendingNonce);
 
         using var listener = CreateListener(redirectUri);
         using var cancellationRegistration = cancellationToken.Register(() => SafeStop(listener));
@@ -56,7 +66,7 @@ public sealed class OAuthService : IOAuthService
         try
         {
             tokenResponse = await ExchangeCodeAsync(code, codeVerifier, cancellationToken);
-            var result = BuildResult(tokenResponse);
+            var result = await BuildResultAsync(tokenResponse, cancellationToken);
             await WriteBrowserResponseAsync(callback.Response, HttpStatusCode.OK, "Sign-in complete", "You can now return to Jira Desktop and close this browser tab.");
             return result;
         }
@@ -77,6 +87,7 @@ public sealed class OAuthService : IOAuthService
         }
         finally
         {
+            _pendingNonce = null;
             SafeStop(listener);
         }
     }
@@ -90,6 +101,8 @@ public sealed class OAuthService : IOAuthService
 
         ValidateHttpsUri(_options.AuthorizationEndpoint, "AuthorizationEndpoint");
         ValidateHttpsUri(_options.TokenEndpoint, "TokenEndpoint");
+        ValidateHttpsUri(_options.Issuer, "Issuer");
+        ValidateHttpsUri(_options.JwksUri, "JwksUri");
     }
 
     private static void ValidateHttpsUri(string uriValue, string settingName)
@@ -108,7 +121,7 @@ public sealed class OAuthService : IOAuthService
         }
     }
 
-    private string BuildAuthorizationUrl(Uri redirectUri, string codeChallenge, string state)
+    private string BuildAuthorizationUrl(Uri redirectUri, string codeChallenge, string state, string nonce)
     {
         var query = new Dictionary<string, string>
         {
@@ -118,7 +131,8 @@ public sealed class OAuthService : IOAuthService
             ["scope"] = string.Join(' ', _options.Scopes.Where(scope => !string.IsNullOrWhiteSpace(scope)).Select(scope => scope.Trim())),
             ["code_challenge"] = codeChallenge,
             ["code_challenge_method"] = "S256",
-            ["state"] = state
+            ["state"] = state,
+            ["nonce"] = nonce
         };
 
         var builder = new StringBuilder(_options.AuthorizationEndpoint);
@@ -207,39 +221,105 @@ public sealed class OAuthService : IOAuthService
         return tokenResponse;
     }
 
-    private OAuthResult BuildResult(OAuthTokenResponse tokenResponse)
+    private async Task<OAuthResult> BuildResultAsync(OAuthTokenResponse tokenResponse, CancellationToken cancellationToken)
     {
-        var handler = new JwtSecurityTokenHandler();
-        var jwt = handler.ReadJwtToken(tokenResponse.IdToken);
+        var nonce = _pendingNonce ?? throw new SecurityException("OAuth nonce was not available for token validation.");
+        var principal = await ValidateIdTokenAsync(tokenResponse.IdToken, nonce, cancellationToken);
 
-        if (!jwt.Audiences.Contains(_options.ClientId, StringComparer.Ordinal))
-        {
-            throw new InvalidOperationException("The identity token audience does not match the configured client ID.");
-        }
-
-        if (jwt.ValidTo <= DateTime.UtcNow)
-        {
-            throw new InvalidOperationException("The identity token has expired.");
-        }
-
-        var email = GetFirstClaim(jwt, "email", "preferred_username", "upn", "unique_name");
+        var email = GetFirstClaim(principal, "email", "preferred_username", "upn", "unique_name");
         if (string.IsNullOrWhiteSpace(email))
         {
             throw new InvalidOperationException("The identity token did not include an email or username claim.");
         }
 
-        var displayName = GetFirstClaim(jwt, "name", "preferred_username", "email") ?? email;
-        var userName = GetFirstClaim(jwt, "preferred_username", "upn", "email");
+        var displayName = GetFirstClaim(principal, "name", "preferred_username", "email") ?? email;
+        var userName = GetFirstClaim(principal, "preferred_username", "upn", "email");
         var expiresAtUtc = tokenResponse.ExpiresIn > 0
             ? DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn)
-            : jwt.ValidTo;
+            : GetTokenExpiry(principal);
 
         return new OAuthResult(email.Trim(), displayName.Trim(), tokenResponse.AccessToken, expiresAtUtc, userName?.Trim());
     }
 
-    private static string? GetFirstClaim(JwtSecurityToken jwt, params string[] claimTypes) =>
+    internal async Task<ClaimsPrincipal> ValidateIdTokenAsync(string idToken, string nonce, CancellationToken cancellationToken = default)
+    {
+        var validationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = _options.Issuer,
+            ValidateAudience = true,
+            ValidAudience = _options.ClientId,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKeys = await FetchJwksAsync(cancellationToken),
+            ClockSkew = TimeSpan.FromMinutes(5)
+        };
+
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
+        var principal = handler.ValidateToken(idToken, validationParameters, out _);
+        var tokenNonce = principal.FindFirst("nonce")?.Value;
+        if (!string.Equals(tokenNonce, nonce, StringComparison.Ordinal))
+        {
+            throw new SecurityException("Nonce mismatch - possible replay attack.");
+        }
+
+        return principal;
+    }
+
+    private async Task<IReadOnlyCollection<SecurityKey>> FetchJwksAsync(CancellationToken cancellationToken)
+    {
+        if (_cachedJwks is not null && _jwksExpiresAtUtc > DateTime.UtcNow)
+        {
+            return _cachedJwks.Keys.Cast<SecurityKey>().ToArray();
+        }
+
+        await _jwksLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_cachedJwks is not null && _jwksExpiresAtUtc > DateTime.UtcNow)
+            {
+                return _cachedJwks.Keys.Cast<SecurityKey>().ToArray();
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, _options.JwksUri);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = TryReadError(responseContent) ?? $"JWKS endpoint returned HTTP {(int)response.StatusCode}.";
+                throw new InvalidOperationException(error);
+            }
+
+            var jwks = new JsonWebKeySet(responseContent);
+            if (jwks.Keys.Count == 0)
+            {
+                throw new InvalidOperationException("The JWKS document did not contain any signing keys.");
+            }
+
+            _cachedJwks = jwks;
+            _jwksExpiresAtUtc = DateTime.UtcNow.AddHours(1);
+            return jwks.Keys.Cast<SecurityKey>().ToArray();
+        }
+        finally
+        {
+            _jwksLock.Release();
+        }
+    }
+
+    private static DateTime GetTokenExpiry(ClaimsPrincipal principal)
+    {
+        var expClaim = principal.FindFirst("exp")?.Value;
+        if (long.TryParse(expClaim, out var expiresAtUnixTimeSeconds))
+        {
+            return DateTimeOffset.FromUnixTimeSeconds(expiresAtUnixTimeSeconds).UtcDateTime;
+        }
+
+        return DateTime.UtcNow;
+    }
+
+    private static string? GetFirstClaim(ClaimsPrincipal principal, params string[] claimTypes) =>
         claimTypes
-            .Select(type => jwt.Claims.FirstOrDefault(claim => string.Equals(claim.Type, type, StringComparison.OrdinalIgnoreCase))?.Value)
+            .Select(type => principal.Claims.FirstOrDefault(claim => string.Equals(claim.Type, type, StringComparison.OrdinalIgnoreCase))?.Value)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
     private static string TryReadError(string content)
@@ -356,9 +436,13 @@ public sealed class OAuthService : IOAuthService
 
     private sealed class OAuthTokenResponse
     {
+        [JsonPropertyName("access_token")]
         public string AccessToken { get; set; } = string.Empty;
+
+        [JsonPropertyName("id_token")]
         public string IdToken { get; set; } = string.Empty;
+
+        [JsonPropertyName("expires_in")]
         public int ExpiresIn { get; set; }
     }
 }
-
