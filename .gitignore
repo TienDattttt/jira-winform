@@ -1,4 +1,4 @@
-# dependencies
+﻿# dependencies
 **/node_modules
 
 # misc
@@ -6,6 +6,13 @@
 
 # environment config
 **/.env
+
+# local tooling
+**/.agent/
+**/.codex/
+**/.vs/
+**/.vscode/
+**/.tmp/
 
 # production
 **/build
@@ -16,4 +23,3 @@
 
 # local app secrets
 **/appsettings.Development.json
-
