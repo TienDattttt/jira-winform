@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Drawing.Drawing2D;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Helpers;
@@ -12,7 +12,7 @@ public sealed class JiraBadge : UserControl
 
     private JiraBadge(string text, Color backColor, Color textColor)
     {
-        BadgeText = text;
+        BadgeText = VietnameseUi.Translate(text);
         _backColor = backColor;
         _textColor = textColor;
 
@@ -74,7 +74,6 @@ public sealed class JiraBadge : UserControl
         var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
         using var path = GraphicsHelper.CreateRoundedPath(bounds, Height / 2);
         using var brush = new SolidBrush(_backColor);
-        using var textBrush = new SolidBrush(_textColor);
 
         e.Graphics.FillPath(brush, path);
 
@@ -88,9 +87,4 @@ public sealed class JiraBadge : UserControl
         Height = 20;
         Invalidate();
     }
-
-
 }
-
-
-

@@ -1,4 +1,4 @@
-using JiraClone.Domain.Entities;
+﻿using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.Domain.Permissions;
 using Microsoft.EntityFrameworkCore;
@@ -24,8 +24,8 @@ public static class SeedData
                 UserName = "admin",
                 DisplayName = "Admin User",
                 Email = "admin@jiraclone.local",
-                PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
-                PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
+                PasswordHash = "jgpZxNxCoXwMhOTNRy7GXZHyX6pwZyruG7q31ducr54=",
+                PasswordSalt = "hyp1jJnol7RJsq08AjbBaw==",
                 IsActive = true,
                 EmailNotificationsEnabled = true,
                 CreatedAtUtc = createdAt,
@@ -37,8 +37,8 @@ public static class SeedData
                 UserName = "gaben",
                 DisplayName = "Gaben",
                 Email = "gaben@jiraclone.local",
-                PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
-                PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
+                PasswordHash = "jgpZxNxCoXwMhOTNRy7GXZHyX6pwZyruG7q31ducr54=",
+                PasswordSalt = "hyp1jJnol7RJsq08AjbBaw==",
                 IsActive = true,
                 EmailNotificationsEnabled = true,
                 CreatedAtUtc = createdAt,
@@ -50,8 +50,8 @@ public static class SeedData
                 UserName = "yoda",
                 DisplayName = "Yoda",
                 Email = "yoda@jiraclone.local",
-                PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
-                PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
+                PasswordHash = "jgpZxNxCoXwMhOTNRy7GXZHyX6pwZyruG7q31ducr54=",
+                PasswordSalt = "hyp1jJnol7RJsq08AjbBaw==",
                 IsActive = true,
                 EmailNotificationsEnabled = true,
                 CreatedAtUtc = createdAt,
@@ -316,6 +316,7 @@ public static class SeedData
         _ => "Status"
     };
 }
+
 
 
 

@@ -11,5 +11,15 @@ public class IssueLabelConfiguration : IEntityTypeConfiguration<IssueLabel>
         builder.ToTable("IssueLabels");
         builder.HasKey(x => new { x.IssueId, x.LabelId });
         builder.HasIndex(x => x.LabelId);
+
+        builder.HasOne(x => x.Label)
+            .WithMany(x => x.IssueLabels)
+            .HasForeignKey(x => x.LabelId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.Issue)
+            .WithMany(x => x.IssueLabels)
+            .HasForeignKey(x => x.IssueId)
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

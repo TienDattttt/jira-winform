@@ -26,6 +26,6 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.HasOne(x => x.Project)
             .WithMany(x => x.Notifications)
             .HasForeignKey(x => x.ProjectId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

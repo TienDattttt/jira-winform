@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -20,13 +20,6 @@ namespace JiraClone.Persistence.Migrations
                 type: "bit",
                 nullable: false,
                 defaultValue: false);
-
-            migrationBuilder.UpdateData(
-                table: "Sprints",
-                keyColumn: "Id",
-                keyValue: 1,
-                columns: new string[0],
-                values: new object[0]);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Sprints_ProjectId",

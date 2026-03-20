@@ -11,5 +11,15 @@ public class IssueComponentConfiguration : IEntityTypeConfiguration<IssueCompone
         builder.ToTable("IssueComponents");
         builder.HasKey(x => new { x.IssueId, x.ComponentId });
         builder.HasIndex(x => x.ComponentId);
+
+        builder.HasOne(x => x.Component)
+            .WithMany(x => x.IssueComponents)
+            .HasForeignKey(x => x.ComponentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.Issue)
+            .WithMany(x => x.IssueComponents)
+            .HasForeignKey(x => x.IssueId)
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

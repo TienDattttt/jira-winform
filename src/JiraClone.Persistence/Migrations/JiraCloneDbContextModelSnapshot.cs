@@ -1643,8 +1643,8 @@ namespace JiraClone.Persistence.Migrations
                             Email = "admin@jiraclone.local",
                             EmailNotificationsEnabled = true,
                             IsActive = true,
-                            PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
-                            PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
+                            PasswordHash = "jgpZxNxCoXwMhOTNRy7GXZHyX6pwZyruG7q31ducr54=",
+                            PasswordSalt = "hyp1jJnol7RJsq08AjbBaw==",
                             UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             UserName = "admin"
                         },
@@ -1656,8 +1656,8 @@ namespace JiraClone.Persistence.Migrations
                             Email = "gaben@jiraclone.local",
                             EmailNotificationsEnabled = true,
                             IsActive = true,
-                            PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
-                            PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
+                            PasswordHash = "jgpZxNxCoXwMhOTNRy7GXZHyX6pwZyruG7q31ducr54=",
+                            PasswordSalt = "hyp1jJnol7RJsq08AjbBaw==",
                             UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             UserName = "gaben"
                         },
@@ -1669,8 +1669,8 @@ namespace JiraClone.Persistence.Migrations
                             Email = "yoda@jiraclone.local",
                             EmailNotificationsEnabled = true,
                             IsActive = true,
-                            PasswordHash = "kgu+8rnxTM1wAdC5cmxrD58zMWHiBN9ocgia5jcEKlU=",
-                            PasswordSalt = "E8M6vZg6o0mM1k3m8Xx3MQ==",
+                            PasswordHash = "jgpZxNxCoXwMhOTNRy7GXZHyX6pwZyruG7q31ducr54=",
+                            PasswordSalt = "hyp1jJnol7RJsq08AjbBaw==",
                             UpdatedAtUtc = new DateTime(2026, 3, 10, 0, 0, 0, 0, DateTimeKind.Utc),
                             UserName = "yoda"
                         });
@@ -2442,7 +2442,7 @@ namespace JiraClone.Persistence.Migrations
                     b.HasOne("JiraClone.Domain.Entities.User", "LeadUser")
                         .WithMany("LedComponents")
                         .HasForeignKey("LeadUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("JiraClone.Domain.Entities.Project", "Project")
                         .WithMany("Components")
@@ -2466,7 +2466,7 @@ namespace JiraClone.Persistence.Migrations
                     b.HasOne("JiraClone.Domain.Entities.ProjectVersion", "FixVersion")
                         .WithMany("Issues")
                         .HasForeignKey("FixVersionId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("JiraClone.Domain.Entities.Issue", "ParentIssue")
                         .WithMany("SubIssues")
@@ -2540,7 +2540,7 @@ namespace JiraClone.Persistence.Migrations
                     b.HasOne("JiraClone.Domain.Entities.Issue", "Issue")
                         .WithMany("IssueComponents")
                         .HasForeignKey("IssueId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.Navigation("Component");
@@ -2553,7 +2553,7 @@ namespace JiraClone.Persistence.Migrations
                     b.HasOne("JiraClone.Domain.Entities.Issue", "Issue")
                         .WithMany("IssueLabels")
                         .HasForeignKey("IssueId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("JiraClone.Domain.Entities.Label", "Label")
@@ -2588,7 +2588,7 @@ namespace JiraClone.Persistence.Migrations
                     b.HasOne("JiraClone.Domain.Entities.Project", "Project")
                         .WithMany("Notifications")
                         .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("JiraClone.Domain.Entities.User", "RecipientUser")
                         .WithMany("Notifications")
@@ -2965,3 +2965,4 @@ namespace JiraClone.Persistence.Migrations
         }
     }
 }
+

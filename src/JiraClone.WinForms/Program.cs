@@ -1,3 +1,4 @@
+﻿using System.Globalization;
 using JiraClone.Application.ActivityLog;
 using JiraClone.Application.ApiTokens;
 using JiraClone.Application.Abstractions;
@@ -34,6 +35,7 @@ using JiraClone.Persistence;
 using JiraClone.Persistence.Repositories;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Forms;
+using JiraClone.WinForms.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,6 +50,11 @@ internal static class Program
     private static void Main()
     {
         ApplicationConfiguration.Initialize();
+
+        var vietnamCulture = CultureInfo.GetCultureInfo("vi-VN");
+        CultureInfo.DefaultThreadCurrentCulture = vietnamCulture;
+        CultureInfo.DefaultThreadCurrentUICulture = vietnamCulture;
+        VietnameseUi.InitializeGlobalHook();
 
         var environmentName =
             Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ??
@@ -243,8 +250,8 @@ internal static class Program
         {
             Log.Fatal(exception, "Unable to start Jira Clone.");
             MessageBox.Show(
-                $"Unable to start Jira Clone.\n\n{exception.Message}",
-                "Startup Error",
+                VietnameseUi.Translate($"Unable to start Jira Clone.\n\n{exception.Message}"),
+                VietnameseUi.Translate("Startup Error"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
@@ -337,6 +344,8 @@ internal static class Program
         }
     }
 }
+
+
 
 
 

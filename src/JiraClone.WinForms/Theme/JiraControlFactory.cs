@@ -62,7 +62,7 @@ public static class JiraControlFactory
         return new Label
         {
             AutoSize = true,
-            Text = text,
+            Text = VietnameseUi.Translate(text),
             Font = isCaption ? JiraTheme.FontCaption : JiraTheme.FontBody,
             ForeColor = isCaption ? JiraTheme.TextSecondary : JiraTheme.TextPrimary,
             Margin = new Padding(JiraTheme.Padding, JiraTheme.Padding / 2, JiraTheme.Padding, JiraTheme.Padding / 2),
@@ -84,7 +84,7 @@ public static class JiraControlFactory
     {
         return new Button
         {
-            Text = text,
+            Text = VietnameseUi.Translate(text),
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlatStyle = FlatStyle.Flat,

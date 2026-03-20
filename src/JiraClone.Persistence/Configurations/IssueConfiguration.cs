@@ -25,7 +25,7 @@ public class IssueConfiguration : IEntityTypeConfiguration<Issue>
         builder.HasOne(x => x.Reporter).WithMany().HasForeignKey(x => x.ReporterId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.ParentIssue).WithMany(x => x.SubIssues).HasForeignKey(x => x.ParentIssueId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne(x => x.FixVersion).WithMany(x => x.Issues).HasForeignKey(x => x.FixVersionId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(x => x.FixVersion).WithMany(x => x.Issues).HasForeignKey(x => x.FixVersionId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne(x => x.WorkflowStatus).WithMany(x => x.Issues).HasForeignKey(x => x.WorkflowStatusId).OnDelete(DeleteBehavior.Restrict);
     }
 }

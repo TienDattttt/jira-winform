@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -46,7 +46,7 @@ namespace JiraClone.Persistence.Migrations
                         column: x => x.LeadUserId,
                         principalTable: "Users",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        onDelete: ReferentialAction.NoAction);
                 });
 
             migrationBuilder.CreateTable(
@@ -118,7 +118,7 @@ namespace JiraClone.Persistence.Migrations
                         column: x => x.IssueId,
                         principalTable: "Issues",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.NoAction);
                 });
 
             migrationBuilder.CreateTable(
@@ -136,7 +136,7 @@ namespace JiraClone.Persistence.Migrations
                         column: x => x.IssueId,
                         principalTable: "Issues",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.NoAction);
                     table.ForeignKey(
                         name: "FK_IssueLabels_Labels_LabelId",
                         column: x => x.LabelId,
@@ -271,7 +271,7 @@ namespace JiraClone.Persistence.Migrations
                 column: "FixVersionId",
                 principalTable: "ProjectVersions",
                 principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+                onDelete: ReferentialAction.NoAction);
         }
 
         /// <inheritdoc />
