@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
@@ -95,6 +95,7 @@ public class MainForm : Form
         _createIssueButton = JiraControlFactory.CreatePrimaryButton("Create");
         _createIssueButton.AutoSize = false;
         _createIssueButton.Size = new Size(120, 40);
+        _createIssueButton.Visible = false;
         _createIssueButton.Click += OnCreateIssueButtonClick;
         _cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
         _cancelButton.AutoSize = false;
@@ -177,21 +178,18 @@ public class MainForm : Form
 
     private Control BuildSidebar()
     {
-        var sidebar = new DoubleBufferedPanel
+        var sidebar = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = JiraTheme.BgSidebar,
             Padding = new Padding(0, 20, 0, 20),
         };
-
         var brandRow = new Panel
         {
-            Dock = DockStyle.Top,
             Height = 62,
-            Padding = new Padding(20, 8, 20, 8),
             BackColor = JiraTheme.BgSidebar,
+            Padding = new Padding(20, 8, 20, 8),
         };
-
         var brandAvatar = new InitialsAvatar("J", 34) { BackCircleColor = JiraTheme.Blue600 };
         var brandLabel = JiraControlFactory.CreateLabel("Jira Clone");
         brandLabel.ForeColor = Color.White;
@@ -200,18 +198,31 @@ public class MainForm : Form
         brandRow.Controls.Add(brandAvatar);
         brandRow.Controls.Add(brandLabel);
         brandAvatar.Location = new Point(20, 7);
-
         var separatorTop = JiraControlFactory.CreateSeparator();
-        separatorTop.Dock = DockStyle.Top;
+        separatorTop.Height = 1;
         separatorTop.BackColor = Color.FromArgb(28, 255, 255, 255);
-
+        var projectHost = new Panel
+        {
+            Height = 104,
+            BackColor = JiraTheme.BgSidebar,
+        };
+        _projectSwitcher.Dock = DockStyle.Fill;
+        projectHost.Controls.Add(_projectSwitcher);
+        var navHost = new Panel
+        {
+            BackColor = JiraTheme.BgSidebar,
+            AutoScroll = true,
+            Padding = new Padding(0, 14, 0, 0),
+            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+        };
         var navStack = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoSize = true,
-            Padding = new Padding(0, 14, 0, 0),
+            Margin = new Padding(0),
+            Padding = new Padding(0),
             BackColor = JiraTheme.BgSidebar,
         };
         var navItems = new List<Control> { _projectsItem, _dashboardItem, _boardItem, _backlogItem, _roadmapItem, _sprintsItem, _issuesItem, _reportsItem };
@@ -219,44 +230,63 @@ public class MainForm : Form
         {
             navItems.Add(_usersItem);
         }
-
         navItems.Add(_settingsItem);
         navStack.Controls.AddRange(navItems.ToArray());
-
+        navHost.Controls.Add(navStack);
         var bottomSection = new Panel
         {
-            Dock = DockStyle.Bottom,
             Height = 140,
-            Padding = new Padding(20, 16, 20, 0),
             BackColor = JiraTheme.BgSidebar,
+            Padding = new Padding(20, 16, 20, 0),
+            Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
         };
-
         var bottomSeparator = JiraControlFactory.CreateSeparator();
         bottomSeparator.Dock = DockStyle.Top;
         bottomSeparator.BackColor = Color.FromArgb(28, 255, 255, 255);
-
-        var userRow = new Panel { Dock = DockStyle.Top, Height = 46, BackColor = JiraTheme.BgSidebar };
+        var userRow = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 46,
+            BackColor = JiraTheme.BgSidebar,
+        };
         userRow.Controls.Add(_sidebarAvatar);
         userRow.Controls.Add(_sidebarUserLabel);
         _sidebarAvatar.Location = new Point(0, 2);
         _sidebarUserLabel.Location = new Point(44, 8);
-
-        var logoutHost = new Panel { Dock = DockStyle.Top, Height = 56, BackColor = JiraTheme.BgSidebar };
+        var logoutHost = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 56,
+            BackColor = JiraTheme.BgSidebar,
+        };
         logoutHost.Controls.Add(_logoutButton);
         _logoutButton.Location = new Point(0, 6);
-
         bottomSection.Controls.Add(logoutHost);
         bottomSection.Controls.Add(userRow);
         bottomSection.Controls.Add(bottomSeparator);
-
+        sidebar.Controls.Add(navHost);
         sidebar.Controls.Add(bottomSection);
-        sidebar.Controls.Add(navStack);
-        sidebar.Controls.Add(_projectSwitcher);
+        sidebar.Controls.Add(projectHost);
         sidebar.Controls.Add(separatorTop);
         sidebar.Controls.Add(brandRow);
+        void layoutSidebar(object? _, EventArgs __)
+        {
+            var width = sidebar.ClientSize.Width;
+            var top = sidebar.Padding.Top;
+            brandRow.SetBounds(0, top, width, 62);
+            separatorTop.SetBounds(0, brandRow.Bottom, width, 1);
+            projectHost.SetBounds(0, separatorTop.Bottom, width, 104);
+            bottomSection.SetBounds(0, Math.Max(projectHost.Bottom + 12, sidebar.ClientSize.Height - sidebar.Padding.Bottom - 140), width, 140);
+            navHost.SetBounds(0, projectHost.Bottom, width, Math.Max(0, bottomSection.Top - projectHost.Bottom));
+        }
+        sidebar.Resize += layoutSidebar;
+        layoutSidebar(null, EventArgs.Empty);
+        _sidebarAvatar.Visible = true;
+        _sidebarUserLabel.Visible = true;
+        _logoutButton.Visible = true;
+        bottomSection.BringToFront();
         return sidebar;
     }
-
     private Control BuildMainArea()
     {
         var main = new TableLayoutPanel
@@ -476,14 +506,26 @@ public class MainForm : Form
             return;
         }
 
-        _navbarAvatar.Location = new Point(_navbarRightPanel.Width - _navbarAvatar.Width, 1);
-        _notificationButton.Location = new Point(_navbarAvatar.Left - _notificationButton.Width - 12, 0);
-        _notificationBadge.Location = new Point(_notificationButton.Right - 10, -2);
-        _searchBox.Location = new Point(_notificationButton.Left - _searchBox.Width - 16, 0);
-        _createIssueButton.Location = new Point(_searchBox.Left - _createIssueButton.Width - 12, 0);
-        _cancelButton.Location = new Point(_createIssueButton.Left - _cancelButton.Width - 12, 0);
-    }
+        var right = _navbarRightPanel.Width;
 
+        _navbarAvatar.Location = new Point(right - _navbarAvatar.Width, 1);
+        right = _navbarAvatar.Left - 12;
+
+        _notificationButton.Location = new Point(right - _notificationButton.Width, 0);
+        _notificationBadge.Location = new Point(_notificationButton.Right - 10, -2);
+        right = _notificationButton.Left - 16;
+
+        _searchBox.Location = new Point(right - _searchBox.Width, 0);
+        right = _searchBox.Left - 12;
+
+        _createIssueButton.Location = new Point(right - _createIssueButton.Width, 0);
+        if (_createIssueButton.Visible)
+        {
+            right = _createIssueButton.Left - 12;
+        }
+
+        _cancelButton.Location = new Point(right - _cancelButton.Width, 0);
+    }
     private void OnNavbarRightPanelResize(object? sender, EventArgs e)
     {
         LayoutNavbarRightPanel();
@@ -638,9 +680,17 @@ public class MainForm : Form
     private void UpdateProjectChrome()
     {
         _projectName = _session.ActiveProject?.Name ?? "Projects";
-        _createIssueButton.Enabled = _session.ActiveProject is not null && !_isUiBusy;
+        UpdateTopBarActions();
         _searchBox.PlaceholderText = GetSearchPlaceholder();
         _breadcrumbLabel.Text = BuildBreadcrumb();
+        LayoutNavbarRightPanel();
+    }
+
+    private void UpdateTopBarActions()
+    {
+        var showCreateIssue = _activeNavItem?.Kind == NavKind.Issues && _session.ActiveProject is not null;
+        _createIssueButton.Visible = showCreateIssue;
+        _createIssueButton.Enabled = showCreateIssue && !_isUiBusy;
     }
 
     private string GetSearchPlaceholder()
@@ -1652,6 +1702,9 @@ public class MainForm : Form
         private sealed record IssueSummaryRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
     }
 }
+
+
+
 
 
 

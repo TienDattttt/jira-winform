@@ -1,4 +1,4 @@
-using JiraClone.Application.Auth;
+﻿using JiraClone.Application.Auth;
 using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
@@ -124,11 +124,12 @@ public class UserManagementForm : UserControl
             BackColor = JiraTheme.BgPage,
             Padding = new Padding(20, 8, 20, 12),
         };
-
         var filters = new FlowLayoutPanel
         {
-            Dock = DockStyle.Left,
             Width = 430,
+            Height = 40,
+            Location = new Point(20, 8),
+            Anchor = AnchorStyles.Left | AnchorStyles.Top,
             WrapContents = false,
             BackColor = JiraTheme.BgPage,
             Margin = new Padding(0),
@@ -136,11 +137,11 @@ public class UserManagementForm : UserControl
         };
         filters.Controls.Add(_searchBox);
         filters.Controls.Add(_statusFilter);
-
         var actions = new FlowLayoutPanel
         {
-            Dock = DockStyle.Right,
-            Width = 580,
+            Width = 520,
+            Height = 40,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
             FlowDirection = FlowDirection.RightToLeft,
             WrapContents = false,
             BackColor = JiraTheme.BgPage,
@@ -148,12 +149,17 @@ public class UserManagementForm : UserControl
             Padding = new Padding(0),
         };
         actions.Controls.AddRange([_resetPasswordButton, _activateButton, _deactivateButton, _editButton, _createButton]);
-
+        void layoutActions(object? _, EventArgs __)
+        {
+            actions.Location = new Point(Math.Max(toolbar.Padding.Left, toolbar.ClientSize.Width - toolbar.Padding.Right - actions.Width), 8);
+        }
+        toolbar.Resize += layoutActions;
         toolbar.Controls.Add(actions);
         toolbar.Controls.Add(filters);
+        layoutActions(null, EventArgs.Empty);
+        actions.BringToFront();
         return toolbar;
     }
-
     private Control BuildSurface()
     {
         var host = new Panel
@@ -237,6 +243,7 @@ public class UserManagementForm : UserControl
         finally
         {
             _isLoading = false;
+            UpdateActionState();
         }
     }
 
@@ -409,13 +416,19 @@ public class UserManagementForm : UserControl
     {
         var isAdmin = _session.Authorization.IsInRole(RoleCatalog.Admin);
         var selectedUser = SelectedUser;
-        var hasProject = _projectId > 0;
-
-        _createButton.Enabled = isAdmin && hasProject;
-        _editButton.Enabled = isAdmin && selectedUser is not null;
-        _deactivateButton.Enabled = isAdmin && selectedUser?.IsActive == true;
-        _activateButton.Enabled = isAdmin && selectedUser?.IsActive == false;
-        _resetPasswordButton.Enabled = isAdmin && selectedUser is not null;
+        var hasSelection = selectedUser is not null;
+        // Always show T?o for admin - no project dependency
+        _createButton.Visible = isAdmin;
+        _createButton.Enabled = isAdmin;
+        // Show action buttons when a row is selected
+        _editButton.Visible = isAdmin && hasSelection;
+        _editButton.Enabled = _editButton.Visible;
+        _resetPasswordButton.Visible = isAdmin && hasSelection;
+        _resetPasswordButton.Enabled = _resetPasswordButton.Visible;
+        _deactivateButton.Visible = isAdmin && (selectedUser?.IsActive == true);
+        _deactivateButton.Enabled = _deactivateButton.Visible;
+        _activateButton.Visible = isAdmin && (selectedUser?.IsActive == false);
+        _activateButton.Enabled = _activateButton.Visible;
     }
 
     private sealed class UserEditorDialog : Form
@@ -544,4 +557,8 @@ public class UserManagementForm : UserControl
         }
     }
 }
+
+
+
+
 
