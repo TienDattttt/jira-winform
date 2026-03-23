@@ -62,10 +62,10 @@ public sealed class ProjectListForm : UserControl
         _countBadge.Padding = new Padding(10, 6, 10, 6);
         _countBadge.Margin = new Padding(12, 4, 0, 0);
 
-        ConfigureActionButton(_createProjectButton, 144);
-        ConfigureActionButton(_openProjectButton, 130);
-        ConfigureActionButton(_cardsViewButton, 96);
-        ConfigureActionButton(_gridViewButton, 96);
+        ConfigureActionButton(_createProjectButton, 172);
+        ConfigureActionButton(_openProjectButton, 142);
+        ConfigureActionButton(_cardsViewButton, 108);
+        ConfigureActionButton(_gridViewButton, 108);
 
         _createProjectButton.Click += async (_, _) => await CreateProjectAsync();
         _openProjectButton.Click += async (_, _) => await OpenSelectedProjectAsync();
@@ -112,7 +112,7 @@ public sealed class ProjectListForm : UserControl
         var header = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 116,
+            Height = 132,
             BackColor = JiraTheme.BgPage,
             Padding = new Padding(20, 18, 20, 10),
         };
@@ -120,7 +120,7 @@ public sealed class ProjectListForm : UserControl
         var right = new FlowLayoutPanel
         {
             Dock = DockStyle.Right,
-            Width = 500,
+            Width = 720,
             FlowDirection = FlowDirection.RightToLeft,
             WrapContents = false,
             BackColor = JiraTheme.BgPage,
@@ -134,7 +134,7 @@ public sealed class ProjectListForm : UserControl
         var titleRow = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 42,
+            Height = 46,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             BackColor = JiraTheme.BgPage,
@@ -146,7 +146,7 @@ public sealed class ProjectListForm : UserControl
 
         var left = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgPage };
         titleRow.Location = new Point(0, 0);
-        _subtitleLabel.Location = new Point(0, 48);
+        _subtitleLabel.Location = new Point(0, 52);
         left.Controls.Add(titleRow);
         left.Controls.Add(_subtitleLabel);
 
@@ -411,7 +411,7 @@ public sealed class ProjectListForm : UserControl
             _project = project;
             _initials = BuildProjectInitials(project);
             Active = active;
-            Size = new Size(260, 150);
+            Size = new Size(340, 196);
             Cursor = Cursors.Hand;
             BackColor = JiraTheme.BgSurface;
 
@@ -441,11 +441,14 @@ public sealed class ProjectListForm : UserControl
             e.Graphics.FillEllipse(avatarBrush, 18, 18, 42, 42);
             TextRenderer.DrawText(e.Graphics, _initials, JiraTheme.FontCaption, new Rectangle(18, 18, 42, 42), Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
-            TextRenderer.DrawText(e.Graphics, _project.Name, JiraTheme.FontH2, new Rectangle(74, 18, Width - 92, 28), JiraTheme.TextPrimary, TextFormatFlags.EndEllipsis | TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
-            TextRenderer.DrawText(e.Graphics, $"{_project.Key}  |  {_project.Category}", JiraTheme.FontCaption, new Rectangle(74, 48, Width - 92, 22), JiraTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
-            TextRenderer.DrawText(e.Graphics, _project.Description ?? "No project description yet.", JiraTheme.FontSmall, new Rectangle(18, 76, Width - 36, 40), JiraTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.WordBreak);
-            TextRenderer.DrawText(e.Graphics, $"{_project.Members.Count} member{(_project.Members.Count == 1 ? string.Empty : "s")}", JiraTheme.FontSmall, new Rectangle(18, 122, Width - 36, 18), JiraTheme.PrimaryActive, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(e.Graphics, _project.Name, JiraTheme.FontH2, new Rectangle(74, 16, Width - 92, 34), JiraTheme.TextPrimary, TextFormatFlags.EndEllipsis | TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(e.Graphics, $"{_project.Key}  |  {_project.Category}", JiraTheme.FontCaption, new Rectangle(74, 50, Width - 92, 24), JiraTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(e.Graphics, _project.Description ?? "No project description yet.", JiraTheme.FontSmall, new Rectangle(18, 82, Width - 36, 72), JiraTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.WordBreak);
+            TextRenderer.DrawText(e.Graphics, $"{_project.Members.Count} member{(_project.Members.Count == 1 ? string.Empty : "s")}", JiraTheme.FontSmall, new Rectangle(18, 164, Width - 36, 20), JiraTheme.PrimaryActive, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
         }
     }
 }
+
+
+
 

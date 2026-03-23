@@ -1,4 +1,4 @@
-﻿using JiraClone.Application.Models;
+using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
@@ -62,7 +62,8 @@ public class IssueEditorForm : Form
         _logger = session.CreateLogger<IssueEditorForm>();
 
         Text = issueId.HasValue ? "Edit Issue" : "Create Issue";
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(760, 720);
         Size = new Size(820, 780);
@@ -439,5 +440,6 @@ public class IssueEditorForm : Form
         }
     }
 }
+
 
 

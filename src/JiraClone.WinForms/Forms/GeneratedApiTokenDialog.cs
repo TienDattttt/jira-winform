@@ -7,7 +7,8 @@ public sealed class GeneratedApiTokenDialog : Form
     public GeneratedApiTokenDialog(string rawToken)
     {
         Text = "API Token Created";
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         Width = 640;
         Height = 320;
         MinimumSize = new Size(640, 320);
@@ -70,3 +71,4 @@ public sealed class GeneratedApiTokenDialog : Form
         AcceptButton = closeButton;
     }
 }
+

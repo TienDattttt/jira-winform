@@ -286,28 +286,44 @@ public class ProjectSettingsForm : UserControl
 
     private Control BuildHeader()
     {
-        var header = new Panel { Dock = DockStyle.Top, Height = 110, BackColor = JiraTheme.BgPage, Padding = new Padding(20, 18, 20, 8) };
         var title = JiraControlFactory.CreateLabel("Project Settings");
         title.Font = JiraTheme.FontH1;
-        title.Location = new Point(0, 0);
+        title.Margin = new Padding(0, 0, 0, 4);
 
         var caption = JiraControlFactory.CreateLabel("Adjust project details, members, board structure, workflows, permissions, labels, components, release versions, and outbound webhooks without leaving the desktop flow.", true);
-        caption.Location = new Point(0, 42);
+        caption.MaximumSize = new Size(980, 0);
+        caption.AutoSize = true;
+        caption.Margin = new Padding(0, 0, 0, 10);
 
         var badges = new FlowLayoutPanel
         {
-            Location = new Point(0, 72),
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             WrapContents = true,
             BackColor = JiraTheme.BgPage,
             Margin = new Padding(0),
             Padding = new Padding(0),
+            Dock = DockStyle.Top,
         };
         badges.Controls.AddRange([_memberCountBadge, _columnCountBadge, _labelCountBadge, _componentCountBadge, _versionCountBadge, _webhookCountBadge]);
 
-        header.Controls.Add(title);
-        header.Controls.Add(caption);
-        header.Controls.Add(badges);
+        var stack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            BackColor = JiraTheme.BgPage,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+        };
+        stack.Controls.Add(title);
+        stack.Controls.Add(caption);
+        stack.Controls.Add(badges);
+
+        var header = new Panel { Dock = DockStyle.Top, Height = 138, BackColor = JiraTheme.BgPage, Padding = new Padding(20, 18, 20, 10) };
+        header.Controls.Add(stack);
         return header;
     }
 
@@ -369,27 +385,19 @@ public class ProjectSettingsForm : UserControl
 
     private Control BuildBoardSettingsSection()
     {
-        var section = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 134,
-            Padding = new Padding(24, 20, 24, 12),
-            BackColor = JiraTheme.BgSurface,
-        };
-
         var title = JiraControlFactory.CreateLabel("Board Mode");
         title.Font = JiraTheme.FontH2;
-        title.Location = new Point(0, 0);
+        title.Margin = new Padding(0, 0, 0, 4);
 
         var caption = JiraControlFactory.CreateLabel("Switch this project between Scrum and Kanban. WIP limits remain configured per workflow column.", true);
-        caption.AutoSize = false;
-        caption.Size = new Size(680, 34);
-        caption.Location = new Point(0, 28);
+        caption.MaximumSize = new Size(760, 0);
+        caption.AutoSize = true;
+        caption.Margin = new Padding(0, 0, 0, 12);
 
         var row = new FlowLayoutPanel
         {
-            Location = new Point(0, 74),
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             WrapContents = false,
             BackColor = JiraTheme.BgSurface,
             Margin = new Padding(0),
@@ -398,9 +406,29 @@ public class ProjectSettingsForm : UserControl
         row.Controls.Add(_boardType);
         row.Controls.Add(_saveBoardSettings);
 
-        section.Controls.Add(title);
-        section.Controls.Add(caption);
-        section.Controls.Add(row);
+        var content = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            BackColor = JiraTheme.BgSurface,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+        };
+        content.Controls.Add(title);
+        content.Controls.Add(caption);
+        content.Controls.Add(row);
+
+        var section = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 154,
+            Padding = new Padding(24, 20, 24, 12),
+            BackColor = JiraTheme.BgSurface,
+        };
+        section.Controls.Add(content);
         return section;
     }
 
@@ -812,7 +840,7 @@ public class ProjectSettingsForm : UserControl
             _webhookCountBadge.Text = "0 webhooks";
             return;
         }
-        _webhookEndpoints = await _session.Webhooks.GetByProjectAsync(_project.Id, cancellationToken);
+        _webhookEndpoints = await _session.RunSerializedAsync(() => _session.Webhooks.GetByProjectAsync(_project.Id, cancellationToken), cancellationToken);
         _webhookCountBadge.Text = _webhookEndpoints.Count == 1 ? "1 webhook" : $"{_webhookEndpoints.Count} webhooks";
     }
     private void BuildPermissionMatrix()
@@ -1494,7 +1522,8 @@ public class ProjectSettingsForm : UserControl
         {
             _expectedProjectKey = projectKey;
             Text = "Delete Project";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 460;
             Height = 250;
             MinimumSize = new Size(460, 250);
@@ -1571,7 +1600,8 @@ public class ProjectSettingsForm : UserControl
         public MemberDialog(IReadOnlyList<User> users)
         {
             Text = "Add Member";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 380;
             Height = 230;
             MinimumSize = new Size(380, 230);
@@ -1612,7 +1642,8 @@ public class ProjectSettingsForm : UserControl
         public MemberRoleDialog(ProjectRole currentRole)
         {
             Text = "Change Member Role";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 340;
             Height = 190;
             MinimumSize = new Size(340, 190);
@@ -1646,7 +1677,8 @@ public class ProjectSettingsForm : UserControl
         public BoardColumnDialog(BoardColumn column)
         {
             Text = "Edit Board Column";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 380;
             Height = 230;
             MinimumSize = new Size(380, 230);
@@ -1685,7 +1717,8 @@ public class ProjectSettingsForm : UserControl
         public LabelDialog(string? name = null, string? colorHex = null)
         {
             Text = string.IsNullOrWhiteSpace(name) ? "Add Label" : "Edit Label";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 380;
             Height = 240;
             MinimumSize = new Size(380, 240);
@@ -1755,7 +1788,8 @@ public class ProjectSettingsForm : UserControl
         public ComponentDialog(IReadOnlyList<User> users, JiraComponentEntity? component = null)
         {
             Text = component is null ? "Add Component" : "Edit Component";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 420;
             Height = 320;
             MinimumSize = new Size(420, 320);
@@ -1815,7 +1849,8 @@ public class ProjectSettingsForm : UserControl
         public VersionDialog(JiraProjectVersionEntity? version = null)
         {
             Text = version is null ? "Add Version" : "Edit Version";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 420;
             Height = 320;
             MinimumSize = new Size(420, 320);
@@ -1859,6 +1894,10 @@ public class ProjectSettingsForm : UserControl
         public bool IsReleased => _released.Checked;
     }
 }
+
+
+
+
 
 
 

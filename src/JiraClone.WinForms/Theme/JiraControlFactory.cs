@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using JiraClone.WinForms.Helpers;
 
 namespace JiraClone.WinForms.Theme;
@@ -18,7 +18,7 @@ public static class JiraControlFactory
         button.MouseLeave += (_, _) => button.BackColor = JiraTheme.Primary;
         button.Resize += (_, _) => ApplyRoundedRegion(button);
         ApplyRoundedRegion(button);
-
+        LayoutHelper.ConfigureButton(button);
         return button;
     }
 
@@ -36,7 +36,7 @@ public static class JiraControlFactory
         button.MouseLeave += (_, _) => button.BackColor = JiraTheme.BgSurface;
         button.Resize += (_, _) => ApplyRoundedRegion(button);
         ApplyRoundedRegion(button);
-
+        LayoutHelper.ConfigureButton(button);
         return button;
     }
 
@@ -53,7 +53,7 @@ public static class JiraControlFactory
 
         textBox.Enter += (_, _) => textBox.BackColor = JiraTheme.Blue100;
         textBox.Leave += (_, _) => textBox.BackColor = JiraTheme.BgSurface;
-
+        LayoutHelper.ConfigureTextBox(textBox);
         return textBox;
     }
 
@@ -106,9 +106,4 @@ public static class JiraControlFactory
         using var path = GraphicsHelper.CreateRoundedPath(new Rectangle(0, 0, control.Width, control.Height), JiraTheme.BorderRadius);
         control.Region = new Region(path);
     }
-
-
 }
-
-
-

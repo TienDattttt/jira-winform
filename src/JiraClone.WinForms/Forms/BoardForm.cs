@@ -3,6 +3,7 @@ using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -16,9 +17,9 @@ public class BoardForm : UserControl
     private readonly Label _sprintDateLabel = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly Button _startSprintButton = JiraControlFactory.CreatePrimaryButton("Start Sprint");
     private readonly Button _boardModeButton = JiraControlFactory.CreateSecondaryButton("Mode: Scrum");
-    private readonly ComboBox _assigneeFilter = CreateFilterCombo(150);
-    private readonly ComboBox _priorityFilter = CreateFilterCombo(130);
-    private readonly ComboBox _typeFilter = CreateFilterCombo(130);
+    private readonly ComboBox _assigneeFilter = CreateFilterCombo(210);
+    private readonly ComboBox _priorityFilter = CreateFilterCombo(170);
+    private readonly ComboBox _typeFilter = CreateFilterCombo(160);
     private readonly TextBox _searchFilter = JiraControlFactory.CreateTextBox();
     private readonly Button _groupByEpicButton = JiraControlFactory.CreateSecondaryButton("Group by Epic");
     private readonly Button _clearFiltersButton = JiraControlFactory.CreateSecondaryButton("Clear filters");
@@ -76,6 +77,7 @@ public class BoardForm : UserControl
     private bool _groupByEpic;
     private BoardType _boardType = BoardType.Scrum;
     private TimeSpan? _averageCycleTime;
+    private bool _suppressFilterEvents;
     private Color _toastAccentColor = JiraTheme.Blue600;
     private readonly CancellationTokenSource _disposeCts = new();
     private CancellationTokenSource? _loadCts;
@@ -94,19 +96,19 @@ public class BoardForm : UserControl
         _sprintDateLabel.AutoSize = true;
 
         _startSprintButton.AutoSize = false;
-        _startSprintButton.Size = new Size(144, 38);
+        _startSprintButton.Size = new Size(168, 40);
         _startSprintButton.Click += OnStartSprintButtonClick;
 
         _boardModeButton.AutoSize = false;
-        _boardModeButton.Size = new Size(148, 38);
+        _boardModeButton.Size = new Size(172, 40);
         _boardModeButton.Click += OnBoardModeButtonClick;
 
-        _searchFilter.Width = 260;
+        _searchFilter.Width = 280;
         _searchFilter.PlaceholderText = "Search issues";
         _groupByEpicButton.AutoSize = false;
-        _groupByEpicButton.Size = new Size(136, 38);
+        _groupByEpicButton.Size = new Size(148, 40);
         _clearFiltersButton.AutoSize = false;
-        _clearFiltersButton.Size = new Size(124, 38);
+        _clearFiltersButton.Size = new Size(132, 40);
         _assigneeFilter.Margin = new Padding(0, 0, 12, 0);
         _priorityFilter.Margin = new Padding(0, 0, 12, 0);
         _typeFilter.Margin = new Padding(0, 0, 12, 0);
@@ -179,7 +181,16 @@ public class BoardForm : UserControl
             return;
         }
 
-        _searchFilter.Text = value;
+        _suppressFilterEvents = true;
+        try
+        {
+            _searchFilter.Text = value;
+        }
+        finally
+        {
+            _suppressFilterEvents = false;
+        }
+
         ApplyFilters();
     }
 
@@ -210,7 +221,7 @@ public class BoardForm : UserControl
         var right = new Panel
         {
             Dock = DockStyle.Right,
-            Width = 340,
+            Width = 440,
             BackColor = JiraTheme.BgSurface,
         };
         var actions = new FlowLayoutPanel
@@ -270,16 +281,21 @@ public class BoardForm : UserControl
         return host;
     }
 
-    private static ComboBox CreateFilterCombo(int width) => new()
+    private static ComboBox CreateFilterCombo(int width)
     {
-        Width = width,
-        DropDownStyle = ComboBoxStyle.DropDownList,
-        FlatStyle = FlatStyle.Flat,
-        BackColor = JiraTheme.BgSurface,
-        ForeColor = JiraTheme.TextPrimary,
-        Font = JiraTheme.FontBody,
-        IntegralHeight = false
-    };
+        var comboBox = new ComboBox
+        {
+            Width = width,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = JiraTheme.BgSurface,
+            ForeColor = JiraTheme.TextPrimary,
+            Font = JiraTheme.FontBody,
+            IntegralHeight = false
+        };
+        LayoutHelper.ConfigureComboBox(comboBox);
+        return comboBox;
+    }
 
     private async Task LoadBoardAsync(CancellationToken cancellationToken = default)
     {
@@ -417,9 +433,17 @@ public class BoardForm : UserControl
         var issues = columns.SelectMany(x => x.Issues).ToList();
         var assignees = issues.SelectMany(x => x.AssigneeNames).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
 
-        ResetCombo(_assigneeFilter, "All assignees", assignees);
-        ResetCombo(_priorityFilter, "All priorities", Enum.GetNames<IssuePriority>());
-        ResetCombo(_typeFilter, "All types", Enum.GetNames<IssueType>());
+        _suppressFilterEvents = true;
+        try
+        {
+            ResetCombo(_assigneeFilter, "All assignees", assignees);
+            ResetCombo(_priorityFilter, "All priorities", Enum.GetNames<IssuePriority>());
+            ResetCombo(_typeFilter, "All types", Enum.GetNames<IssueType>());
+        }
+        finally
+        {
+            _suppressFilterEvents = false;
+        }
     }
 
     private static void ResetCombo(ComboBox comboBox, string allLabel, IEnumerable<string> values)
@@ -499,22 +523,31 @@ public class BoardForm : UserControl
 
     private void ClearFilters()
     {
-        if (_assigneeFilter.Items.Count > 0)
+        _suppressFilterEvents = true;
+        try
         {
-            _assigneeFilter.SelectedIndex = 0;
+            if (_assigneeFilter.Items.Count > 0)
+            {
+                _assigneeFilter.SelectedIndex = 0;
+            }
+
+            if (_priorityFilter.Items.Count > 0)
+            {
+                _priorityFilter.SelectedIndex = 0;
+            }
+
+            if (_typeFilter.Items.Count > 0)
+            {
+                _typeFilter.SelectedIndex = 0;
+            }
+
+            _searchFilter.Clear();
+        }
+        finally
+        {
+            _suppressFilterEvents = false;
         }
 
-        if (_priorityFilter.Items.Count > 0)
-        {
-            _priorityFilter.SelectedIndex = 0;
-        }
-
-        if (_typeFilter.Items.Count > 0)
-        {
-            _typeFilter.SelectedIndex = 0;
-        }
-
-        _searchFilter.Clear();
         ApplyFilters();
     }
 
@@ -1096,7 +1129,6 @@ public class BoardForm : UserControl
         {
             CancelPendingLoad();
             _disposeCts.Cancel();
-            _disposeCts.Dispose();
             Load -= OnBoardLoad;
             Resize -= OnBoardResize;
             _startSprintButton.Click -= OnStartSprintButtonClick;
@@ -1146,6 +1178,11 @@ public class BoardForm : UserControl
 
     private void OnFilterChanged(object? sender, EventArgs e)
     {
+        if (_suppressFilterEvents)
+        {
+            return;
+        }
+
         ApplyFilters();
     }
 
@@ -1232,6 +1269,16 @@ public class BoardForm : UserControl
 
     private const string NoEpicLaneKey = "no-epic";
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

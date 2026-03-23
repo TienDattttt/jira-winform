@@ -64,11 +64,10 @@ public class WorkflowSettingsControl : UserControl
             Dock = DockStyle.Fill,
             BackColor = JiraTheme.Border,
             SplitterWidth = 6,
-            SplitterDistance = 350,
             FixedPanel = FixedPanel.None
         };
-        split.Panel1MinSize = 300;
-        split.Panel2MinSize = 360;
+        split.HandleCreated += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 350, 300, 360);
+        split.SizeChanged += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 350, 300, 360);
         split.Panel1.Controls.Add(BuildListPanel("Statuses", "Board columns will mirror these statuses automatically.", _statuses, _statusesEmptyState));
         split.Panel2.Controls.Add(BuildListPanel("Transitions", "Choose where issues can move next and which roles can do it.", _transitions, _transitionsEmptyState));
 
@@ -618,7 +617,8 @@ public class WorkflowSettingsControl : UserControl
         public WorkflowStatusDialog(string? name = null, string? colorHex = null, StatusCategory category = StatusCategory.ToDo)
         {
             Text = string.IsNullOrWhiteSpace(name) ? "Add Workflow Status" : "Edit Workflow Status";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 390;
             Height = 280;
             MinimumSize = new Size(390, 280);
@@ -693,7 +693,8 @@ public class WorkflowSettingsControl : UserControl
         public WorkflowTransitionDialog(IReadOnlyList<WorkflowStatusOptionDto> statuses, IReadOnlyList<Role> roles, WorkflowTransitionDto? transition = null)
         {
             Text = transition is null ? "Add Workflow Transition" : "Edit Workflow Transition";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 430;
             Height = 470;
             MinimumSize = new Size(430, 470);
@@ -762,6 +763,11 @@ public class WorkflowSettingsControl : UserControl
         public IReadOnlyList<string> SelectedRoleNames => _roles.CheckedItems.Cast<string>().ToList();
     }
 }
+
+
+
+
+
 
 
 

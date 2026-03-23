@@ -435,7 +435,8 @@ public class UserManagementForm : UserControl
         {
             _isCreateMode = user is null;
             Text = _isCreateMode ? "Create User" : "Edit User";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 560;
             Height = _isCreateMode ? 520 : 470;
             MinimumSize = new Size(560, 470);
@@ -543,3 +544,4 @@ public class UserManagementForm : UserControl
         }
     }
 }
+

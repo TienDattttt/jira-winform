@@ -29,7 +29,8 @@ public sealed class WebhookEndpointDialog : Form
     public WebhookEndpointDialog(WebhookEndpoint? endpoint = null)
     {
         Text = endpoint is null ? "Add Webhook" : "Edit Webhook";
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         Width = 520;
         Height = 520;
         MinimumSize = new Size(520, 520);
@@ -215,4 +216,5 @@ public sealed class WebhookEndpointDialog : Form
         return string.IsNullOrWhiteSpace(error);
     }
 }
+
 

@@ -58,10 +58,10 @@ public class SprintManagementForm : UserControl
         _assignButton.Click += async (_, _) => await AssignIssuesAsync();
         _startButton.Click += async (_, _) => await StartSprintAsync();
         _closeButton.Click += async (_, _) => await CloseSprintAsync();
-        ConfigureActionButton(_createButton, 144);
-        ConfigureActionButton(_assignButton, 136);
-        ConfigureActionButton(_startButton, 124);
-        ConfigureActionButton(_closeButton, 124);
+        ConfigureActionButton(_createButton, 164);
+        ConfigureActionButton(_assignButton, 156);
+        ConfigureActionButton(_startButton, 156);
+        ConfigureActionButton(_closeButton, 148);
 
         _helpLabel.ForeColor = JiraTheme.TextSecondary;
         _emptyState.Dock = DockStyle.Fill;
@@ -125,7 +125,7 @@ public class SprintManagementForm : UserControl
         var actions = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 64,
+            Height = 68,
             Padding = new Padding(16, 8, 16, 12),
             BackColor = JiraTheme.BgPage,
             WrapContents = false,
@@ -422,7 +422,8 @@ public class SprintManagementForm : UserControl
         public CreateSprintDialog()
         {
             Text = "Create Sprint";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -540,7 +541,8 @@ public class SprintManagementForm : UserControl
         public CloseSprintDialog(Sprint sprint, IReadOnlyList<Sprint> candidateSprints)
         {
             Text = $"Close {sprint.Name}";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 460;
             Height = 220;
             MinimumSize = new Size(460, 220);
@@ -587,6 +589,8 @@ public class SprintManagementForm : UserControl
         public int? MoveIncompleteToSprintId { get; private set; }
     }
 }
+
+
 
 
 

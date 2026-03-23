@@ -20,7 +20,8 @@ public sealed class WebhookDeliveryHistoryForm : Form
         _endpoint = endpoint;
 
         Text = $"Delivery History - {endpoint.Name}";
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         Width = 980;
         Height = 560;
         MinimumSize = new Size(820, 460);
@@ -146,3 +147,5 @@ public sealed class WebhookDeliveryHistoryForm : Form
         }
     }
 }
+
+

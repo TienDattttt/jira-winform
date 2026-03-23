@@ -1,5 +1,6 @@
 using JiraClone.Domain.Entities;
 using JiraClone.WinForms.Composition;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -17,8 +18,11 @@ public sealed class ProjectSwitcherControl : UserControl
         BackColor = JiraTheme.BgSurface,
         ForeColor = JiraTheme.TextPrimary,
         Font = JiraTheme.FontBody,
+        IntegralHeight = false,
+        DropDownWidth = 320,
+        MaxDropDownItems = 12,
     };
-    private readonly Panel _surface = new() { Dock = DockStyle.Top, Height = 42, BackColor = JiraTheme.BgSurface };
+    private readonly Panel _surface = new() { Dock = DockStyle.Top, Height = 50, BackColor = JiraTheme.BgSurface };
 
     private bool _isBinding;
 
@@ -26,7 +30,7 @@ public sealed class ProjectSwitcherControl : UserControl
     {
         _session = session;
         BackColor = JiraTheme.BgSidebar;
-        Height = 82;
+        Height = 104;
         Dock = DockStyle.Top;
         Padding = new Padding(20, 14, 20, 10);
 
@@ -34,6 +38,7 @@ public sealed class ProjectSwitcherControl : UserControl
         _captionLabel.Font = JiraTheme.FontCaption;
         _captionLabel.Location = new Point(0, 0);
 
+        LayoutHelper.ConfigureComboBox(_projectComboBox);
         _projectComboBox.DisplayMember = nameof(ProjectOption.DisplayName);
         _projectComboBox.ValueMember = nameof(ProjectOption.ProjectId);
         _projectComboBox.SelectedIndexChanged += async (_, _) => await HandleSelectionChangedAsync();
@@ -47,7 +52,7 @@ public sealed class ProjectSwitcherControl : UserControl
 
         Controls.Add(_surface);
         Controls.Add(_captionLabel);
-        _surface.Location = new Point(0, 24);
+        _surface.Location = new Point(0, 28);
 
         Load += async (_, _) => await RefreshProjectsAsync();
         _session.ProjectChanged += HandleSessionProjectChanged;
@@ -64,7 +69,7 @@ public sealed class ProjectSwitcherControl : UserControl
             cancellationToken.ThrowIfCancellationRequested();
             var items = projects
                 .OrderBy(project => project.Name)
-                .Select(project => new ProjectOption(project.Id, $"{project.Key} - {project.Name}"))
+                .Select(project => new ProjectOption(project.Id, BuildDisplayName(project), $"{project.Key} - {project.Name}"))
                 .ToList();
 
             _projectComboBox.DataSource = items;
@@ -135,11 +140,16 @@ public sealed class ProjectSwitcherControl : UserControl
         ProjectChanged?.Invoke(this, eventArgs);
     }
 
-    private sealed record ProjectOption(int ProjectId, string DisplayName)
+    private static string BuildDisplayName(Project project)
     {
-        public override string ToString() => DisplayName;
+        var name = project.Name.Length > 14 ? project.Name[..14] + "..." : project.Name;
+        return $"{project.Key} - {name}";
+    }
+
+    private sealed record ProjectOption(int ProjectId, string DisplayName, string FullName)
+    {
+        public override string ToString() => FullName;
     }
 }
-
 
 

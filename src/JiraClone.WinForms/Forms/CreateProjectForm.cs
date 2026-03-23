@@ -40,7 +40,8 @@ public sealed class CreateProjectForm : Form
         _session = session;
         Text = "Create Project";
         StartPosition = FormStartPosition.CenterParent;
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -491,3 +492,4 @@ public sealed class CreateProjectForm : Form
         public ProjectRole ProjectRole { get; set; }
     }
 }
+

@@ -38,7 +38,8 @@ public class LoginForm : Form
         Text = "Jira Clone Login";
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         ClientSize = new Size(1280, 800);
         MinimumSize = new Size(960, 640);
         BackColor = JiraTheme.BgPage;
@@ -577,3 +578,4 @@ public class LoginForm : Form
         }
     }
 }
+

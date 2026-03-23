@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Dashboard;
 using JiraClone.Application.Issues;
@@ -137,7 +137,6 @@ public sealed class DashboardForm : UserControl
         {
             CancelPendingLoad();
             _disposeCts.Cancel();
-            _disposeCts.Dispose();
             Load -= OnDashboardLoad;
             Resize -= OnDashboardResize;
             VisibleChanged -= OnDashboardVisibleChanged;
@@ -1127,6 +1126,7 @@ public sealed class DashboardForm : UserControl
         };
     }
 }
+
 
 
 

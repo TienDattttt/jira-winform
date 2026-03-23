@@ -4,8 +4,10 @@ using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.Infrastructure.Session;
+using JiraClone.Application.Roles;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 using Microsoft.Extensions.Logging;
@@ -28,6 +30,7 @@ public class MainForm : Form
     private readonly SidebarNavItem _sprintsItem = new(NavKind.Sprints, "Sprints");
     private readonly SidebarNavItem _issuesItem = new(NavKind.Issues, "Issues");
     private readonly SidebarNavItem _reportsItem = new(NavKind.Reports, "Reports");
+    private readonly SidebarNavItem _usersItem = new(NavKind.Users, "Users");
     private readonly SidebarNavItem _settingsItem = new(NavKind.Settings, "Settings");
     private readonly ProjectSwitcherControl _projectSwitcher;
     private readonly InitialsAvatar _sidebarAvatar;
@@ -63,14 +66,15 @@ public class MainForm : Form
 
         Text = $"Jira Clone Desktop - {_displayName}";
         StartPosition = FormStartPosition.CenterScreen;
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1180, 760);
         BackColor = JiraTheme.BgPage;
         Font = JiraTheme.FontBody;
 
-        _searchBox.Width = 300;
-        _searchBox.MinimumSize = new Size(220, 38);
+        _searchBox.Width = 340;
+        _searchBox.MinimumSize = new Size(260, 40);
         _searchBox.PlaceholderText = "Search projects";
         _searchBox.TextChanged += OnSearchBoxTextChanged;
 
@@ -90,11 +94,11 @@ public class MainForm : Form
         _logoutButton.Click += OnLogoutButtonClick;
         _createIssueButton = JiraControlFactory.CreatePrimaryButton("Create");
         _createIssueButton.AutoSize = false;
-        _createIssueButton.Size = new Size(108, 38);
+        _createIssueButton.Size = new Size(120, 40);
         _createIssueButton.Click += OnCreateIssueButtonClick;
         _cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
         _cancelButton.AutoSize = false;
-        _cancelButton.Size = new Size(96, 38);
+        _cancelButton.Size = new Size(108, 40);
         _cancelButton.Visible = false;
         _cancelButton.Enabled = false;
         _cancelButton.Click += OnCancelButtonClick;
@@ -141,6 +145,7 @@ public class MainForm : Form
             _sprintsItem.Click -= OnSprintsItemClick;
             _issuesItem.Click -= OnIssuesItemClick;
             _reportsItem.Click -= OnReportsItemClick;
+            _usersItem.Click -= OnUsersItemClick;
             _settingsItem.Click -= OnSettingsItemClick;
             if (_activeContent is ProjectListForm projectListForm)
             {
@@ -209,7 +214,14 @@ public class MainForm : Form
             Padding = new Padding(0, 14, 0, 0),
             BackColor = JiraTheme.BgSidebar,
         };
-        navStack.Controls.AddRange([_projectsItem, _dashboardItem, _boardItem, _backlogItem, _roadmapItem, _sprintsItem, _issuesItem, _reportsItem, _settingsItem]);
+        var navItems = new List<Control> { _projectsItem, _dashboardItem, _boardItem, _backlogItem, _roadmapItem, _sprintsItem, _issuesItem, _reportsItem };
+        if (_session.Authorization.IsInRole(RoleCatalog.Admin))
+        {
+            navItems.Add(_usersItem);
+        }
+
+        navItems.Add(_settingsItem);
+        navStack.Controls.AddRange(navItems.ToArray());
 
         var bottomSection = new Panel
         {
@@ -270,7 +282,7 @@ public class MainForm : Form
             Padding = new Padding(20, 10, 20, 10),
         };
 
-        _navbarRightPanel = new Panel { Dock = DockStyle.Right, Width = 740, BackColor = JiraTheme.BgSurface };
+        _navbarRightPanel = new Panel { Dock = DockStyle.Right, Width = 800, BackColor = JiraTheme.BgSurface };
         _navbarRightPanel.Controls.Add(_notificationBadge);
         _navbarRightPanel.Controls.Add(_notificationButton);
         _navbarRightPanel.Controls.Add(_navbarAvatar);
@@ -550,6 +562,7 @@ public class MainForm : Form
         _sprintsItem.Click += OnSprintsItemClick;
         _issuesItem.Click += OnIssuesItemClick;
         _reportsItem.Click += OnReportsItemClick;
+        _usersItem.Click += OnUsersItemClick;
         _settingsItem.Click += OnSettingsItemClick;
     }
 
@@ -1024,6 +1037,16 @@ public class MainForm : Form
         }
     }
 
+    private void OnUsersItemClick(object? sender, EventArgs e)
+    {
+        if (!_session.Authorization.IsInRole(RoleCatalog.Admin))
+        {
+            return;
+        }
+
+        NavigateTo(_usersItem, () => new UserManagementForm(_session));
+    }
+
     private enum NavKind
     {
         Projects,
@@ -1034,6 +1057,7 @@ public class MainForm : Form
         Sprints,
         Issues,
         Reports,
+        Users,
         Settings
     }
 
@@ -1561,17 +1585,22 @@ public class MainForm : Form
             BindIssues();
         }
 
-        private static ComboBox CreateFilterCombo(int width) => new()
+        private static ComboBox CreateFilterCombo(int width)
         {
-            Width = width,
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = JiraTheme.BgSurface,
-            ForeColor = JiraTheme.TextPrimary,
-            Font = JiraTheme.FontBody,
-            IntegralHeight = false,
-            Margin = new Padding(0, 0, 12, 0),
-        };
+            var comboBox = new ComboBox
+            {
+                Width = width,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = JiraTheme.BgSurface,
+                ForeColor = JiraTheme.TextPrimary,
+                Font = JiraTheme.FontBody,
+                IntegralHeight = false,
+                Margin = new Padding(0, 0, 12, 0),
+            };
+            LayoutHelper.ConfigureComboBox(comboBox);
+            return comboBox;
+        }
 
         private static string FormatPriority(IssuePriority priority) => priority switch
         {
@@ -1623,6 +1652,15 @@ public class MainForm : Form
         private sealed record IssueSummaryRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
     }
 }
+
+
+
+
+
+
+
+
+
 
 
 

@@ -91,10 +91,14 @@ public sealed class IntegrationSettingsControl : UserControl
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _project = await _session.Projects.GetActiveProjectAsync(cancellationToken);
-            var statuses = _project is null
-                ? []
-                : await _session.Integrations.GetProjectStatusesAsync(_project.Id, cancellationToken);
+            IReadOnlyList<IntegrationStatus> statuses = [];
+            await _session.RunSerializedAsync(async () =>
+            {
+                _project = await _session.Projects.GetActiveProjectAsync(cancellationToken);
+                statuses = _project is null
+                    ? []
+                    : await _session.Integrations.GetProjectStatusesAsync(_project.Id, cancellationToken);
+            }, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
             var statusByName = statuses.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
@@ -163,7 +167,7 @@ public sealed class IntegrationSettingsControl : UserControl
             {
                 case IntegrationNames.GitHub:
                 {
-                    var config = await _session.Integrations.GetGitHubConfigAsync(_project.Id, cancellationToken);
+                    var config = await _session.RunSerializedAsync(() => _session.Integrations.GetGitHubConfigAsync(_project.Id, cancellationToken), cancellationToken);
                     using var dialog = new GitHubIntegrationConfigDialog(config, card.CurrentStatus?.IsEnabled ?? true);
                     if (dialog.ShowDialog(this) != DialogResult.OK)
                     {
@@ -171,12 +175,12 @@ public sealed class IntegrationSettingsControl : UserControl
                     }
 
                     cancellationToken.ThrowIfCancellationRequested();
-                    await _session.Integrations.SaveGitHubConfigAsync(_project.Id, dialog.Config, dialog.IsEnabled, cancellationToken);
+                    await _session.RunSerializedAsync(() => _session.Integrations.SaveGitHubConfigAsync(_project.Id, dialog.Config, dialog.IsEnabled, cancellationToken), cancellationToken);
                     break;
                 }
                 case IntegrationNames.Confluence:
                 {
-                    var config = await _session.Integrations.GetConfluenceConfigAsync(_project.Id, cancellationToken);
+                    var config = await _session.RunSerializedAsync(() => _session.Integrations.GetConfluenceConfigAsync(_project.Id, cancellationToken), cancellationToken);
                     using var dialog = new ConfluenceIntegrationConfigDialog(config, card.CurrentStatus?.IsEnabled ?? true);
                     if (dialog.ShowDialog(this) != DialogResult.OK)
                     {
@@ -184,7 +188,7 @@ public sealed class IntegrationSettingsControl : UserControl
                     }
 
                     cancellationToken.ThrowIfCancellationRequested();
-                    await _session.Integrations.SaveConfluenceConfigAsync(_project.Id, dialog.Config, dialog.IsEnabled, cancellationToken);
+                    await _session.RunSerializedAsync(() => _session.Integrations.SaveConfluenceConfigAsync(_project.Id, dialog.Config, dialog.IsEnabled, cancellationToken), cancellationToken);
                     break;
                 }
             }
@@ -232,10 +236,10 @@ public sealed class IntegrationSettingsControl : UserControl
             switch (card.IntegrationName)
             {
                 case IntegrationNames.GitHub:
-                    await _session.Integrations.DisconnectGitHubAsync(_project.Id, cancellationToken);
+                    await _session.RunSerializedAsync(() => _session.Integrations.DisconnectGitHubAsync(_project.Id, cancellationToken), cancellationToken);
                     break;
                 case IntegrationNames.Confluence:
-                    await _session.Integrations.DisconnectConfluenceAsync(_project.Id, cancellationToken);
+                    await _session.RunSerializedAsync(() => _session.Integrations.DisconnectConfluenceAsync(_project.Id, cancellationToken), cancellationToken);
                     break;
             }
 
@@ -372,3 +376,5 @@ public sealed class IntegrationSettingsControl : UserControl
         private void OnDisconnectClick(object? sender, EventArgs e) => DisconnectRequested?.Invoke(this, EventArgs.Empty);
     }
 }
+
+

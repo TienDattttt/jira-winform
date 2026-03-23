@@ -1,4 +1,4 @@
-using JiraClone.Domain.Entities;
+﻿using JiraClone.Domain.Entities;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Forms;
 using JiraClone.WinForms.Services;
@@ -25,6 +25,7 @@ public sealed class ProfileSettingsControl : UserControl
     private readonly DataGridView _tokensGrid = new();
     private readonly List<ApiToken> _tokens = [];
     private readonly CancellationTokenSource _disposeCts = new();
+    private readonly SemaphoreSlim _operationGate = new(1, 1);
     private CancellationTokenSource? _loadCts;
 
     public ProfileSettingsControl(AppSession session)
@@ -35,11 +36,13 @@ public sealed class ProfileSettingsControl : UserControl
         Font = JiraTheme.FontBody;
 
         _saveButton.AutoSize = false;
-        _saveButton.Size = new Size(156, 36);
+        _saveButton.Size = new Size(196, 40);
+        _saveButton.MinimumSize = new Size(196, 40);
         _saveButton.Click += OnSaveButtonClick;
 
         _createTokenButton.AutoSize = false;
-        _createTokenButton.Size = new Size(156, 36);
+        _createTokenButton.Size = new Size(196, 40);
+        _createTokenButton.MinimumSize = new Size(196, 40);
         _createTokenButton.Click += OnCreateTokenButtonClick;
 
         _status.AutoSize = true;
@@ -49,10 +52,10 @@ public sealed class ProfileSettingsControl : UserControl
 
         ConfigureTokenGrid();
         Controls.Add(BuildLayout());
-        Load += OnProfileSettingsLoad;
     }
 
-    public Task RefreshProfileAsync(CancellationToken cancellationToken = default) => LoadProfileAsync(RestartLoadCancellation(cancellationToken));
+    public Task RefreshProfileAsync(CancellationToken cancellationToken = default) =>
+        ExecuteExclusiveAsync(LoadProfileCoreAsync, RestartLoadCancellation(cancellationToken));
 
     protected override void Dispose(bool disposing)
     {
@@ -63,7 +66,7 @@ public sealed class ProfileSettingsControl : UserControl
             _saveButton.Click -= OnSaveButtonClick;
             _createTokenButton.Click -= OnCreateTokenButtonClick;
             _tokensGrid.CellContentClick -= OnTokensGridCellContentClick;
-            Load -= OnProfileSettingsLoad;
+            _operationGate.Dispose();
             _disposeCts.Dispose();
         }
 
@@ -79,6 +82,19 @@ public sealed class ProfileSettingsControl : UserControl
 
     private CancellationTokenSource CreateOperationSource(CancellationToken cancellationToken = default) =>
         CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token, cancellationToken);
+
+    private async Task ExecuteExclusiveAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken)
+    {
+        await _operationGate.WaitAsync(cancellationToken);
+        try
+        {
+            await operation(cancellationToken);
+        }
+        finally
+        {
+            _operationGate.Release();
+        }
+    }
 
     private void CancelPendingLoad()
     {
@@ -99,14 +115,12 @@ public sealed class ProfileSettingsControl : UserControl
         _loadCts = null;
     }
 
-    private void OnProfileSettingsLoad(object? sender, EventArgs e) => _ = RefreshProfileAsync();
-
     private async void OnSaveButtonClick(object? sender, EventArgs e)
     {
         using var operationSource = CreateOperationSource();
         try
         {
-            await SaveAsync(operationSource.Token);
+            await ExecuteExclusiveAsync(SaveCoreAsync, operationSource.Token);
         }
         catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
         {
@@ -118,7 +132,7 @@ public sealed class ProfileSettingsControl : UserControl
         using var operationSource = CreateOperationSource();
         try
         {
-            await CreateTokenAsync(operationSource.Token);
+            await ExecuteExclusiveAsync(CreateTokenCoreAsync, operationSource.Token);
         }
         catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
         {
@@ -130,7 +144,7 @@ public sealed class ProfileSettingsControl : UserControl
         using var operationSource = CreateOperationSource();
         try
         {
-            await HandleTokenGridCellContentClickAsync(eventArgs, operationSource.Token);
+            await ExecuteExclusiveAsync(ct => HandleTokenGridCellContentClickCoreAsync(eventArgs, ct), operationSource.Token);
         }
         catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
         {
@@ -254,7 +268,7 @@ public sealed class ProfileSettingsControl : UserControl
         _tokensEmptyState.Visible = false;
     }
 
-    private async Task LoadProfileAsync(CancellationToken cancellationToken)
+    private async Task LoadProfileCoreAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -273,7 +287,9 @@ public sealed class ProfileSettingsControl : UserControl
                 return;
             }
 
-            var tokens = await _session.ApiTokens.GetUserTokensAsync(currentUser.Id, cancellationToken);
+            var tokens = await _session.RunSerializedAsync(
+                () => _session.ApiTokens.GetUserTokensAsync(currentUser.Id, cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             BindTokens(tokens);
         }
@@ -310,7 +326,7 @@ public sealed class ProfileSettingsControl : UserControl
         _tokensEmptyState.Visible = tokens.Count == 0;
     }
 
-    private async Task SaveAsync(CancellationToken cancellationToken)
+    private async Task SaveCoreAsync(CancellationToken cancellationToken)
     {
         var currentUser = _session.CurrentUserContext.CurrentUser;
         if (currentUser is null)
@@ -322,7 +338,9 @@ public sealed class ProfileSettingsControl : UserControl
         try
         {
             _saveButton.Enabled = false;
-            var updatedUser = await _session.UserCommands.UpdateEmailNotificationsPreferenceAsync(currentUser.Id, _emailNotifications.Checked, cancellationToken);
+            var updatedUser = await _session.RunSerializedAsync(
+                () => _session.UserCommands.UpdateEmailNotificationsPreferenceAsync(currentUser.Id, _emailNotifications.Checked, cancellationToken),
+                cancellationToken);
             if (updatedUser is null)
             {
                 ErrorDialogService.Show("Unable to update email notification preferences.");
@@ -354,7 +372,7 @@ public sealed class ProfileSettingsControl : UserControl
         }
     }
 
-    private async Task CreateTokenAsync(CancellationToken cancellationToken)
+    private async Task CreateTokenCoreAsync(CancellationToken cancellationToken)
     {
         var currentUser = _session.CurrentUserContext.CurrentUser;
         if (currentUser is null)
@@ -372,8 +390,10 @@ public sealed class ProfileSettingsControl : UserControl
         try
         {
             _createTokenButton.Enabled = false;
-            var result = await _session.ApiTokens.CreateAsync(currentUser.Id, dialog.TokenName, dialog.ExpiresAtUtc, dialog.SelectedScopes, cancellationToken);
-            await LoadProfileAsync(cancellationToken);
+            var result = await _session.RunSerializedAsync(
+                () => _session.ApiTokens.CreateAsync(currentUser.Id, dialog.TokenName, dialog.ExpiresAtUtc, dialog.SelectedScopes, cancellationToken),
+                cancellationToken);
+            await LoadProfileCoreAsync(cancellationToken);
             using var generatedDialog = new GeneratedApiTokenDialog(result.RawToken);
             generatedDialog.ShowDialog(this);
             _status.Text = "API token created successfully.";
@@ -398,7 +418,7 @@ public sealed class ProfileSettingsControl : UserControl
         }
     }
 
-    private async Task HandleTokenGridCellContentClickAsync(DataGridViewCellEventArgs eventArgs, CancellationToken cancellationToken)
+    private async Task HandleTokenGridCellContentClickCoreAsync(DataGridViewCellEventArgs eventArgs, CancellationToken cancellationToken)
     {
         if (eventArgs.RowIndex < 0 || eventArgs.ColumnIndex != _tokensGrid.Columns.Count - 1 || eventArgs.RowIndex >= _tokens.Count)
         {
@@ -424,8 +444,10 @@ public sealed class ProfileSettingsControl : UserControl
 
         try
         {
-            await _session.ApiTokens.RevokeAsync(token.Id, currentUserId, cancellationToken);
-            await LoadProfileAsync(cancellationToken);
+            await _session.RunSerializedAsync(
+                () => _session.ApiTokens.RevokeAsync(token.Id, currentUserId, cancellationToken),
+                cancellationToken);
+            await LoadProfileCoreAsync(cancellationToken);
             _status.Text = "API token revoked.";
             _status.ForeColor = JiraTheme.Green700;
         }

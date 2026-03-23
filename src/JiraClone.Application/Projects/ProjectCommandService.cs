@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using JiraClone.Application.Abstractions;
@@ -157,7 +157,7 @@ public class ProjectCommandService : IProjectCommandService
             .Select(x => x.First())
             .ToList();
 
-        AddProjectMember(project, actor, ProjectRole.Admin, now);
+        AddProjectMember(project, actor.Id, ProjectRole.Admin, now);
 
         foreach (var member in uniqueMembers)
         {
@@ -172,7 +172,7 @@ public class ProjectCommandService : IProjectCommandService
                 throw new ValidationException($"User {member.UserId} is not available for project membership.");
             }
 
-            AddProjectMember(project, user, member.ProjectRole, now);
+            AddProjectMember(project, user.Id, member.ProjectRole, now);
         }
 
         await _projects.AddAsync(project, cancellationToken);
@@ -422,7 +422,6 @@ public class ProjectCommandService : IProjectCommandService
         {
             ProjectId = projectId,
             UserId = userId,
-            User = user,
             ProjectRole = projectRole,
             JoinedAtUtc = DateTime.UtcNow
         });
@@ -561,17 +560,16 @@ public class ProjectCommandService : IProjectCommandService
         return (key ?? string.Empty).Trim().ToUpperInvariant();
     }
 
-    private static void AddProjectMember(Project project, User user, ProjectRole role, DateTime joinedAtUtc)
+    private static void AddProjectMember(Project project, int userId, ProjectRole role, DateTime joinedAtUtc)
     {
-        if (project.Members.Any(x => x.UserId == user.Id))
+        if (project.Members.Any(x => x.UserId == userId))
         {
             return;
         }
 
         project.Members.Add(new ProjectMember
         {
-            UserId = user.Id,
-            User = user,
+            UserId = userId,
             ProjectRole = role,
             JoinedAtUtc = joinedAtUtc,
         });
@@ -646,3 +644,4 @@ public class ProjectCommandService : IProjectCommandService
         }, cancellationToken);
     }
 }
+

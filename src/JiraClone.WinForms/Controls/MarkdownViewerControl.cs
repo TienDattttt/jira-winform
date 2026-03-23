@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net;
 using JiraClone.Application.Common;
 using JiraClone.WinForms.Theme;
@@ -7,7 +7,7 @@ namespace JiraClone.WinForms.Controls;
 
 public class MarkdownViewerControl : UserControl
 {
-    private const string EmptyMessage = "Add a description...";
+    private const string EmptyMessage = "Thêm mô tả...";
     private readonly WebBrowser _browser = new()
     {
         Dock = DockStyle.Fill,

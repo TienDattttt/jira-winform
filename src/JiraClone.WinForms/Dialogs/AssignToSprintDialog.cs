@@ -22,7 +22,8 @@ public class AssignToSprintDialog : Form
         Issues = issues;
 
         Text = $"Assign Issues To {sprint.Name}";
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         StartPosition = FormStartPosition.CenterParent;
         Size = new Size(760, 560);
         MinimumSize = new Size(760, 560);
@@ -105,4 +106,5 @@ public class AssignToSprintDialog : Form
     public IReadOnlyList<Issue> Issues { get; }
     public IReadOnlyList<int> SelectedIssueIds { get; private set; } = Array.Empty<int>();
 }
+
 

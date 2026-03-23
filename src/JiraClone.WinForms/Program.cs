@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using JiraClone.Application.ActivityLog;
 using JiraClone.Application.ApiTokens;
 using JiraClone.Application.Abstractions;
@@ -49,7 +49,9 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
-        ApplicationConfiguration.Initialize();
+        System.Windows.Forms.Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+        System.Windows.Forms.Application.EnableVisualStyles();
+        System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
 
         var vietnamCulture = CultureInfo.GetCultureInfo("vi-VN");
         CultureInfo.DefaultThreadCurrentCulture = vietnamCulture;
@@ -344,6 +346,9 @@ internal static class Program
         }
     }
 }
+
+
+
 
 
 

@@ -14,7 +14,8 @@ public sealed class ResetPasswordDialog : Form
     public ResetPasswordDialog()
     {
         Text = "Reset Password";
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         Width = 520;
         Height = 320;
         MinimumSize = new Size(520, 320);
@@ -154,4 +155,5 @@ public sealed class ResetPasswordDialog : Form
         layout.Controls.Add(control, 1, row);
     }
 }
+
 

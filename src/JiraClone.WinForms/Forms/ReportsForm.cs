@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
@@ -201,7 +201,6 @@ public class ReportsForm : UserControl
         {
             CancelPendingLoad();
             _disposeCts.Cancel();
-            _disposeCts.Dispose();
             Load -= OnReportsLoad;
             _refreshButton.Click -= OnRefreshButtonClick;
             _exportButton.Click -= OnExportButtonClick;
@@ -1821,5 +1820,6 @@ public class ReportsForm : UserControl
     private static string TrimLabel(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..Math.Max(1, maxLength - 3)] + "...";
 }
+
 
 

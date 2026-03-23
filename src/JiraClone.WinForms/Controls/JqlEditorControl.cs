@@ -1,4 +1,4 @@
-using JiraClone.Application.Jql;
+﻿using JiraClone.Application.Jql;
 using JiraClone.WinForms.Theme;
 
 namespace JiraClone.WinForms.Controls;
@@ -21,8 +21,8 @@ public sealed class JqlEditorControl : UserControl
     {
         Visible = false,
         IntegralHeight = false,
-        Height = 140,
-        Width = 240,
+        Height = 164,
+        Width = 300,
         BorderStyle = BorderStyle.FixedSingle,
         Font = JiraTheme.FontSmall,
         BackColor = JiraTheme.BgSurface,
@@ -36,7 +36,7 @@ public sealed class JqlEditorControl : UserControl
         BackColor = JiraTheme.BgSurface;
         BorderStyle = BorderStyle.FixedSingle;
         Padding = new Padding(10, 8, 10, 8);
-        Height = 92;
+        Height = 104;
 
         Controls.Add(_editor);
         Controls.Add(_suggestions);
@@ -221,7 +221,7 @@ public sealed class JqlEditorControl : UserControl
     {
         _suggestions.Left = Padding.Left;
         _suggestions.Top = Math.Max(Padding.Top + 32, Height - _suggestions.Height - Padding.Bottom + 8);
-        _suggestions.Width = Math.Min(320, Math.Max(220, Width - Padding.Horizontal - 20));
+        _suggestions.Width = Math.Min(380, Math.Max(260, Width - Padding.Horizontal - 20));
     }
 
     private void AcceptSuggestion()
@@ -261,3 +261,4 @@ public sealed class JqlEditorControl : UserControl
 
     private static bool IsSuggestionChar(char value) => char.IsLetterOrDigit(value) || value is '_' or '.' or '-';
 }
+

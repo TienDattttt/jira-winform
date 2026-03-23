@@ -4,6 +4,7 @@ using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -180,7 +181,7 @@ public sealed class IssueNavigatorForm : UserControl
     private Control BuildHeader()
     {
         var header = new Panel { Dock = DockStyle.Top, Height = 78, BackColor = JiraTheme.BgPage };
-        var right = new Panel { Dock = DockStyle.Right, Width = 140, BackColor = JiraTheme.BgPage };
+        var right = new Panel { Dock = DockStyle.Right, Width = 168, BackColor = JiraTheme.BgPage };
         right.Controls.Add(_openButton);
         _openButton.Location = new Point(12, 18);
 
@@ -218,7 +219,7 @@ public sealed class IssueNavigatorForm : UserControl
             e.Graphics.DrawRectangle(pen, 0, 0, surface.Width - 1, surface.Height - 1);
         };
 
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 240, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = JiraTheme.BgSurface };
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 304, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = JiraTheme.BgSurface };
         actions.Controls.Add(_runQueryButton);
         actions.Controls.Add(_clearQueryButton);
         _runQueryButton.Margin = new Padding(0, 24, 10, 0);
@@ -243,12 +244,11 @@ public sealed class IssueNavigatorForm : UserControl
         {
             Dock = DockStyle.Fill,
             FixedPanel = FixedPanel.Panel1,
-            SplitterDistance = 240,
             BackColor = JiraTheme.Border,
             SplitterWidth = 6
         };
-        split.Panel1MinSize = 220;
-        split.Panel2MinSize = 480;
+        split.HandleCreated += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 240, 220, 480);
+        split.SizeChanged += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 240, 220, 480);
         split.Panel1.Controls.Add(BuildFiltersSidebar());
         split.Panel2.Controls.Add(BuildResultsSurface());
         return split;
@@ -273,7 +273,7 @@ public sealed class IssueNavigatorForm : UserControl
         caption.Height = 20;
         caption.ForeColor = JiraTheme.TextSecondary;
 
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 48, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = JiraTheme.BgSurface };
+        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 56, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = JiraTheme.BgSurface };
         buttons.Controls.Add(_saveFilterButton);
         buttons.Controls.Add(_deleteFilterButton);
         _saveFilterButton.Margin = new Padding(0, 6, 8, 0);
@@ -699,7 +699,8 @@ public sealed class IssueNavigatorForm : UserControl
         public SaveFilterDialog()
         {
             Text = "Save Filter";
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 360;
             Height = 190;
             MinimumSize = new Size(360, 190);
@@ -740,5 +741,10 @@ public sealed class IssueNavigatorForm : UserControl
         public string FilterName => _name.Text.Trim();
     }
 }
+
+
+
+
+
 
 

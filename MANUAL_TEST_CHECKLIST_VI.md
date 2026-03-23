@@ -6,18 +6,18 @@
 - Developer: `gaben` / `ChangeMe123!`
 
 ## Chuan bi truoc khi test
-- [ ] Chay `dotnet ef database update` de ap dung migration moi nhat.
-- [ ] Mo app va dang nhap bang tung tai khoan seed.
-- [ ] Xac nhan giao dien hien chu Viet o cac man hinh chinh: dang nhap, sidebar, board, backlog, roadmap, reports, settings.
-- [ ] Xac nhan project mac dinh `JIRA` duoc tai len thanh cong.
+- [x] Chay `dotnet ef database update` de ap dung migration moi nhat.
+- [x] Mo app va dang nhap bang tung tai khoan seed.
+- [x] Xac nhan giao dien hien chu Viet o cac man hinh chinh: dang nhap, sidebar, board, backlog, roadmap, reports, settings.
+- [x] Xac nhan project mac dinh `JIRA` duoc tai len thanh cong.
 
 ## Smoke test chung
-- [ ] Dang nhap thanh cong bang `admin`, `yoda`, `gaben` voi mat khau `ChangeMe123!`.
-- [ ] Dang xuat va dang nhap lai khong loi.
-- [ ] Thu `Remember me` roi mo lai app, session duoc khoi phuc.
+- [x] Dang nhap thanh cong bang `admin`, `yoda`, `gaben` voi mat khau `ChangeMe123!`.
+- [x] Dang xuat va dang nhap lai khong loi.
+- [x] Thu `Remember me` roi mo lai app, session duoc khoi phuc.
 - [ ] Notification badge tu dong cap nhat sau khoang 30 giay.
-- [ ] Search issue o thanh tren tra ve ket qua.
-- [ ] Chuyen project bang project switcher neu co nhieu project.
+- [x] Search issue o thanh tren tra ve ket qua.
+- [x] Chuyen project bang project switcher neu co nhieu project.
 
 ## Luong test cho Admin
 ### Quan tri he thong

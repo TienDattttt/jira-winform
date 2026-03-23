@@ -108,15 +108,14 @@ public class IssueDetailsForm : Form
         _integrations = new IssueIntegrationsControl(_session);
         Text = "Issue Details";
         StartPosition = FormStartPosition.CenterParent;
-        AutoScaleMode = AutoScaleMode.Font;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         FormBorderStyle = FormBorderStyle.Sizable;
         MinimumSize = new Size(900, 600);
         Size = new Size(1180, 760);
         BackColor = JiraTheme.BgPage;
         DoubleBuffered = true;
         _split.FixedPanel = FixedPanel.Panel2;
-        _split.Panel1MinSize = PreferredLeftPanelMinWidth;
-        _split.Panel2MinSize = PreferredRightPanelMinWidth;
 
         _split.Panel1.BackColor = JiraTheme.BgSurface;
         _split.Panel2.BackColor = JiraTheme.BgSurface;
@@ -492,25 +491,8 @@ public class IssueDetailsForm : Form
                 return;
             }
 
-            if (_split.Panel1MinSize != leftMin)
-            {
-                _split.Panel1MinSize = leftMin;
-            }
-
-            if (_split.Panel2MinSize != rightMin)
-            {
-                _split.Panel2MinSize = rightMin;
-            }
-
             var preferred = (int)Math.Round(totalWidth * 0.64);
-            var maxPanel1 = totalWidth - rightMin;
-            var minPanel1 = leftMin;
-            var safeDistance = Math.Max(minPanel1, Math.Min(preferred, maxPanel1));
-
-            if (safeDistance > 0 && safeDistance != _split.SplitterDistance)
-            {
-                _split.SplitterDistance = safeDistance;
-            }
+            SplitContainerHelper.ConfigureSafeLayout(_split, preferred, leftMin, rightMin);
         }
         catch (ArgumentOutOfRangeException ex)
         {
@@ -1758,7 +1740,6 @@ public class IssueDetailsForm : Form
         {
             CancelPendingLoad();
             _disposeCts.Cancel();
-            _disposeCts.Dispose();
             Load -= OnIssueDetailsLoad;
             Shown -= OnIssueDetailsShown;
             Resize -= OnIssueDetailsResize;
@@ -1994,7 +1975,8 @@ public class IssueDetailsForm : Form
         {
             Text = "Log Time";
             StartPosition = FormStartPosition.CenterParent;
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             ClientSize = new Size(380, 220);
             MinimumSize = new Size(380, 220);
@@ -2054,7 +2036,8 @@ public class IssueDetailsForm : Form
         {
             Text = "Edit Labels";
             StartPosition = FormStartPosition.CenterParent;
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             ClientSize = new Size(420, 420);
             MinimumSize = new Size(420, 420);
@@ -2136,7 +2119,8 @@ public class IssueDetailsForm : Form
         {
             Text = "Add Existing Issues";
             StartPosition = FormStartPosition.CenterParent;
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             ClientSize = new Size(520, 460);
             MinimumSize = new Size(520, 460);
@@ -2213,7 +2197,8 @@ public class IssueDetailsForm : Form
         {
             Text = "Assign Users";
             StartPosition = FormStartPosition.CenterParent;
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             ClientSize = new Size(420, 420);
             MinimumSize = new Size(420, 420);
@@ -2275,6 +2260,12 @@ public class IssueDetailsForm : Form
         public IReadOnlyList<int> SelectedUserIds => _assignees.CheckedItems.Cast<User>().Select(x => x.Id).ToList();
     }
 }
+
+
+
+
+
+
 
 
 

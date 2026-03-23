@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
@@ -6,207 +7,161 @@ namespace JiraClone.WinForms.Helpers;
 
 public static class VietnameseUi
 {
+    private static readonly ConditionalWeakTable<Form, object?> AppliedForms = new();
     private static readonly Dictionary<string, string> Exact = new(StringComparer.Ordinal)
     {
-        ["Projects"] = "Dá»± Ã¡n",
-        ["Dashboard"] = "Tá»•ng quan",
-        ["Board"] = "Báº£ng",
+        ["Projects"] = "Dự án",
+        ["Dashboard"] = "Tổng quan",
+        ["Sprint Progress"] = "Tiến độ sprint",
+        ["Issue Statistics"] = "Thống kê issue",
+        ["Recent Activity"] = "Hoạt động gần đây",
+        ["Assigned To Me"] = "Được giao cho tôi",
+        ["Team Workload"] = "Tải công việc của nhóm",
+        ["Board"] = "Bảng",
         ["Backlog"] = "Backlog",
-        ["Roadmap"] = "Lá»™ trÃ¬nh",
+        ["Roadmap"] = "Lộ trình",
         ["Sprints"] = "Sprint",
         ["Issues"] = "Issue",
-        ["Reports"] = "BÃ¡o cÃ¡o",
-        ["Settings"] = "CÃ i Ä‘áº·t",
-        ["Notifications"] = "ThÃ´ng bÃ¡o",
-        ["No notifications yet."] = "ChÆ°a cÃ³ thÃ´ng bÃ¡o nÃ o.",
-        ["Mark all as read"] = "ÄÃ¡nh dáº¥u Ä‘Ã£ Ä‘á»c táº¥t cáº£",
-        ["Search projects"] = "TÃ¬m kiáº¿m dá»± Ã¡n",
-        ["Logout"] = "ÄÄƒng xuáº¥t",
-        ["Create"] = "Táº¡o",
-        ["Cancel"] = "Há»§y",
-        ["Clear filters"] = "XÃ³a bá»™ lá»c",
-        ["Open issue"] = "Má»Ÿ issue",
-        ["Open Project"] = "Má»Ÿ dá»± Ã¡n",
-        ["Cards"] = "Tháº»",
-        ["Grid"] = "LÆ°á»›i",
-        ["Your Projects"] = "Dá»± Ã¡n cá»§a báº¡n",
-        ["+ Create Project"] = "+ Táº¡o dá»± Ã¡n",
-        ["You do not have any active projects yet."] = "Báº¡n chÆ°a cÃ³ dá»± Ã¡n Ä‘ang hoáº¡t Ä‘á»™ng nÃ o.",
-        ["Project"] = "Dá»± Ã¡n",
-        ["Profile"] = "Há»“ sÆ¡",
-        ["General"] = "Tá»•ng quan",
-        ["Members"] = "ThÃ nh viÃªn",
-        ["Permissions"] = "PhÃ¢n quyá»n",
-        ["Integrations"] = "TÃ­ch há»£p",
+        ["Reports"] = "Báo cáo",
+        ["Settings"] = "Cài đặt",
+        ["Notifications"] = "Thông báo",
+        ["Project"] = "Dự án",
+        ["Profile"] = "Hồ sơ",
+        ["General"] = "Tổng quan",
+        ["Overview"] = "Tổng quan",
+        ["Members"] = "Thành viên",
+        ["Permissions"] = "Phân quyền",
+        ["Integrations"] = "Tích hợp",
         ["Webhooks"] = "Webhook",
-        ["Workflow"] = "Quy trÃ¬nh",
-        ["Labels"] = "NhÃ£n",
-        ["Components"] = "ThÃ nh pháº§n",
-        ["Versions"] = "PhiÃªn báº£n",
-        ["Project Settings"] = "CÃ i Ä‘áº·t dá»± Ã¡n",
-        ["Save Project"] = "LÆ°u dá»± Ã¡n",
-        ["Save Board"] = "LÆ°u báº£ng",
-        ["Archive Project"] = "LÆ°u trá»¯ dá»± Ã¡n",
-        ["Delete Project"] = "XÃ³a dá»± Ã¡n",
-        ["Add Member"] = "ThÃªm thÃ nh viÃªn",
-        ["Change Role"] = "Äá»•i vai trÃ²",
-        ["Remove Member"] = "XÃ³a thÃ nh viÃªn",
-        ["Edit Column"] = "Sá»­a cá»™t",
-        ["Add Label"] = "ThÃªm nhÃ£n",
-        ["Edit Label"] = "Sá»­a nhÃ£n",
-        ["Delete Label"] = "XÃ³a nhÃ£n",
-        ["Add Component"] = "ThÃªm thÃ nh pháº§n",
-        ["Edit Component"] = "Sá»­a thÃ nh pháº§n",
-        ["Delete Component"] = "XÃ³a thÃ nh pháº§n",
-        ["Add Version"] = "ThÃªm phiÃªn báº£n",
-        ["Edit Version"] = "Sá»­a phiÃªn báº£n",
-        ["Delete Version"] = "XÃ³a phiÃªn báº£n",
-        ["Mark Released"] = "ÄÃ¡nh dáº¥u phÃ¡t hÃ nh",
-        ["Add Webhook"] = "ThÃªm webhook",
-        ["Edit Webhook"] = "Sá»­a webhook",
-        ["Delete Webhook"] = "XÃ³a webhook",
-        ["Test"] = "Kiá»ƒm tra",
-        ["Delivery History"] = "Lá»‹ch sá»­ gá»­i",
-        ["Save Permissions"] = "LÆ°u phÃ¢n quyá»n",
-        ["No members on this project yet."] = "Dá»± Ã¡n nÃ y chÆ°a cÃ³ thÃ nh viÃªn nÃ o.",
-        ["No board columns configured."] = "ChÆ°a cáº¥u hÃ¬nh cá»™t báº£ng.",
-        ["No labels created for this project yet."] = "Dá»± Ã¡n nÃ y chÆ°a cÃ³ nhÃ£n nÃ o.",
-        ["No components created for this project yet."] = "Dá»± Ã¡n nÃ y chÆ°a cÃ³ thÃ nh pháº§n nÃ o.",
-        ["No versions created for this project yet."] = "Dá»± Ã¡n nÃ y chÆ°a cÃ³ phiÃªn báº£n nÃ o.",
-        ["No webhooks configured for this project yet."] = "Dá»± Ã¡n nÃ y chÆ°a cáº¥u hÃ¬nh webhook nÃ o.",
-        ["Name"] = "TÃªn",
-        ["Description"] = "MÃ´ táº£",
-        ["Category"] = "Danh má»¥c",
-        ["URL"] = "URL",
-        ["Project key"] = "MÃ£ dá»± Ã¡n",
-        ["User"] = "NgÆ°á»i dÃ¹ng",
-        ["Project Role"] = "Vai trÃ² dá»± Ã¡n",
-        ["WIP Limit (0 = none)"] = "Giá»›i háº¡n WIP (0 = khÃ´ng giá»›i háº¡n)",
-        ["Color"] = "MÃ u sáº¯c",
-        ["Lead"] = "Phá»¥ trÃ¡ch",
-        ["Release date"] = "NgÃ y phÃ¡t hÃ nh",
-        ["Released"] = "ÄÃ£ phÃ¡t hÃ nh",
-        ["Scheme name"] = "TÃªn scheme",
-        ["Board Mode"] = "Cháº¿ Ä‘á»™ báº£ng",
-        ["Dashboard"] = "Tá»•ng quan",
-        ["Refresh"] = "LÃ m má»›i",
-        ["Auto-refresh every 5 minutes"] = "Tá»± lÃ m má»›i má»—i 5 phÃºt",
-        ["Reports"] = "BÃ¡o cÃ¡o",
-        ["Sprint"] = "Sprint",
-        ["Export PNG"] = "Xuáº¥t PNG",
-        ["No sprint selected"] = "ChÆ°a chá»n sprint",
-        ["Velocity history"] = "Lá»‹ch sá»­ velocity",
-        ["Cumulative flow"] = "Luá»“ng tÃ­ch lÅ©y",
-        ["Sprint report"] = "BÃ¡o cÃ¡o sprint",
-        ["Closed sprint"] = "Sprint Ä‘Ã£ Ä‘Ã³ng",
-        ["Roadmap"] = "Lá»™ trÃ¬nh",
-        ["No epics match the current roadmap filters."] = "KhÃ´ng cÃ³ epic nÃ o khá»›p bá»™ lá»c hiá»‡n táº¡i.",
-        ["Select an epic"] = "Chá»n má»™t epic",
-        ["Open Epic"] = "Má»Ÿ epic",
-        ["Epics"] = "Epic",
-        ["Log in"] = "ÄÄƒng nháº­p",
-        ["Log in to Jira Clone"] = "ÄÄƒng nháº­p vÃ o Jira Desktop",
-        ["Username"] = "TÃªn Ä‘Äƒng nháº­p",
-        ["Password"] = "Máº­t kháº©u",
-        ["Remember me for 30 days"] = "Ghi nhá»› Ä‘Äƒng nháº­p trong 30 ngÃ y",
-        ["Show"] = "Hiá»‡n",
-        ["Hide"] = "áº¨n",
-        ["Remember Me"] = "Ghi nhá»› Ä‘Äƒng nháº­p",
-        ["Attachment"] = "Tá»‡p Ä‘Ã­nh kÃ¨m",
-        ["Browse"] = "Chá»n tá»‡p",
-        ["Upload"] = "Táº£i lÃªn",
-        ["Download"] = "Táº£i xuá»‘ng",
-        ["Delete"] = "XÃ³a",
-        ["No attachments yet."] = "ChÆ°a cÃ³ tá»‡p Ä‘Ã­nh kÃ¨m nÃ o.",
-        ["No activity yet."] = "ChÆ°a cÃ³ hoáº¡t Ä‘á»™ng nÃ o.",
-        ["No issues in this column."] = "KhÃ´ng cÃ³ issue nÃ o trong cá»™t nÃ y.",
-        ["No issues"] = "KhÃ´ng cÃ³ issue",
-        ["Details"] = "Chi tiáº¿t",
-        ["No labels"] = "KhÃ´ng cÃ³ nhÃ£n",
-        ["Hours"] = "Sá»‘ giá»",
-        ["Comment"] = "BÃ¬nh luáº­n",
-        ["Apply"] = "Ãp dá»¥ng",
-        ["Choose one or more labels"] = "Chá»n má»™t hoáº·c nhiá»u nhÃ£n",
-        ["Link issues"] = "LiÃªn káº¿t issue",
-        ["Choose one or more existing stories or tasks"] = "Chá»n má»™t hoáº·c nhiá»u story/task cÃ³ sáºµn",
-        ["Choose one or more assignees"] = "Chá»n má»™t hoáº·c nhiá»u ngÆ°á»i Ä‘Æ°á»£c giao",
-        ["Edit Comment"] = "Sá»­a bÃ¬nh luáº­n",
-        ["Delete Comment"] = "XÃ³a bÃ¬nh luáº­n",
-        ["Create Token"] = "Táº¡o token",
-        ["Expiry"] = "Háº¿t háº¡n",
-        ["Scopes"] = "Pháº¡m vi",
-        ["Copy Token"] = "Sao chÃ©p token",
-        ["Close"] = "ÄÃ³ng",
-        ["Your new API token"] = "API token má»›i cá»§a báº¡n",
-        ["Drop files here or browse to attach"] = "Tháº£ tá»‡p vÃ o Ä‘Ã¢y hoáº·c chá»n tá»‡p Ä‘á»ƒ Ä‘Ã­nh kÃ¨m",
-        ["Watch"] = "Theo dÃµi",
-        ["Log Time"] = "Ghi nháº­n thá»i gian",
-        ["Edit Labels"] = "Sá»­a nhÃ£n",
-        ["Add existing issue"] = "ThÃªm issue cÃ³ sáºµn",
-        ["Create child issue"] = "Táº¡o issue con",
-        ["Save"] = "LÆ°u",
-        ["Comment body:"] = "Ná»™i dung bÃ¬nh luáº­n:",
-        ["Assign"] = "GÃ¡n",
-        ["Choose a file first."] = "HÃ£y chá»n tá»‡p trÆ°á»›c.",
-        ["File exceeds the 10 MB limit."] = "Tá»‡p vÆ°á»£t quÃ¡ giá»›i háº¡n 10 MB.",
-        ["Create project"] = "Táº¡o dá»± Ã¡n",
-        ["Back"] = "Quay láº¡i",
-        ["Next"] = "Tiáº¿p theo",
-        ["Create Project"] = "Táº¡o dá»± Ã¡n",
-        ["Create Sprint"] = "Táº¡o sprint",
-        ["Close Sprint"] = "ÄÃ³ng sprint",
-        ["Users"] = "NgÆ°á»i dÃ¹ng",
-        ["Edit"] = "Sá»­a",
-        ["Deactivate"] = "VÃ´ hiá»‡u hÃ³a",
-        ["Activate"] = "KÃ­ch hoáº¡t",
-        ["Reset Password"] = "Äáº·t láº¡i máº­t kháº©u",
-        ["No users match the current filters."] = "KhÃ´ng cÃ³ ngÆ°á»i dÃ¹ng nÃ o khá»›p bá»™ lá»c hiá»‡n táº¡i.",
-        ["Unexpected Error"] = "Lá»—i ngoÃ i dá»± kiáº¿n",
-        ["Error"] = "Lá»—i",
-        ["Copy Token"] = "Sao chÃ©p token",
-        ["API Tokens"] = "API token",
-        ["Create New Token"] = "Táº¡o token má»›i",
-        ["No API tokens created yet."] = "ChÆ°a táº¡o API token nÃ o.",
-        ["Status"] = "Tráº¡ng thÃ¡i",
-        ["Priority"] = "Äá»™ Æ°u tiÃªn",
-        ["Type"] = "Loáº¡i",
-        ["Assignees"] = "NgÆ°á»i Ä‘Æ°á»£c giao",
-        ["Key"] = "MÃ£",
-        ["Summary"] = "TÃ³m táº¯t",
-        ["Member"] = "ThÃ nh viÃªn",
-        ["Column"] = "Cá»™t",
-        ["Label"] = "NhÃ£n",
-        ["Component"] = "ThÃ nh pháº§n",
-        ["Version"] = "PhiÃªn báº£n",
-        ["Active"] = "Báº­t",
-        ["Last delivery"] = "Láº§n gá»­i gáº§n nháº¥t",
-        ["Page title"] = "TiÃªu Ä‘á» trang",
-        ["Page URL"] = "URL trang",
-        ["Add Link"] = "ThÃªm liÃªn káº¿t",
-        ["Base URL"] = "Base URL",
-        ["Space key"] = "Space key",
+        ["Workflow"] = "Quy trình",
+        ["Labels"] = "Nhãn",
+        ["Components"] = "Thành phần",
+        ["Versions"] = "Phiên bản",
+        ["Users"] = "Người dùng",
+        ["Refresh"] = "Làm mới",
+        ["Create"] = "Tạo",
+        ["Save"] = "Lưu",
+        ["Edit"] = "Sửa",
+        ["Delete"] = "Xóa",
+        ["Cancel"] = "Hủy",
+        ["Close"] = "Đóng",
+        ["Open"] = "Mở",
+        ["Username"] = "Tên đăng nhập",
+        ["Password"] = "Mật khẩu",
         ["Email"] = "Email",
-        ["API token"] = "API token",
-        ["Create Confluence Page"] = "Táº¡o trang Confluence",
-        ["Add Page Link"] = "ThÃªm liÃªn káº¿t trang",
-        ["No active sprint"] = "KhÃ´ng cÃ³ sprint Ä‘ang hoáº¡t Ä‘á»™ng",
-        ["Start Sprint"] = "Báº¯t Ä‘áº§u sprint",
-        ["Mode: Scrum"] = "Cháº¿ Ä‘á»™: Scrum",
-        ["Mode: Kanban"] = "Cháº¿ Ä‘á»™: Kanban",
-        ["Group by Epic"] = "NhÃ³m theo Epic",
-        ["Search issues"] = "TÃ¬m kiáº¿m issue",
-        ["Search users"] = "TÃ¬m kiáº¿m ngÆ°á»i dÃ¹ng",
-        ["Leave blank to use ChangeMe123!"] = "Äá»ƒ trá»‘ng Ä‘á»ƒ dÃ¹ng ChangeMe123!",
-        ["Password has been reset."] = "Máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c Ä‘áº·t láº¡i.",
-        ["User Management"] = "Quáº£n lÃ½ ngÆ°á»i dÃ¹ng",
-        ["Confirm Delete"] = "XÃ¡c nháº­n xÃ³a",
-        ["Delete this comment?"] = "XÃ³a bÃ¬nh luáº­n nÃ y?",
-        ["Delete this issue?"] = "XÃ³a issue nÃ y?",
-        ["Logout"] = "ÄÄƒng xuáº¥t",
-        ["Log out from Jira Clone?"] = "Báº¡n cÃ³ muá»‘n Ä‘Äƒng xuáº¥t khá»i Jira Desktop khÃ´ng?",
-        ["Export PNG"] = "Xuáº¥t PNG"
+        ["Name"] = "Tên",
+        ["Description"] = "Mô tả",
+        ["Status"] = "Trạng thái",
+        ["Priority"] = "Độ ưu tiên",
+        ["Type"] = "Loại",
+        ["Assignee"] = "Người phụ trách",
+        ["Assignees"] = "Người được giao",
+        ["Key"] = "Mã",
+        ["Category"] = "Danh mục",
+        ["Color"] = "Màu sắc",
+        ["Search projects"] = "Tìm kiếm dự án",
+        ["Search issues"] = "Tìm kiếm issue",
+        ["Search issue"] = "Tìm kiếm issue",
+        ["Search users"] = "Tìm kiếm người dùng",
+        ["Clear filters"] = "Xóa bộ lọc",
+        ["Open issue"] = "Mở issue",
+        ["Open Project"] = "Mở dự án",
+        ["Open Epic"] = "Mở epic",
+        ["Your Projects"] = "Dự án của bạn",
+        ["+ Create Project"] = "+ Tạo dự án",
+        ["Run Query"] = "Chạy truy vấn",
+        ["Clear"] = "Xóa",
+        ["Save Filter"] = "Lưu bộ lọc",
+        ["Delete Filter"] = "Xóa bộ lọc",
+        ["Saved Filters"] = "Bộ lọc đã lưu",
+        ["0 issues"] = "0 issue",
+        ["No issues match the current query."] = "Không có issue nào khớp truy vấn hiện tại.",
+        ["No notifications yet."] = "Chưa có thông báo nào.",
+        ["Mark all as read"] = "Đánh dấu đã đọc tất cả",
+        ["No active project was found."] = "Không tìm thấy dự án đang hoạt động.",
+        ["No active sprint"] = "Không có sprint đang hoạt động",
+        ["Start Sprint"] = "Bắt đầu sprint",
+        ["Mode: Scrum"] = "Chế độ: Scrum",
+        ["Mode: Kanban"] = "Chế độ: Kanban",
+        ["Group by Epic"] = "Nhóm theo Epic",
+        ["All assignees"] = "Tất cả người được giao",
+        ["All priorities"] = "Tất cả mức ưu tiên",
+        ["All types"] = "Tất cả loại",
+        ["All sprints"] = "Tất cả sprint",
+        ["Week view"] = "Chế độ tuần",
+        ["Month view"] = "Chế độ tháng",
+        ["Day view"] = "Chế độ ngày",
+        ["No epics match the current roadmap filters."] = "Không có epic nào khớp bộ lọc lộ trình hiện tại.",
+        ["Select an epic"] = "Chọn một epic",
+        ["Click an epic bar to inspect child issues and progress."] = "Bấm vào thanh epic để xem issue con và tiến độ.",
+        ["This epic has no linked child issues yet."] = "Epic này chưa có issue con được liên kết.",
+        ["Confluence Pages"] = "Trang Confluence",
+        ["Commits"] = "Commit",
+        ["Pull Requests"] = "Pull Request",
+        ["Connected"] = "Đã kết nối",
+        ["Not configured"] = "Chưa cấu hình",
+        ["No linked commits yet."] = "Chưa có commit nào được liên kết.",
+        ["No linked pull requests yet."] = "Chưa có pull request nào được liên kết.",
+        ["No Confluence pages linked yet."] = "Chưa có trang Confluence nào được liên kết.",
+        ["Configure"] = "Cấu hình",
+        ["Disconnect"] = "Ngắt kết nối",
+        ["Disconnect Integration"] = "Ngắt kết nối tích hợp",
+        ["Disconnected"] = "Chưa kết nối",
+        ["Not available."] = "Chưa khả dụng.",
+        ["Not configured."] = "Chưa cấu hình.",
+        ["Email notifications"] = "Thông báo email",
+        ["Save Preferences"] = "Lưu tùy chọn",
+        ["Create New Token"] = "Tạo token mới",
+        ["API Tokens"] = "API token",
+        ["No API tokens created yet."] = "Chưa tạo API token nào.",
+        ["Scopes"] = "Phạm vi",
+        ["Created"] = "Ngày tạo",
+        ["Last Used"] = "Dùng gần nhất",
+        ["Expires"] = "Hết hạn",
+        ["Revoke"] = "Thu hồi",
+        ["Revoke API Token"] = "Thu hồi API token",
+        ["Revoked"] = "Đã thu hồi",
+        ["Expired"] = "Đã hết hạn",
+        ["Active"] = "Đang hoạt động",
+        ["Never"] = "Không bao giờ",
+        ["Create Token"] = "Tạo token",
+        ["Expiry"] = "Thời hạn",
+        ["30 days"] = "30 ngày",
+        ["90 days"] = "90 ngày",
+        ["1 year"] = "1 năm",
+        ["Drop files here or browse to attach"] = "Thả tệp vào đây hoặc chọn tệp để đính kèm",
+        ["Choose a file first."] = "Hãy chọn tệp trước.",
+        ["Drop issue here"] = "Thả issue vào đây",
+        ["Choose how Jira Desktop should notify you about assignments, comments, sprint updates, and other changes."] = "Chọn cách Jira Desktop thông báo cho bạn về việc được giao, bình luận, cập nhật sprint và các thay đổi khác.",
+        ["When enabled, in-app notifications will also send email if SMTP is configured and your account has an email address."] = "Khi bật, thông báo trong ứng dụng cũng sẽ gửi email nếu SMTP đã được cấu hình và tài khoản của bạn có địa chỉ email.",
+        ["Create personal access tokens for local tools and integrations. Raw tokens are shown once and stored only as SHA-256 hashes."] = "Tạo personal access token cho công cụ nội bộ và tích hợp. Raw token chỉ hiển thị một lần và chỉ được lưu dưới dạng hash SHA-256.",
+        ["Link commits and pull requests to issue activity."] = "Liên kết commit và pull request với hoạt động của issue.",
+        ["Create and link knowledge-base pages from issues."] = "Tạo và liên kết trang kiến thức từ issue.",
+        ["Project Settings"] = "Cài đặt dự án",
+        ["Adjust project details, members, board structure, workflows, permissions, labels, components, release versions, and outbound webhooks without leaving the desktop flow."] = "Điều chỉnh thông tin dự án, thành viên, cấu trúc bảng, workflow, phân quyền, nhãn, thành phần, phiên bản phát hành và webhook mà không cần rời luồng làm việc trên desktop.",
+        ["Project overview across sprint progress, issue mix, activity, and team workload."] = "Tổng quan dự án theo tiến độ sprint, cơ cấu issue, hoạt động gần đây và tải công việc của nhóm.",
+        ["Browse issues with advanced JQL search."] = "Duyệt issue với tìm kiếm JQL nâng cao.",
+        ["Epic timeline across the active project. Filter by sprint or assignee, zoom the horizon, and drag bars to update schedule."] = "Dòng thời gian epic trong dự án hiện tại. Lọc theo sprint hoặc người phụ trách, phóng to thu nhỏ mốc thời gian và kéo thanh để cập nhật lịch.",
+        ["Add a description..."] = "Thêm mô tả...",
+        ["Unexpected Error"] = "Lỗi ngoài dự kiến",
+        ["Error"] = "Lỗi",
+        ["Startup Error"] = "Lỗi khởi động"
     };
 
+    private static readonly Regex OverviewRegex = new(@"^Overview for (.+)\. Search filters activity, assigned work, and team rows\.$", RegexOptions.Compiled);
+    private static readonly Regex TimelineRegex = new(@"^Timeline for (.+)\. Use the sidebar to jump between epics and drag bars to update dates\.$", RegexOptions.Compiled);
+    private static readonly Regex NavigatorRegex = new(@"^Browse issues in (.+) with advanced JQL search\.$", RegexOptions.Compiled);
+    private static readonly Regex ZoomRegex = new(@"^Zoom:\s+(.+)$", RegexOptions.Compiled);
+    private static readonly Regex LinkedRegex = new(@"^Linked (.+)$", RegexOptions.Compiled);
+    private static readonly Regex EditedRegex = new(@"^Edited (.+)$", RegexOptions.Compiled);
+    private static readonly Regex LastSyncRegex = new(@"^(.+?)\s+Last sync:\s+(.+)$", RegexOptions.Compiled);
+    private static readonly Regex RevokeRegex = new(@"^Revoke API token '(.+)'\? This action cannot be undone\.$", RegexOptions.Compiled);
+    private static readonly Regex DisconnectRegex = new(@"^Disconnect (.+) from this project\?$", RegexOptions.Compiled);
+    private static readonly Regex DeleteStatusRegex = new(@"^Delete status '(.+)'\? Related board column and transitions will be removed too\.$", RegexOptions.Compiled);
+    private static readonly Regex DeleteTransitionRegex = new(@"^Delete transition '(.+)'\?$", RegexOptions.Compiled);
+    private static readonly Regex ActiveSprintRegex = new(@"^Active sprint:\s+(.+)$", RegexOptions.Compiled);
+    private static readonly Regex CountRegex = new(@"^(\d+)\s+(issues|projects|members|columns|labels|components|versions|webhooks)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex StepRegex = new(@"^Step\s+(\d+)\s+of\s+(\d+)$", RegexOptions.Compiled);
     private static bool _initialized;
 
     public static void InitializeGlobalHook()
@@ -221,7 +176,14 @@ public static class VietnameseUi
         {
             foreach (Form form in System.Windows.Forms.Application.OpenForms)
             {
+                if (AppliedForms.TryGetValue(form, out _))
+                {
+                    continue;
+                }
+
+                LayoutHelper.EnableResponsiveLayout(form);
                 Apply(form);
+                AppliedForms.Add(form, null);
             }
         };
     }
@@ -238,67 +200,101 @@ public static class VietnameseUi
             return translated;
         }
 
-        if (text.StartsWith("Sign in with ", StringComparison.Ordinal))
+        if (OverviewRegex.Match(text) is { Success: true } overview)
         {
-            return $"ÄÄƒng nháº­p vá»›i {text[13..]}";
+            return $"Tổng quan cho {overview.Groups[1].Value}. Dùng ô tìm kiếm để lọc hoạt động, công việc được giao và dữ liệu nhóm.";
         }
 
-        if (text.StartsWith("Or sign in with ", StringComparison.Ordinal))
+        if (TimelineRegex.Match(text) is { Success: true } timeline)
         {
-            return $"Hoáº·c Ä‘Äƒng nháº­p vá»›i {text[16..]}";
+            return $"Dòng thời gian của {timeline.Groups[1].Value}. Dùng thanh bên để chuyển giữa các epic và kéo thanh để cập nhật ngày.";
         }
 
-        if (text.StartsWith("Browse every issue in ", StringComparison.Ordinal) && text.EndsWith(".", StringComparison.Ordinal))
+        if (NavigatorRegex.Match(text) is { Success: true } navigator)
         {
-            return $"Xem má»i issue trong {text[22..^1]}.";
+            return $"Duyệt issue trong {navigator.Groups[1].Value} với tìm kiếm JQL nâng cao.";
         }
 
-        if (text.StartsWith("Saved ", StringComparison.Ordinal) && text.EndsWith(".", StringComparison.Ordinal))
+        if (ZoomRegex.Match(text) is { Success: true } zoom)
         {
-            return $"ÄÃ£ lÆ°u {text[6..^1]}.";
+            return $"Thu phóng: {Translate(zoom.Groups[1].Value)}";
         }
 
-        if (Regex.Match(text, @"^Step\s+(\d+)\s+of\s+(\d+)$") is { Success: true } stepMatch)
+        if (LinkedRegex.Match(text) is { Success: true } linked)
         {
-            return $"BÆ°á»›c {stepMatch.Groups[1].Value} / {stepMatch.Groups[2].Value}";
+            return $"Đã liên kết {linked.Groups[1].Value}";
         }
 
-        if (Regex.Match(text, @"^(\d+)\s+issues$") is { Success: true } issuesMatch)
+        if (EditedRegex.Match(text) is { Success: true } edited)
         {
-            return $"{issuesMatch.Groups[1].Value} issue";
+            return $"Đã sửa {edited.Groups[1].Value}";
         }
 
-        if (Regex.Match(text, @"^(\d+)\s+projects$") is { Success: true } projectsMatch)
+        if (LastSyncRegex.Match(text) is { Success: true } lastSync)
         {
-            return $"{projectsMatch.Groups[1].Value} dá»± Ã¡n";
+            return $"{Translate(lastSync.Groups[1].Value)}  Đồng bộ lần cuối: {lastSync.Groups[2].Value}";
         }
 
-        if (Regex.Match(text, @"^Type\s+(.+?)\s+to\s+confirm\s+deleting\s+(.+)\.$") is { Success: true } deleteMatch)
+        if (RevokeRegex.Match(text) is { Success: true } revoke)
         {
-            return $"Nháº­p {deleteMatch.Groups[1].Value} Ä‘á»ƒ xÃ¡c nháº­n xÃ³a {deleteMatch.Groups[2].Value}.";
+            return $"Thu hồi API token '{revoke.Groups[1].Value}'? Hành động này không thể hoàn tác.";
+        }
+
+        if (DisconnectRegex.Match(text) is { Success: true } disconnect)
+        {
+            return $"Ngắt kết nối {disconnect.Groups[1].Value} khỏi dự án này?";
+        }
+
+        if (DeleteStatusRegex.Match(text) is { Success: true } deleteStatus)
+        {
+            return $"Xóa trạng thái '{deleteStatus.Groups[1].Value}'? Cột bảng liên quan và các chuyển trạng thái cũng sẽ bị xóa.";
+        }
+
+        if (DeleteTransitionRegex.Match(text) is { Success: true } deleteTransition)
+        {
+            return $"Xóa chuyển trạng thái '{deleteTransition.Groups[1].Value}'?";
+        }
+
+        if (ActiveSprintRegex.Match(text) is { Success: true } activeSprint)
+        {
+            return $"Sprint đang hoạt động: {activeSprint.Groups[1].Value}";
+        }
+
+        if (CountRegex.Match(text) is { Success: true } count)
+        {
+            var suffix = count.Groups[2].Value.ToLowerInvariant() switch
+            {
+                "issues" => "issue",
+                "projects" => "dự án",
+                "members" => "thành viên",
+                "columns" => "cột",
+                "labels" => "nhãn",
+                "components" => "thành phần",
+                "versions" => "phiên bản",
+                "webhooks" => "webhook",
+                _ => count.Groups[2].Value
+            };
+            return $"{count.Groups[1].Value} {suffix}";
+        }
+
+        if (StepRegex.Match(text) is { Success: true } step)
+        {
+            return $"Bước {step.Groups[1].Value} / {step.Groups[2].Value}";
         }
 
         return text switch
         {
-            "TODO" => "Cáº¦N LÃ€M",
-            "SELECTED" => "ÄÃƒ CHá»ŒN",
-            "IN PROGRESS" => "ÄANG LÃ€M",
-            "DONE" => "HOÃ€N THÃ€NH",
-            "LOW" => "THáº¤P",
-            "MEDIUM" => "TRUNG BÃŒNH",
-            "HIGH" => "CAO",
-            "HIGHEST" => "CAO NHáº¤T",
-            "TASK" => "TASK",
-            "BUG" => "BUG",
-            "STORY" => "STORY",
-            _ => text,
+            "TODO" => "CẦN LÀM",
+            "SELECTED" => "ĐÃ CHỌN",
+            "IN PROGRESS" => "ĐANG LÀM",
+            "DONE" => "HOÀN THÀNH",
+            _ => text
         };
     }
 
     public static void Apply(Control root)
     {
         TranslateControl(root);
-
         foreach (Control child in root.Controls)
         {
             Apply(child);
@@ -307,11 +303,19 @@ public static class VietnameseUi
 
     private static void TranslateControl(Control control)
     {
-        control.Text = Translate(control.Text);
+        var translatedText = Translate(control.Text);
+        if (!string.Equals(control.Text, translatedText, StringComparison.Ordinal))
+        {
+            control.Text = translatedText;
+        }
 
         if (control is TextBox textBox)
         {
-            textBox.PlaceholderText = Translate(textBox.PlaceholderText);
+            var translatedPlaceholder = Translate(textBox.PlaceholderText);
+            if (!string.Equals(textBox.PlaceholderText, translatedPlaceholder, StringComparison.Ordinal))
+            {
+                textBox.PlaceholderText = translatedPlaceholder;
+            }
         }
 
         if (control is ComboBox comboBox && comboBox.DataSource is null && comboBox.Items.Count > 0)
@@ -320,7 +324,11 @@ public static class VietnameseUi
             {
                 if (comboBox.Items[index] is string item)
                 {
-                    comboBox.Items[index] = Translate(item);
+                    var translatedItem = Translate(item);
+                    if (!string.Equals(item, translatedItem, StringComparison.Ordinal))
+                    {
+                        comboBox.Items[index] = translatedItem;
+                    }
                 }
             }
         }
@@ -329,8 +337,11 @@ public static class VietnameseUi
         {
             foreach (TabPage tabPage in tabControl.TabPages)
             {
-                tabPage.Text = Translate(tabPage.Text);
-                Apply(tabPage);
+                var translatedTab = Translate(tabPage.Text);
+                if (!string.Equals(tabPage.Text, translatedTab, StringComparison.Ordinal))
+                {
+                    tabPage.Text = translatedTab;
+                }
             }
         }
 
@@ -338,7 +349,11 @@ public static class VietnameseUi
         {
             foreach (DataGridViewColumn column in dataGridView.Columns)
             {
-                column.HeaderText = Translate(column.HeaderText);
+                var translatedHeader = Translate(column.HeaderText);
+                if (!string.Equals(column.HeaderText, translatedHeader, StringComparison.Ordinal))
+                {
+                    column.HeaderText = translatedHeader;
+                }
             }
         }
 
@@ -346,7 +361,11 @@ public static class VietnameseUi
         {
             foreach (ColumnHeader column in listView.Columns)
             {
-                column.Text = Translate(column.Text);
+                var translatedHeader = Translate(column.Text);
+                if (!string.Equals(column.Text, translatedHeader, StringComparison.Ordinal))
+                {
+                    column.Text = translatedHeader;
+                }
             }
         }
 
@@ -361,10 +380,17 @@ public static class VietnameseUi
 
     private static void TranslateNode(TreeNode node)
     {
-        node.Text = Translate(node.Text);
+        var translated = Translate(node.Text);
+        if (!string.Equals(node.Text, translated, StringComparison.Ordinal))
+        {
+            node.Text = translated;
+        }
+
         foreach (TreeNode child in node.Nodes)
         {
             TranslateNode(child);
         }
     }
 }
+
+
