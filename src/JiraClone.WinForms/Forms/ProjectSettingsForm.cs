@@ -85,6 +85,8 @@ public class ProjectSettingsForm : UserControl
         BackColor = JiraTheme.BgPage;
         Font = JiraTheme.FontBody;
         DoubleBuffered = true;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
 
         _name.MinimumSize = new Size(360, 38);
         _url.MinimumSize = new Size(360, 38);
@@ -116,8 +118,7 @@ public class ProjectSettingsForm : UserControl
         tabs.TabPages.Add(BuildIntegrationsTab());
         tabs.TabPages.Add(BuildWebhooksTab());
 
-        Controls.Add(tabs);
-        Controls.Add(BuildHeader());
+        Controls.Add(BuildLayout(tabs));
         Load += async (_, _) =>
         {
             await _profileSettings.RefreshProfileAsync();
@@ -149,6 +150,23 @@ public class ProjectSettingsForm : UserControl
         await LoadProjectAsync(cancellationToken);
     }
 
+    private Control BuildLayout(Control content)
+    {
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = JiraTheme.BgPage,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.Controls.Add(BuildHeader(), 0, 0);
+        root.Controls.Add(content, 0, 1);
+        return root;
+    }
     
 
     public void SetShellSearch(string value)

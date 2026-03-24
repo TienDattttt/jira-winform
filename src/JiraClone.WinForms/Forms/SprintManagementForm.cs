@@ -23,15 +23,15 @@ public class SprintManagementForm : UserControl
         Font = JiraTheme.FontBody,
         HideSelection = false,
     };
-    private readonly Button _createButton = JiraControlFactory.CreatePrimaryButton("Create Sprint");
-    private readonly Button _assignButton = JiraControlFactory.CreateSecondaryButton("Assign Issues");
-    private readonly Button _startButton = JiraControlFactory.CreateSecondaryButton("Start Sprint");
-    private readonly Button _closeButton = JiraControlFactory.CreateSecondaryButton("Close Sprint");
+    private readonly Button _createButton = JiraControlFactory.CreatePrimaryButton("Tạo sprint");
+    private readonly Button _assignButton = JiraControlFactory.CreateSecondaryButton("Gán issue");
+    private readonly Button _startButton = JiraControlFactory.CreateSecondaryButton("Bắt đầu sprint");
+    private readonly Button _closeButton = JiraControlFactory.CreateSecondaryButton("Đóng sprint");
     private readonly Label _helpLabel = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly Label _plannedBadge = CreateBadgeLabel();
     private readonly Label _activeBadge = CreateBadgeLabel();
     private readonly Label _closedBadge = CreateBadgeLabel();
-    private readonly Label _emptyState = JiraControlFactory.CreateLabel("No sprints yet. Create the first sprint to start planning work.", true);
+    private readonly Label _emptyState = JiraControlFactory.CreateLabel("Chưa có sprint nào. Hãy tạo sprint đầu tiên để bắt đầu lập kế hoạch công việc.", true);
     private List<Sprint> _sprints = [];
     private int _projectId;
     private bool _isLoading;
@@ -46,10 +46,10 @@ public class SprintManagementForm : UserControl
 
         JiraTheme.StyleListView(_listView);
         _listView.Columns.Add("Sprint", 240);
-        _listView.Columns.Add("State", 120);
-        _listView.Columns.Add("Start", 140);
-        _listView.Columns.Add("End", 140);
-        _listView.Columns.Add("Goal", 520);
+        _listView.Columns.Add("Trạng thái", 120);
+        _listView.Columns.Add("Bắt đầu", 140);
+        _listView.Columns.Add("Kết thúc", 140);
+        _listView.Columns.Add("Mục tiêu", 520);
         _listView.SelectedIndexChanged += (_, _) => UpdateActionState();
         _listView.DoubleClick += async (_, _) => await AssignIssuesAsync();
         _listView.Resize += (_, _) => ApplyResponsiveColumns();
@@ -96,11 +96,11 @@ public class SprintManagementForm : UserControl
             Padding = new Padding(20, 18, 20, 8),
         };
 
-        var title = JiraControlFactory.CreateLabel("Sprints");
+        var title = JiraControlFactory.CreateLabel("Sprint");
         title.Font = JiraTheme.FontH1;
         title.Location = new Point(0, 0);
 
-        var subtitle = JiraControlFactory.CreateLabel("Plan, start, and close sprints with the same flow users expect from Jira.", true);
+        var subtitle = JiraControlFactory.CreateLabel("Lập kế hoạch, bắt đầu và đóng sprint theo đúng luồng làm việc quen thuộc trong Jira.", true);
         subtitle.Location = new Point(0, 40);
 
         var badges = new FlowLayoutPanel
@@ -212,11 +212,11 @@ public class SprintManagementForm : UserControl
 
             var activeSprint = _sprints.FirstOrDefault(x => x.State == SprintState.Active);
             _helpLabel.Text = activeSprint is null
-                ? "No active sprint. Start a planned sprint to focus the board."
-                : $"Active sprint: {activeSprint.Name} | {FormatSprintDateRange(activeSprint)}";
-            _plannedBadge.Text = $"Planned {_sprints.Count(x => x.State == SprintState.Planned)}";
-            _activeBadge.Text = $"Active {_sprints.Count(x => x.State == SprintState.Active)}";
-            _closedBadge.Text = $"Closed {_sprints.Count(x => x.State == SprintState.Closed)}";
+                ? "Chưa có sprint đang hoạt động. Hãy bắt đầu một sprint đã lập kế hoạch để tập trung bảng làm việc."
+                : $"Sprint đang hoạt động: {activeSprint.Name} | {FormatSprintDateRange(activeSprint)}";
+            _plannedBadge.Text = $"Kế hoạch {_sprints.Count(x => x.State == SprintState.Planned)}";
+            _activeBadge.Text = $"Đang chạy {_sprints.Count(x => x.State == SprintState.Active)}";
+            _closedBadge.Text = $"Đã đóng {_sprints.Count(x => x.State == SprintState.Closed)}";
             UpdateActionState();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -246,7 +246,7 @@ public class SprintManagementForm : UserControl
         foreach (var sprint in filtered)
         {
             var item = new ListViewItem(sprint.Name) { Tag = sprint };
-            item.SubItems.Add(sprint.State.ToString());
+            item.SubItems.Add(sprint.State switch { SprintState.Planned => "Kế hoạch", SprintState.Active => "Đang chạy", SprintState.Closed => "Đã đóng", _ => sprint.State.ToString() });
             item.SubItems.Add(sprint.StartDate?.ToString("dd MMM yyyy") ?? "-");
             item.SubItems.Add(sprint.EndDate?.ToString("dd MMM yyyy") ?? "-");
             item.SubItems.Add(sprint.Goal ?? string.Empty);
@@ -421,7 +421,7 @@ public class SprintManagementForm : UserControl
 
         public CreateSprintDialog()
         {
-            Text = "Create Sprint";
+            Text = "Tạo sprint";
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
             StartPosition = FormStartPosition.CenterParent;
@@ -441,7 +441,7 @@ public class SprintManagementForm : UserControl
             _goal.Dock = DockStyle.Fill;
             _goal.MinimumSize = new Size(0, 140);
 
-            var save = JiraControlFactory.CreatePrimaryButton("Create sprint");
+            var save = JiraControlFactory.CreatePrimaryButton("Tạo sprint");
             var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
             save.AutoSize = false;
             save.Size = new Size(136, 42);
@@ -451,7 +451,7 @@ public class SprintManagementForm : UserControl
             {
                 if (string.IsNullOrWhiteSpace(_name.Text))
                 {
-                    MessageBox.Show(this, "Sprint name is required.", "Create Sprint", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, "Tên sprint là bắt buộc.", "Tạo sprint", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
@@ -466,17 +466,17 @@ public class SprintManagementForm : UserControl
             AcceptButton = save;
             CancelButton = cancel;
 
-            var title = JiraControlFactory.CreateLabel("Create sprint");
+            var title = JiraControlFactory.CreateLabel("Tạo sprint");
             title.Font = JiraTheme.FontH2;
             title.Dock = DockStyle.Top;
             title.Height = 34;
 
-            var subtitle = JiraControlFactory.CreateLabel("Add a sprint name and an optional goal to keep planning aligned with the board.", true);
+            var subtitle = JiraControlFactory.CreateLabel("Thêm tên sprint và mục tiêu tùy chọn để kế hoạch luôn bám sát bảng làm việc.", true);
             subtitle.Dock = DockStyle.Top;
             subtitle.AutoSize = false;
             subtitle.Height = 40;
 
-            var nameLabel = JiraControlFactory.CreateLabel("Sprint name", true);
+            var nameLabel = JiraControlFactory.CreateLabel("Tên sprint", true);
             nameLabel.Dock = DockStyle.Top;
             nameLabel.Height = 24;
 
@@ -489,7 +489,7 @@ public class SprintManagementForm : UserControl
             nameHost.Controls.Add(_name);
             nameHost.Controls.Add(nameLabel);
 
-            var goalLabel = JiraControlFactory.CreateLabel("Goal", true);
+            var goalLabel = JiraControlFactory.CreateLabel("Mục tiêu", true);
             goalLabel.Dock = DockStyle.Top;
             goalLabel.Height = 24;
 
@@ -534,13 +534,13 @@ public class SprintManagementForm : UserControl
 
     private sealed class CloseSprintDialog : Form
     {
-        private readonly RadioButton _moveToBacklog = new() { Text = "Move incomplete issues to backlog", Checked = true, AutoSize = true, Font = JiraTheme.FontBody };
-        private readonly RadioButton _moveToSprint = new() { Text = "Move incomplete issues to another sprint", AutoSize = true, Font = JiraTheme.FontBody };
+        private readonly RadioButton _moveToBacklog = new() { Text = "Chuyển issue chưa hoàn thành về backlog", Checked = true, AutoSize = true, Font = JiraTheme.FontBody };
+        private readonly RadioButton _moveToSprint = new() { Text = "Chuyển issue chưa hoàn thành sang sprint khác", AutoSize = true, Font = JiraTheme.FontBody };
         private readonly ComboBox _targetSprint = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody };
 
         public CloseSprintDialog(Sprint sprint, IReadOnlyList<Sprint> candidateSprints)
         {
-            Text = $"Close {sprint.Name}";
+            Text = $"Đóng {sprint.Name}";
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 460;
@@ -558,7 +558,7 @@ public class SprintManagementForm : UserControl
             _moveToBacklog.CheckedChanged += (_, _) => _targetSprint.Enabled = _moveToSprint.Checked;
             _moveToSprint.CheckedChanged += (_, _) => _targetSprint.Enabled = _moveToSprint.Checked;
 
-            var okButton = JiraControlFactory.CreatePrimaryButton("Close Sprint");
+            var okButton = JiraControlFactory.CreatePrimaryButton("Đóng sprint");
             var cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
             okButton.Click += (_, _) =>
             {
@@ -577,7 +577,7 @@ public class SprintManagementForm : UserControl
             actions.Controls.Add(cancelButton);
 
             var content = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(16), BackColor = JiraTheme.BgSurface };
-            content.Controls.Add(JiraControlFactory.CreateLabel("Choose where incomplete issues should go when this sprint closes.", true));
+            content.Controls.Add(JiraControlFactory.CreateLabel("Chọn nơi chuyển các issue chưa hoàn thành khi sprint này đóng lại.", true));
             content.Controls.Add(_moveToBacklog);
             content.Controls.Add(_moveToSprint);
             content.Controls.Add(_targetSprint);

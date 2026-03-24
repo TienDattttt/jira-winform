@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
@@ -22,16 +22,16 @@ public class MainForm : Form
     private readonly Panel _contentPanel = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgPage };
     private readonly Label _breadcrumbLabel = new() { AutoSize = true, Font = JiraTheme.FontSmall, ForeColor = JiraTheme.TextSecondary };
     private readonly TextBox _searchBox = JiraControlFactory.CreateTextBox();
-    private readonly SidebarNavItem _projectsItem = new(NavKind.Projects, "Projects");
-    private readonly SidebarNavItem _dashboardItem = new(NavKind.Dashboard, "Dashboard");
-    private readonly SidebarNavItem _boardItem = new(NavKind.Board, "Board");
+    private readonly SidebarNavItem _projectsItem = new(NavKind.Projects, "Dự án");
+    private readonly SidebarNavItem _dashboardItem = new(NavKind.Dashboard, "Tổng quan");
+    private readonly SidebarNavItem _boardItem = new(NavKind.Board, "Bảng");
     private readonly SidebarNavItem _backlogItem = new(NavKind.Backlog, "Backlog");
-    private readonly SidebarNavItem _roadmapItem = new(NavKind.Roadmap, "Roadmap");
-    private readonly SidebarNavItem _sprintsItem = new(NavKind.Sprints, "Sprints");
-    private readonly SidebarNavItem _issuesItem = new(NavKind.Issues, "Issues");
-    private readonly SidebarNavItem _reportsItem = new(NavKind.Reports, "Reports");
-    private readonly SidebarNavItem _usersItem = new(NavKind.Users, "Users");
-    private readonly SidebarNavItem _settingsItem = new(NavKind.Settings, "Settings");
+    private readonly SidebarNavItem _roadmapItem = new(NavKind.Roadmap, "Lộ trình");
+    private readonly SidebarNavItem _sprintsItem = new(NavKind.Sprints, "Sprint");
+    private readonly SidebarNavItem _issuesItem = new(NavKind.Issues, "Issue");
+    private readonly SidebarNavItem _reportsItem = new(NavKind.Reports, "Báo cáo");
+    private readonly SidebarNavItem _usersItem = new(NavKind.Users, "Người dùng");
+    private readonly SidebarNavItem _settingsItem = new(NavKind.Settings, "Cài đặt");
     private readonly ProjectSwitcherControl _projectSwitcher;
     private readonly InitialsAvatar _sidebarAvatar;
     private readonly InitialsAvatar _navbarAvatar;
@@ -75,7 +75,7 @@ public class MainForm : Form
 
         _searchBox.Width = 340;
         _searchBox.MinimumSize = new Size(260, 40);
-        _searchBox.PlaceholderText = "Search projects";
+        _searchBox.PlaceholderText = "Tìm kiếm dự án";
         _searchBox.TextChanged += OnSearchBoxTextChanged;
 
         var initials = BuildInitials(_displayName);
@@ -86,18 +86,18 @@ public class MainForm : Form
         _sidebarUserLabel.Font = JiraTheme.FontSmall;
         _sidebarUserLabel.AutoEllipsis = true;
         _sidebarUserLabel.MaximumSize = new Size(150, 30);
-        _logoutButton = JiraControlFactory.CreateSecondaryButton("Logout");
+        _logoutButton = JiraControlFactory.CreateSecondaryButton("Đăng xuất");
         _logoutButton.AutoSize = false;
         _logoutButton.Width = 124;
         _logoutButton.Height = 40;
         _logoutButton.MinimumSize = new Size(124, 36);
         _logoutButton.Click += OnLogoutButtonClick;
-        _createIssueButton = JiraControlFactory.CreatePrimaryButton("Create");
+        _createIssueButton = JiraControlFactory.CreatePrimaryButton("Tạo");
         _createIssueButton.AutoSize = false;
         _createIssueButton.Size = new Size(120, 40);
         _createIssueButton.Visible = false;
         _createIssueButton.Click += OnCreateIssueButtonClick;
-        _cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
+        _cancelButton = JiraControlFactory.CreateSecondaryButton("Hủy");
         _cancelButton.AutoSize = false;
         _cancelButton.Size = new Size(108, 40);
         _cancelButton.Visible = false;
@@ -184,9 +184,11 @@ public class MainForm : Form
             BackColor = JiraTheme.BgSidebar,
             Padding = new Padding(0, 20, 0, 20),
         };
+
         var brandRow = new Panel
         {
-            Height = 62,
+            Dock = DockStyle.Top,
+            Height = 56,
             BackColor = JiraTheme.BgSidebar,
             Padding = new Padding(20, 8, 20, 8),
         };
@@ -195,25 +197,32 @@ public class MainForm : Form
         brandLabel.ForeColor = Color.White;
         brandLabel.Font = JiraTheme.FontH2;
         brandLabel.Location = new Point(52, 8);
+        brandAvatar.Location = new Point(20, 7);
         brandRow.Controls.Add(brandAvatar);
         brandRow.Controls.Add(brandLabel);
-        brandAvatar.Location = new Point(20, 7);
-        var separatorTop = JiraControlFactory.CreateSeparator();
-        separatorTop.Height = 1;
-        separatorTop.BackColor = Color.FromArgb(28, 255, 255, 255);
+
+        var separatorTop = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 1,
+            BackColor = Color.FromArgb(28, 255, 255, 255),
+        };
+
         var projectHost = new Panel
         {
+            Dock = DockStyle.Top,
             Height = 104,
             BackColor = JiraTheme.BgSidebar,
         };
         _projectSwitcher.Dock = DockStyle.Fill;
         projectHost.Controls.Add(_projectSwitcher);
+
         var navHost = new Panel
         {
+            Dock = DockStyle.Fill,
             BackColor = JiraTheme.BgSidebar,
             AutoScroll = true,
             Padding = new Padding(0, 14, 0, 0),
-            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
         };
         var navStack = new FlowLayoutPanel
         {
@@ -221,70 +230,75 @@ public class MainForm : Form
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = new Padding(0),
             Padding = new Padding(0),
             BackColor = JiraTheme.BgSidebar,
         };
-        var navItems = new List<Control> { _projectsItem, _dashboardItem, _boardItem, _backlogItem, _roadmapItem, _sprintsItem, _issuesItem, _reportsItem };
+
+        var navItems = new List<Control>
+        {
+            _projectsItem,
+            _dashboardItem,
+            _boardItem,
+            _backlogItem,
+            _roadmapItem,
+            _sprintsItem,
+            _issuesItem,
+            _reportsItem,
+        };
         if (_session.Authorization.IsInRole(RoleCatalog.Admin))
         {
             navItems.Add(_usersItem);
         }
         navItems.Add(_settingsItem);
         navStack.Controls.AddRange(navItems.ToArray());
-        navHost.Controls.Add(navStack);
-        var bottomSection = new Panel
+
+        var userSeparator = new Panel
         {
-            Height = 140,
-            BackColor = JiraTheme.BgSidebar,
-            Padding = new Padding(20, 16, 20, 0),
-            Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+            Width = JiraTheme.SidebarWidth - 40,
+            Height = 1,
+            Margin = new Padding(20, 8, 20, 8),
+            BackColor = Color.FromArgb(28, 255, 255, 255),
         };
-        var bottomSeparator = JiraControlFactory.CreateSeparator();
-        bottomSeparator.Dock = DockStyle.Top;
-        bottomSeparator.BackColor = Color.FromArgb(28, 255, 255, 255);
-        var userRow = new Panel
+
+        var userInfoPanel = new Panel
         {
-            Dock = DockStyle.Top,
-            Height = 46,
+            Width = JiraTheme.SidebarWidth,
+            Height = 52,
+            Margin = new Padding(0),
             BackColor = JiraTheme.BgSidebar,
+            Padding = new Padding(20, 6, 20, 0),
         };
-        userRow.Controls.Add(_sidebarAvatar);
-        userRow.Controls.Add(_sidebarUserLabel);
-        _sidebarAvatar.Location = new Point(0, 2);
-        _sidebarUserLabel.Location = new Point(44, 8);
+        userInfoPanel.Controls.Add(_sidebarAvatar);
+        userInfoPanel.Controls.Add(_sidebarUserLabel);
+        _sidebarAvatar.Location = new Point(0, 6);
+        _sidebarUserLabel.Location = new Point(44, 12);
+
         var logoutHost = new Panel
         {
-            Dock = DockStyle.Top,
+            Width = JiraTheme.SidebarWidth,
             Height = 56,
+            Margin = new Padding(0, 0, 0, 4),
             BackColor = JiraTheme.BgSidebar,
+            Padding = new Padding(20, 6, 20, 0),
         };
         logoutHost.Controls.Add(_logoutButton);
-        _logoutButton.Location = new Point(0, 6);
-        bottomSection.Controls.Add(logoutHost);
-        bottomSection.Controls.Add(userRow);
-        bottomSection.Controls.Add(bottomSeparator);
-        sidebar.Controls.Add(navHost);
-        sidebar.Controls.Add(bottomSection);
-        sidebar.Controls.Add(projectHost);
-        sidebar.Controls.Add(separatorTop);
-        sidebar.Controls.Add(brandRow);
-        void layoutSidebar(object? _, EventArgs __)
-        {
-            var width = sidebar.ClientSize.Width;
-            var top = sidebar.Padding.Top;
-            brandRow.SetBounds(0, top, width, 62);
-            separatorTop.SetBounds(0, brandRow.Bottom, width, 1);
-            projectHost.SetBounds(0, separatorTop.Bottom, width, 104);
-            bottomSection.SetBounds(0, Math.Max(projectHost.Bottom + 12, sidebar.ClientSize.Height - sidebar.Padding.Bottom - 140), width, 140);
-            navHost.SetBounds(0, projectHost.Bottom, width, Math.Max(0, bottomSection.Top - projectHost.Bottom));
-        }
-        sidebar.Resize += layoutSidebar;
-        layoutSidebar(null, EventArgs.Empty);
+        _logoutButton.Location = new Point(0, 8);
+
+        navStack.Controls.Add(userSeparator);
+        navStack.Controls.Add(userInfoPanel);
+        navStack.Controls.Add(logoutHost);
+        navHost.Controls.Add(navStack);
+
         _sidebarAvatar.Visible = true;
         _sidebarUserLabel.Visible = true;
         _logoutButton.Visible = true;
-        bottomSection.BringToFront();
+
+        sidebar.Controls.Add(navHost);
+        sidebar.Controls.Add(projectHost);
+        sidebar.Controls.Add(separatorTop);
+        sidebar.Controls.Add(brandRow);
         return sidebar;
     }
     private Control BuildMainArea()
@@ -706,17 +720,17 @@ public class MainForm : Form
     {
         if (_activeNavItem is null)
         {
-            return _session.ActiveProject is null ? "Projects > Your Projects" : $"Projects > {_projectName}";
+            return _session.ActiveProject is null ? "Dự án > Dự án của bạn" : $"Dự án > {_projectName}";
         }
 
         if (_activeNavItem.Kind == NavKind.Projects)
         {
-            return "Projects > Your Projects";
+            return "Dự án > Dự án của bạn";
         }
 
         return _session.ActiveProject is null
-            ? $"Projects > {_activeNavItem.TextLabel}"
-            : $"Projects > {_projectName} > {_activeNavItem.TextLabel}";
+            ? $"Dự án > {_activeNavItem.TextLabel}"
+            : $"Dự án > {_projectName} > {_activeNavItem.TextLabel}";
     }
 
     private async Task CreateIssueAsync()
@@ -946,7 +960,7 @@ public class MainForm : Form
 
     private async Task LogoutAsync()
     {
-        if (MessageBox.Show(this, "Log out from Jira Clone?", "Logout", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        if (MessageBox.Show(this, "Bạn có muốn đăng xuất khỏi Jira Clone không?", "Đăng xuất", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
             return;
         }

@@ -16,20 +16,20 @@ public sealed class IssueNavigatorForm : UserControl
     private static readonly string[] SupportedOperators = ["=", "!=", "in", ">=", "<=", ">", "<", "AND", "OR", "ORDER BY", "ASC", "DESC"];
 
     private readonly AppSession _session;
-    private readonly Label _titleLabel = JiraControlFactory.CreateLabel("Issues");
-    private readonly Label _subtitleLabel = JiraControlFactory.CreateLabel("Browse issues with advanced JQL search.", true);
-    private readonly Label _countBadge = JiraControlFactory.CreateLabel("0 issues", true);
+    private readonly Label _titleLabel = JiraControlFactory.CreateLabel("Issue");
+    private readonly Label _subtitleLabel = JiraControlFactory.CreateLabel("Duyệt issue với tìm kiếm JQL nâng cao.", true);
+    private readonly Label _countBadge = JiraControlFactory.CreateLabel("0 issue", true);
     private readonly JqlEditorControl _jqlEditor = new() { Dock = DockStyle.Top };
-    private readonly Button _runQueryButton = JiraControlFactory.CreatePrimaryButton("Run Query");
-    private readonly Button _clearQueryButton = JiraControlFactory.CreateSecondaryButton("Clear");
-    private readonly Label _queryHint = JiraControlFactory.CreateLabel("Examples: assignee = currentUser() AND priority in (High, Highest) | type = Bug AND created >= -7d", true);
+    private readonly Button _runQueryButton = JiraControlFactory.CreatePrimaryButton("Chạy truy vấn");
+    private readonly Button _clearQueryButton = JiraControlFactory.CreateSecondaryButton("Xóa");
+    private readonly Label _queryHint = JiraControlFactory.CreateLabel("Ví dụ: assignee = currentUser() AND priority in (High, Highest) | type = Bug AND created >= -7d", true);
     private readonly Label _queryErrorLabel = JiraControlFactory.CreateLabel(string.Empty, true);
-    private readonly Button _saveFilterButton = JiraControlFactory.CreateSecondaryButton("Save Filter");
-    private readonly Button _deleteFilterButton = JiraControlFactory.CreateSecondaryButton("Delete Filter");
+    private readonly Button _saveFilterButton = JiraControlFactory.CreateSecondaryButton("Lưu bộ lọc");
+    private readonly Button _deleteFilterButton = JiraControlFactory.CreateSecondaryButton("Xóa bộ lọc");
     private readonly ListBox _savedFilters = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, Font = JiraTheme.FontBody, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary };
     private readonly DataGridView _grid = new();
     private readonly Label _emptyState = JiraControlFactory.CreateLabel("No issues match the current query.", true);
-    private readonly Button _openButton = JiraControlFactory.CreateSecondaryButton("Open issue");
+    private readonly Button _openButton = JiraControlFactory.CreateSecondaryButton("Mở issue");
     private readonly JqlLexer _lexer = new();
 
     private int _projectId;
@@ -137,7 +137,7 @@ public sealed class IssueNavigatorForm : UserControl
             }
 
             _projectId = project.Id;
-            _subtitleLabel.Text = $"Browse issues in {project.Name} with advanced JQL search.";
+            _subtitleLabel.Text = $"Duyệt issue trong {project.Name} với tìm kiếm JQL nâng cao.";
             await ExecuteCurrentQueryAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -181,9 +181,6 @@ public sealed class IssueNavigatorForm : UserControl
     private Control BuildHeader()
     {
         var header = new Panel { Dock = DockStyle.Top, Height = 78, BackColor = JiraTheme.BgPage };
-        var right = new Panel { Dock = DockStyle.Right, Width = 168, BackColor = JiraTheme.BgPage };
-        right.Controls.Add(_openButton);
-        _openButton.Location = new Point(12, 18);
 
         var meta = new FlowLayoutPanel
         {
@@ -198,14 +195,10 @@ public sealed class IssueNavigatorForm : UserControl
         meta.Controls.Add(_titleLabel);
         meta.Controls.Add(_countBadge);
 
-        var left = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgPage };
-        left.Controls.Add(_subtitleLabel);
-        left.Controls.Add(meta);
+        header.Controls.Add(_subtitleLabel);
+        header.Controls.Add(meta);
         meta.Location = new Point(0, 0);
         _subtitleLabel.Location = new Point(0, 42);
-
-        header.Controls.Add(right);
-        header.Controls.Add(left);
         return header;
     }
 
@@ -219,11 +212,13 @@ public sealed class IssueNavigatorForm : UserControl
             e.Graphics.DrawRectangle(pen, 0, 0, surface.Width - 1, surface.Height - 1);
         };
 
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 304, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = JiraTheme.BgSurface };
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 436, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = JiraTheme.BgSurface };
         actions.Controls.Add(_runQueryButton);
         actions.Controls.Add(_clearQueryButton);
+        actions.Controls.Add(_openButton);
         _runQueryButton.Margin = new Padding(0, 24, 10, 0);
-        _clearQueryButton.Margin = new Padding(0, 24, 0, 0);
+        _clearQueryButton.Margin = new Padding(0, 24, 10, 0);
+        _openButton.Margin = new Padding(0, 24, 0, 0);
 
         _queryHint.Dock = DockStyle.Bottom;
         _queryHint.Height = 22;
@@ -263,12 +258,12 @@ public sealed class IssueNavigatorForm : UserControl
             e.Graphics.DrawRectangle(pen, 0, 0, surface.Width - 1, surface.Height - 1);
         };
 
-        var title = JiraControlFactory.CreateLabel("Filters");
+        var title = JiraControlFactory.CreateLabel("Bộ lọc");
         title.Font = JiraTheme.FontColumnHeader;
         title.Dock = DockStyle.Top;
         title.Height = 28;
 
-        var caption = JiraControlFactory.CreateLabel("Saved JQL queries for this project.", true);
+        var caption = JiraControlFactory.CreateLabel("Các truy vấn JQL đã lưu cho dự án này.", true);
         caption.Dock = DockStyle.Top;
         caption.Height = 20;
         caption.ForeColor = JiraTheme.TextSecondary;
@@ -358,7 +353,7 @@ public sealed class IssueNavigatorForm : UserControl
         catch (JqlParseException ex)
         {
             _queryErrorLabel.Visible = true;
-            _queryErrorLabel.Text = $"Parse error at position {ex.Position + 1}: {ex.Message}";
+            _queryErrorLabel.Text = $"Lỗi phân tích tại vị trí {ex.Position + 1}: {ex.Message}";
         }
         catch (Exception ex)
         {
@@ -413,13 +408,13 @@ public sealed class IssueNavigatorForm : UserControl
                 issue.WorkflowStatusName,
                 FormatPriority(issue.Priority),
                 FormatType(issue.Type),
-                issue.AssigneeNames.Count == 0 ? "Unassigned" : string.Join(", ", issue.AssigneeNames)))
+                issue.AssigneeNames.Count == 0 ? "Chưa giao" : string.Join(", ", issue.AssigneeNames)))
             .ToList();
 
         _grid.DataSource = filtered;
         _emptyState.Visible = filtered.Count == 0;
         _grid.Visible = filtered.Count > 0;
-        _countBadge.Text = filtered.Count == 1 ? "1 issue" : $"{filtered.Count} issues";
+        _countBadge.Text = filtered.Count == 1 ? "1 issue" : $"{filtered.Count} issue";
         _openButton.Enabled = filtered.Count > 0 && _grid.CurrentRow?.DataBoundItem is IssueRow;
     }
 
@@ -441,7 +436,7 @@ public sealed class IssueNavigatorForm : UserControl
         var query = _jqlEditor.QueryText.Trim();
         if (string.IsNullOrWhiteSpace(query))
         {
-            ErrorDialogService.Show("Enter a JQL query before saving a filter.");
+            ErrorDialogService.Show("Hãy nhập truy vấn JQL trước khi lưu bộ lọc.");
             return;
         }
 
@@ -698,7 +693,7 @@ public sealed class IssueNavigatorForm : UserControl
 
         public SaveFilterDialog()
         {
-            Text = "Save Filter";
+            Text = "Lưu bộ lọc";
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
             Width = 360;
@@ -714,7 +709,7 @@ public sealed class IssueNavigatorForm : UserControl
             {
                 if (string.IsNullOrWhiteSpace(_name.Text))
                 {
-                    ErrorDialogService.Show("Filter name is required.");
+                    ErrorDialogService.Show("Tên bộ lọc là bắt buộc.");
                     return;
                 }
 
@@ -732,7 +727,7 @@ public sealed class IssueNavigatorForm : UserControl
             buttons.Controls.Add(cancel);
 
             var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(16), BackColor = JiraTheme.BgSurface };
-            layout.Controls.Add(JiraControlFactory.CreateLabel("Filter name", true));
+            layout.Controls.Add(JiraControlFactory.CreateLabel("Tên bộ lọc", true));
             layout.Controls.Add(_name);
             Controls.Add(layout);
             Controls.Add(buttons);

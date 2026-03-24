@@ -36,11 +36,14 @@ public class LoginForm : Form
         _oauthProviderName = _session.OAuth.ProviderName;
 
         Text = "Jira Clone Login";
-        FormBorderStyle = FormBorderStyle.None;
+        FormBorderStyle = FormBorderStyle.Sizable;
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
         ClientSize = new Size(1280, 800);
+        MinimizeBox = true;
+        MaximizeBox = true;
+        ControlBox = true;
         MinimumSize = new Size(960, 640);
         BackColor = JiraTheme.BgPage;
         KeyPreview = true;
@@ -48,7 +51,7 @@ public class LoginForm : Form
 
         _cardPanel = new ShadowPanel
         {
-            Size = new Size(480, _oauthEnabled ? 684 : 612),
+            Size = new Size(560, _oauthEnabled ? 684 : 612),
             BackColor = Color.Transparent,
             Anchor = AnchorStyles.None,
         };
@@ -79,7 +82,7 @@ public class LoginForm : Form
         {
             Text = "Show",
             Dock = DockStyle.Right,
-            Width = 96,
+            Width = 108,
             FlatStyle = FlatStyle.Flat,
             BackColor = JiraTheme.BgSurface,
             ForeColor = JiraTheme.Primary,
@@ -87,7 +90,7 @@ public class LoginForm : Form
             Cursor = Cursors.Hand,
             TabStop = false,
         };
-        _showPasswordButton.MinimumSize = new Size(92, 40);
+        _showPasswordButton.MinimumSize = new Size(108, 40);
         _showPasswordButton.FlatAppearance.BorderSize = 0;
         _showPasswordButton.MouseDown += (_, _) => SetPasswordVisibility(true);
         _showPasswordButton.MouseUp += (_, _) => SetPasswordVisibility(false);
@@ -104,15 +107,20 @@ public class LoginForm : Form
         _loginButton = JiraControlFactory.CreatePrimaryButton("Log in");
         _loginButton.AutoSize = false;
         _loginButton.Dock = DockStyle.Fill;
-        _loginButton.MinimumSize = new Size(0, 44);
-        _loginButton.Height = 44;
+        _loginButton.MinimumSize = new Size(0, 52);
+        _loginButton.Height = 52;
+        _loginButton.Font = JiraTheme.FontBody;
+        _loginButton.TextAlign = ContentAlignment.MiddleCenter;
+        _loginButton.Padding = new Padding(12, 8, 12, 8);
         _loginButton.Click += async (_, _) => await LoginAsync();
 
         _ssoButton = JiraControlFactory.CreateSecondaryButton($"Sign in with {_oauthProviderName}");
         _ssoButton.AutoSize = false;
         _ssoButton.Dock = DockStyle.Fill;
-        _ssoButton.MinimumSize = new Size(0, 44);
-        _ssoButton.Height = 44;
+        _ssoButton.MinimumSize = new Size(0, 52);
+        _ssoButton.Height = 52;
+        _ssoButton.Font = JiraTheme.FontBody;
+        _ssoButton.TextAlign = ContentAlignment.MiddleCenter;
         _ssoButton.Visible = _oauthEnabled;
         _ssoButton.Click += async (_, _) => await LoginWithSsoAsync();
 
@@ -122,6 +130,7 @@ public class LoginForm : Form
         _closeButton.FlatAppearance.BorderSize = 0;
         _closeButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         _closeButton.Click += (_, _) => Close();
+        _closeButton.Visible = false;
 
         AcceptButton = _loginButton;
 
@@ -141,6 +150,8 @@ public class LoginForm : Form
                 Close();
             }
         };
+        CenterCard();
+        PositionChrome();
     }
 
     private void BuildLayout()
@@ -164,7 +175,7 @@ public class LoginForm : Form
             BackColor = JiraTheme.BgSurface,
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
@@ -191,6 +202,7 @@ public class LoginForm : Form
         title.Font = JiraTheme.FontH1;
         title.TextAlign = ContentAlignment.MiddleCenter;
         title.Dock = DockStyle.Fill;
+        title.AutoEllipsis = true;
 
         var subtitle = JiraControlFactory.CreateLabel(_oauthEnabled ? "Use your credentials or single sign-on" : "Enter your credentials", true);
         subtitle.Font = JiraTheme.FontSmall;
@@ -246,20 +258,26 @@ public class LoginForm : Form
 
     private Control BuildPasswordHost()
     {
-        var host = new Panel
+        _showPasswordButton.Dock = DockStyle.Fill;
+
+        var host = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = JiraTheme.BgSurface,
             Padding = new Padding(0),
-            MinimumSize = new Size(0, 40),
+            Margin = new Padding(0),
+            ColumnCount = 2,
+            RowCount = 1,
         };
+        host.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        host.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
+        host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        host.MinimumSize = new Size(0, 40);
 
-        host.Controls.Add(_passwordTextBox);
-        host.Controls.Add(_showPasswordButton);
-
+        host.Controls.Add(_passwordTextBox, 0, 0);
+        host.Controls.Add(_showPasswordButton, 1, 0);
         return host;
     }
-
     private Control BuildRememberMeHost()
     {
         var host = new Panel

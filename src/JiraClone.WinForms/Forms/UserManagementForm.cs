@@ -1,4 +1,4 @@
-﻿using JiraClone.Application.Auth;
+using JiraClone.Application.Auth;
 using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
@@ -120,44 +120,37 @@ public class UserManagementForm : UserControl
         var toolbar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 72,
+            Height = 56,
             BackColor = JiraTheme.BgPage,
-            Padding = new Padding(20, 8, 20, 12),
+            Padding = new Padding(16, 8, 16, 8),
         };
-        var filters = new FlowLayoutPanel
+        var strip = new FlowLayoutPanel
         {
-            Width = 430,
-            Height = 40,
-            Location = new Point(20, 8),
-            Anchor = AnchorStyles.Left | AnchorStyles.Top,
+            Dock = DockStyle.Fill,
             WrapContents = false,
+            FlowDirection = FlowDirection.LeftToRight,
+            AutoScroll = false,
             BackColor = JiraTheme.BgPage,
             Margin = new Padding(0),
             Padding = new Padding(0),
         };
-        filters.Controls.Add(_searchBox);
-        filters.Controls.Add(_statusFilter);
-        var actions = new FlowLayoutPanel
-        {
-            Width = 520,
-            Height = 40,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            BackColor = JiraTheme.BgPage,
-            Margin = new Padding(0),
-            Padding = new Padding(0),
-        };
-        actions.Controls.AddRange([_resetPasswordButton, _activateButton, _deactivateButton, _editButton, _createButton]);
-        void layoutActions(object? _, EventArgs __)
-        {
-            actions.Location = new Point(Math.Max(toolbar.Padding.Left, toolbar.ClientSize.Width - toolbar.Padding.Right - actions.Width), 8);
-        }
-        toolbar.Resize += layoutActions;
-        toolbar.Controls.Add(actions);
-        toolbar.Controls.Add(filters);
-        layoutActions(null, EventArgs.Empty);
-        actions.BringToFront();
+        _searchBox.Margin = new Padding(0, 0, 12, 0);
+        _statusFilter.Margin = new Padding(0, 0, 16, 0);
+        _createButton.Margin = new Padding(0, 0, 8, 0);
+        _editButton.Margin = new Padding(0, 0, 8, 0);
+        _deactivateButton.Margin = new Padding(0, 0, 8, 0);
+        _activateButton.Margin = new Padding(0, 0, 8, 0);
+        _resetPasswordButton.Margin = new Padding(0);
+
+        strip.Controls.Add(_searchBox);
+        strip.Controls.Add(_statusFilter);
+        strip.Controls.Add(_createButton);
+        strip.Controls.Add(_editButton);
+        strip.Controls.Add(_deactivateButton);
+        strip.Controls.Add(_activateButton);
+        strip.Controls.Add(_resetPasswordButton);
+
+        toolbar.Controls.Add(strip);
         return toolbar;
     }
     private Control BuildSurface()

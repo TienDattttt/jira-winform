@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
@@ -11,54 +11,54 @@ namespace JiraClone.WinForms.Forms;
 
 public class ReportsForm : UserControl
 {
-    private const string DefaultSubtitle = "Follow sprint burn, flow, and delivery pace without leaving the desktop flow.";
+    private const string DefaultSubtitle = "Theo dõi burndown, velocity, luồng tích lũy và tín hiệu kết thúc sprint ngay trên desktop.";
 
     private readonly AppSession _session;
-    private readonly Label _titleLabel = JiraControlFactory.CreateLabel("Reports");
+    private readonly Label _titleLabel = JiraControlFactory.CreateLabel("Báo cáo");
     private readonly Label _subtitleLabel = JiraControlFactory.CreateLabel(DefaultSubtitle, true);
     private readonly Label _sprintSelectorLabel = JiraControlFactory.CreateLabel("Sprint", true);
     private readonly ComboBox _sprintSelector = CreateSprintSelector();
-    private readonly Button _refreshButton = JiraControlFactory.CreateSecondaryButton("Refresh");
-    private readonly Button _exportButton = JiraControlFactory.CreatePrimaryButton("Export PNG");
+    private readonly Button _refreshButton = JiraControlFactory.CreateSecondaryButton("Làm mới");
+    private readonly Button _exportButton = JiraControlFactory.CreatePrimaryButton("Xuất PNG");
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill, Font = JiraTheme.FontBody };
-    private readonly TabPage _burndownTab = CreatePage("Burndown Chart");
-    private readonly TabPage _velocityTab = CreatePage("Velocity Chart");
-    private readonly TabPage _cfdTab = CreatePage("Cumulative Flow");
-    private readonly TabPage _sprintReportTab = CreatePage("Sprint Report");
+    private readonly TabPage _burndownTab = CreatePage("Biểu đồ burndown");
+    private readonly TabPage _velocityTab = CreatePage("Biểu đồ velocity");
+    private readonly TabPage _cfdTab = CreatePage("Luồng tích lũy");
+    private readonly TabPage _sprintReportTab = CreatePage("Báo cáo sprint");
 
-    private readonly Label _burndownTitleLabel = JiraControlFactory.CreateLabel("No sprint selected");
-    private readonly Label _burndownMetaLabel = JiraControlFactory.CreateLabel("Select a sprint to plot remaining story points by day.", true);
-    private readonly Label _velocityTitleLabel = JiraControlFactory.CreateLabel("Velocity history");
-    private readonly Label _velocityMetaLabel = JiraControlFactory.CreateLabel("Close a sprint to start building delivery history.", true);
-    private readonly Label _cfdTitleLabel = JiraControlFactory.CreateLabel("Cumulative flow");
-    private readonly Label _cfdMetaLabel = JiraControlFactory.CreateLabel("Track how work-in-progress shifts across statuses over time.", true);
-    private readonly Label _sprintReportTitleLabel = JiraControlFactory.CreateLabel("Sprint report");
-    private readonly Label _sprintReportMetaLabel = JiraControlFactory.CreateLabel("Select a closed sprint to inspect completed, carried, and removed scope.", true);
-    private readonly Label _sprintReportSelectorLabel = JiraControlFactory.CreateLabel("Closed sprint", true);
+    private readonly Label _burndownTitleLabel = JiraControlFactory.CreateLabel("Chưa chọn sprint");
+    private readonly Label _burndownMetaLabel = JiraControlFactory.CreateLabel("Chọn một sprint để vẽ số điểm story còn lại theo từng ngày.", true);
+    private readonly Label _velocityTitleLabel = JiraControlFactory.CreateLabel("Lịch sử velocity");
+    private readonly Label _velocityMetaLabel = JiraControlFactory.CreateLabel("Đóng một sprint để bắt đầu hình thành lịch sử giao hàng.", true);
+    private readonly Label _cfdTitleLabel = JiraControlFactory.CreateLabel("Luồng tích lũy");
+    private readonly Label _cfdMetaLabel = JiraControlFactory.CreateLabel("Theo dõi cách công việc đang làm dịch chuyển qua các trạng thái theo thời gian.", true);
+    private readonly Label _sprintReportTitleLabel = JiraControlFactory.CreateLabel("Báo cáo sprint");
+    private readonly Label _sprintReportMetaLabel = JiraControlFactory.CreateLabel("Chọn một sprint đã đóng để xem phạm vi hoàn thành, mang sang và bị loại bỏ.", true);
+    private readonly Label _sprintReportSelectorLabel = JiraControlFactory.CreateLabel("Sprint đã đóng", true);
     private readonly ComboBox _sprintReportSelector = CreateSprintSelector();
 
     private readonly BurndownChartPanel _burndownChart = new() { Dock = DockStyle.Fill };
     private readonly VelocityChartPanel _velocityChart = new() { Dock = DockStyle.Fill };
     private readonly CfdChartPanel _cfdChart = new() { Dock = DockStyle.Fill };
 
-    private readonly Label _burndownEmptyState = CreateEmptyStateLabel("Select a sprint to render the burndown chart.");
-    private readonly Label _velocityEmptyState = CreateEmptyStateLabel("Close a sprint to render the velocity chart.");
-    private readonly Label _cfdEmptyState = CreateEmptyStateLabel("Complete a sprint or change issue statuses to start plotting cumulative flow.");
-    private readonly Label _sprintReportEmptyState = CreateEmptyStateLabel("Close a sprint to unlock its sprint report.");
+    private readonly Label _burndownEmptyState = CreateEmptyStateLabel("Chọn một sprint để hiển thị biểu đồ burndown.");
+    private readonly Label _velocityEmptyState = CreateEmptyStateLabel("Đóng ít nhất một sprint để hiển thị biểu đồ velocity.");
+    private readonly Label _cfdEmptyState = CreateEmptyStateLabel("Hoàn thành sprint hoặc thay đổi trạng thái issue để bắt đầu vẽ luồng tích lũy.");
+    private readonly Label _sprintReportEmptyState = CreateEmptyStateLabel("Đóng một sprint để mở khóa báo cáo sprint của nó.");
 
     private readonly DoubleBufferedPanel _burndownExportSurface = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(20) };
     private readonly DoubleBufferedPanel _velocityExportSurface = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(20) };
     private readonly DoubleBufferedPanel _cfdExportSurface = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(20) };
     private readonly DoubleBufferedPanel _sprintReportExportSurface = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(20) };
 
-    private readonly ReportMetricCard _committedMetricCard = new("Committed SP", JiraTheme.PrimaryActive);
-    private readonly ReportMetricCard _completedMetricCard = new("Completed SP", JiraTheme.Success);
-    private readonly ReportMetricCard _completionMetricCard = new("Completion", JiraTheme.Warning);
-    private readonly ReportMetricCard _removedMetricCard = new("Removed", JiraTheme.Danger);
+    private readonly ReportMetricCard _committedMetricCard = new("SP cam kết", JiraTheme.PrimaryActive);
+    private readonly ReportMetricCard _completedMetricCard = new("SP hoàn thành", JiraTheme.Success);
+    private readonly ReportMetricCard _completionMetricCard = new("Hoàn thành", JiraTheme.Warning);
+    private readonly ReportMetricCard _removedMetricCard = new("Loại bỏ", JiraTheme.Danger);
     private readonly TableLayoutPanel _sprintReportBody = BuildSprintReportBody();
-    private readonly SprintIssueBucket _completedBucket = new("Completed work", JiraTheme.Success);
-    private readonly SprintIssueBucket _notCompletedBucket = new("Not completed", JiraTheme.Danger);
-    private readonly SprintIssueBucket _removedBucket = new("Removed from sprint", JiraTheme.Warning);
+    private readonly SprintIssueBucket _completedBucket = new("Công việc hoàn thành", JiraTheme.Success);
+    private readonly SprintIssueBucket _notCompletedBucket = new("Chưa hoàn thành", JiraTheme.Danger);
+    private readonly SprintIssueBucket _removedBucket = new("Bị loại khỏi sprint", JiraTheme.Warning);
 
     private List<Sprint> _allSprints = [];
     private List<Sprint> _closedSprints = [];
@@ -82,6 +82,8 @@ public class ReportsForm : UserControl
         BackColor = JiraTheme.BgPage;
         Font = JiraTheme.FontBody;
         DoubleBuffered = true;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
 
         _titleLabel.Font = JiraTheme.FontH1;
         _subtitleLabel.Font = JiraTheme.FontCaption;
@@ -110,9 +112,7 @@ public class ReportsForm : UserControl
         _tabs.TabPages.Add(_cfdTab);
         _tabs.TabPages.Add(_sprintReportTab);
 
-        Controls.Add(_tabs);
-        Controls.Add(BuildToolbar());
-        Controls.Add(BuildHeader());
+        Controls.Add(BuildLayout());
 
         _sprintReportBody.Controls.Add(_completedBucket, 0, 0);
         _sprintReportBody.Controls.Add(_notCompletedBucket, 1, 0);
@@ -125,6 +125,35 @@ public class ReportsForm : UserControl
 
     public Task RefreshReportsAsync(CancellationToken cancellationToken = default) => ReloadReportsAsync(cancellationToken);
 
+    private Control BuildLayout()
+    {
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = JiraTheme.BgPage,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.Controls.Add(BuildHeader(), 0, 0);
+        root.Controls.Add(BuildContentArea(), 0, 1);
+        return root;
+    }
+
+    private Control BuildContentArea()
+    {
+        var content = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = JiraTheme.BgPage,
+        };
+        content.Controls.Add(_tabs);
+        content.Controls.Add(BuildToolbar());
+        return content;
+    }
     private Task ReloadReportsAsync(CancellationToken cancellationToken = default) => LoadReportsAsync(RestartLoadCancellation(cancellationToken));
 
     private Task ReloadSelectedSprintBurndownAsync(CancellationToken cancellationToken = default) =>
@@ -447,7 +476,7 @@ public class ReportsForm : UserControl
             _cfdToDate = DateOnly.FromDateTime(cfdRange.ToUtc.Date);
             _subtitleLabel.Text = project is null
                 ? DefaultSubtitle
-                : $"Burndown, velocity, cumulative flow, and sprint closeout signals for {project.Name}.";
+                : $"Burndown, velocity, luồng tích lũy và tín hiệu kết thúc sprint của {project.Name}.";
 
             PopulateSprintSelector(previousSprintId);
             PopulateSprintReportSelector(previousSprintReportId);
@@ -650,29 +679,29 @@ public class ReportsForm : UserControl
 
         if (_project is null)
         {
-            _burndownTitleLabel.Text = "No active project";
-            _burndownMetaLabel.Text = "Choose an active project before opening reports.";
-            _burndownEmptyState.Text = "Choose an active project to render the burndown chart.";
+            _burndownTitleLabel.Text = "Không có dự án đang hoạt động";
+            _burndownMetaLabel.Text = "Hãy chọn một dự án đang hoạt động trước khi mở báo cáo.";
+            _burndownEmptyState.Text = "Hãy chọn một dự án đang hoạt động để hiển thị biểu đồ burndown.";
             return;
         }
 
         if (data is null)
         {
-            _burndownTitleLabel.Text = _sprintSelector.Items.Count == 0 ? "No matching sprint" : "Burndown unavailable";
+            _burndownTitleLabel.Text = _sprintSelector.Items.Count == 0 ? "Không có sprint phù hợp" : "Chưa có dữ liệu burndown";
             _burndownMetaLabel.Text = _sprintSelector.Items.Count == 0
-                ? "No sprints match the current search filter."
-                : "Select a sprint to plot remaining story points by day.";
+                ? "Không có sprint nào khớp bộ lọc tìm kiếm hiện tại."
+                : "Chọn một sprint để vẽ số điểm story còn lại theo từng ngày.";
             _burndownEmptyState.Text = _sprintSelector.Items.Count == 0
-                ? "Adjust the search or create a sprint to render this report."
-                : "Select a sprint to render the burndown chart.";
+                ? "Hãy điều chỉnh tìm kiếm hoặc tạo sprint để hiển thị báo cáo này."
+                : "Chọn một sprint để hiển thị biểu đồ burndown.";
             return;
         }
 
         var remainingStoryPoints = data.ActualPoints.LastOrDefault()?.RemainingStoryPoints ?? 0d;
-        var sprintLength = data.IdealPoints.Count == 1 ? "1 day" : $"{data.IdealPoints.Count} days";
+        var sprintLength = data.IdealPoints.Count == 1 ? "1 ngày" : $"{data.IdealPoints.Count} ngày";
 
         _burndownTitleLabel.Text = $"{data.SprintName} | {FormatDateRange(data.StartDate, data.EndDate)}";
-        _burndownMetaLabel.Text = $"{data.TotalStoryPoints} committed points across {sprintLength}. Remaining on the last day: {remainingStoryPoints:0.#}.";
+        _burndownMetaLabel.Text = $"{data.TotalStoryPoints} điểm cam kết trong {sprintLength}. Còn lại ở ngày cuối: {remainingStoryPoints:0.#}.";
     }
 
     private void ApplyVelocityData(VelocityReportDto? data)
@@ -683,22 +712,22 @@ public class ReportsForm : UserControl
 
         if (_project is null)
         {
-            _velocityTitleLabel.Text = "No active project";
-            _velocityMetaLabel.Text = "Choose an active project before opening reports.";
-            _velocityEmptyState.Text = "Choose an active project to render the velocity chart.";
+            _velocityTitleLabel.Text = "Không có dự án đang hoạt động";
+            _velocityMetaLabel.Text = "Hãy chọn một dự án đang hoạt động trước khi mở báo cáo.";
+            _velocityEmptyState.Text = "Hãy chọn một dự án đang hoạt động để hiển thị biểu đồ velocity.";
             return;
         }
 
         if (data is null || data.Sprints.Count == 0)
         {
-            _velocityTitleLabel.Text = $"{_project.Name} velocity";
-            _velocityMetaLabel.Text = "Close a sprint to start building delivery history.";
-            _velocityEmptyState.Text = "Close at least one sprint to render the velocity chart.";
+            _velocityTitleLabel.Text = $"Velocity của {_project.Name}";
+            _velocityMetaLabel.Text = "Đóng một sprint để bắt đầu hình thành lịch sử giao hàng.";
+            _velocityEmptyState.Text = "Đóng ít nhất một sprint để hiển thị biểu đồ velocity.";
             return;
         }
 
-        _velocityTitleLabel.Text = $"{_project.Name} velocity";
-        _velocityMetaLabel.Text = $"{data.Sprints.Count} closed sprints | average completed {data.AverageCompletedStoryPoints:0.#} story points.";
+        _velocityTitleLabel.Text = $"Velocity của {_project.Name}";
+        _velocityMetaLabel.Text = $"{data.Sprints.Count} sprint đã đóng | trung bình hoàn thành {data.AverageCompletedStoryPoints:0.#} điểm story.";
     }
     private void ApplyCfdData(IReadOnlyList<CfdDataPointDto>? data)
     {
@@ -714,17 +743,17 @@ public class ReportsForm : UserControl
 
         if (_project is null)
         {
-            _cfdTitleLabel.Text = "No active project";
-            _cfdMetaLabel.Text = "Choose an active project before opening reports.";
-            _cfdEmptyState.Text = "Choose an active project to render the cumulative flow diagram.";
+            _cfdTitleLabel.Text = "Không có dự án đang hoạt động";
+            _cfdMetaLabel.Text = "Hãy chọn một dự án đang hoạt động trước khi mở báo cáo.";
+            _cfdEmptyState.Text = "Hãy chọn một dự án đang hoạt động để hiển thị biểu đồ luồng tích lũy.";
             return;
         }
 
         if (normalized.Count == 0)
         {
-            _cfdTitleLabel.Text = $"{_project.Name} cumulative flow";
-            _cfdMetaLabel.Text = $"No status activity was reconstructed for {FormatDateRange(_cfdFromDate, _cfdToDate)}.";
-            _cfdEmptyState.Text = "Move work through workflow statuses to start plotting the cumulative flow diagram.";
+            _cfdTitleLabel.Text = $"Luồng tích lũy của {_project.Name}";
+            _cfdMetaLabel.Text = $"Không dựng lại được hoạt động trạng thái nào cho giai đoạn {FormatDateRange(_cfdFromDate, _cfdToDate)}.";
+            _cfdEmptyState.Text = "Hãy chuyển công việc qua các trạng thái workflow để bắt đầu vẽ biểu đồ luồng tích lũy.";
             return;
         }
 
@@ -733,8 +762,8 @@ public class ReportsForm : UserControl
         var latestCount = normalized.Where(x => x.Date == latestDate).Sum(x => x.IssueCount);
         var statusCount = normalized.Select(x => x.StatusId).Distinct().Count();
 
-        _cfdTitleLabel.Text = $"{_project.Name} cumulative flow | {FormatDateRange(_cfdFromDate, _cfdToDate)}";
-        _cfdMetaLabel.Text = $"{statusCount} statuses tracked across {dates.Count} days. Latest visible scope: {latestCount} issues.";
+        _cfdTitleLabel.Text = $"Luồng tích lũy của {_project.Name} | {FormatDateRange(_cfdFromDate, _cfdToDate)}";
+        _cfdMetaLabel.Text = $"Theo dõi {statusCount} trạng thái trong {dates.Count} ngày. Phạm vi hiển thị mới nhất: {latestCount} issue.";
     }
 
     private void ApplySprintReportData(SprintReportDto? data)
@@ -745,41 +774,41 @@ public class ReportsForm : UserControl
 
         if (_project is null)
         {
-            _sprintReportTitleLabel.Text = "No active project";
-            _sprintReportMetaLabel.Text = "Choose an active project before opening reports.";
-            _sprintReportEmptyState.Text = "Choose an active project to inspect a sprint report.";
+            _sprintReportTitleLabel.Text = "Không có dự án đang hoạt động";
+            _sprintReportMetaLabel.Text = "Hãy chọn một dự án đang hoạt động trước khi mở báo cáo.";
+            _sprintReportEmptyState.Text = "Hãy chọn một dự án đang hoạt động để xem báo cáo sprint.";
             ResetSprintReportVisuals();
             return;
         }
 
         if (_sprintReportSelector.Items.Count == 0)
         {
-            _sprintReportTitleLabel.Text = $"{_project.Name} sprint report";
-            _sprintReportMetaLabel.Text = "Close a sprint to unlock completed, carried, and removed scope breakdowns.";
-            _sprintReportEmptyState.Text = "No closed sprints match the current search filter.";
+            _sprintReportTitleLabel.Text = $"Báo cáo sprint của {_project.Name}";
+            _sprintReportMetaLabel.Text = "Đóng một sprint để mở khóa phần phân tích phạm vi hoàn thành, mang sang và bị loại bỏ.";
+            _sprintReportEmptyState.Text = "Không có sprint đã đóng nào khớp bộ lọc tìm kiếm hiện tại.";
             ResetSprintReportVisuals();
             return;
         }
 
         if (data is null)
         {
-            _sprintReportTitleLabel.Text = "Sprint report unavailable";
-            _sprintReportMetaLabel.Text = "Select a closed sprint to inspect completed, carried, and removed scope.";
-            _sprintReportEmptyState.Text = "Select a closed sprint to render the sprint report.";
+            _sprintReportTitleLabel.Text = "Chưa có báo cáo sprint";
+            _sprintReportMetaLabel.Text = "Chọn một sprint đã đóng để xem phạm vi hoàn thành, mang sang và bị loại bỏ.";
+            _sprintReportEmptyState.Text = "Chọn một sprint đã đóng để hiển thị báo cáo sprint.";
             ResetSprintReportVisuals();
             return;
         }
 
         var closedLabel = data.ClosedAtUtc.HasValue
-            ? $"Closed {data.ClosedAtUtc.Value.ToLocalTime():dd MMM yyyy HH:mm}"
-            : "Closed sprint";
+            ? $"Đóng lúc {data.ClosedAtUtc.Value.ToLocalTime():dd MMM yyyy HH:mm}"
+            : "Sprint đã đóng";
         _sprintReportTitleLabel.Text = $"{data.SprintName} | {FormatDateRange(data.StartDate, data.EndDate)}";
-        _sprintReportMetaLabel.Text = $"{closedLabel} | {data.CompletedWork.Count} completed, {data.NotCompleted.Count} carried, {data.RemovedFromSprint.Count} removed.";
+        _sprintReportMetaLabel.Text = $"{closedLabel} | {data.CompletedWork.Count} hoàn thành, {data.NotCompleted.Count} mang sang, {data.RemovedFromSprint.Count} bị loại bỏ.";
 
-        _committedMetricCard.SetValue($"{data.CommittedStoryPoints}", "story points committed");
-        _completedMetricCard.SetValue($"{data.CompletedStoryPoints}", "story points completed");
-        _completionMetricCard.SetValue($"{data.CompletionPercentage:0.#}%", "of committed scope");
-        _removedMetricCard.SetValue($"{data.RemovedFromSprint.Count}", "issues removed");
+        _committedMetricCard.SetValue($"{data.CommittedStoryPoints}", "điểm story cam kết");
+        _completedMetricCard.SetValue($"{data.CompletedStoryPoints}", "điểm story hoàn thành");
+        _completionMetricCard.SetValue($"{data.CompletionPercentage:0.#}%", "trên phạm vi đã cam kết");
+        _removedMetricCard.SetValue($"{data.RemovedFromSprint.Count}", "issue bị loại bỏ");
 
         _completedBucket.SetIssues(
             "Completed work",
@@ -800,8 +829,8 @@ public class ReportsForm : UserControl
 
     private void ResetSprintReportVisuals()
     {
-        _committedMetricCard.SetValue("0", "story points committed");
-        _completedMetricCard.SetValue("0", "story points completed");
+        _committedMetricCard.SetValue("0", "điểm story cam kết");
+        _completedMetricCard.SetValue("0", "điểm story hoàn thành");
         _completionMetricCard.SetValue("0%", "of committed scope");
         _removedMetricCard.SetValue("0", "issues removed");
         _completedBucket.SetIssues("Completed work", JiraTheme.Success, Array.Empty<SprintReportIssueDto>(), "No issues available.");
@@ -885,7 +914,7 @@ public class ReportsForm : UserControl
 
             using var dialog = new SaveFileDialog
             {
-                Filter = "PNG Image|*.png",
+                Filter = "Ảnh PNG|*.png",
                 FileName = BuildExportFileName(),
                 RestoreDirectory = true,
                 AddExtension = true,
@@ -1195,7 +1224,7 @@ public class ReportsForm : UserControl
                 Padding = new Padding(12, 10, 12, 8),
             };
             _titleLabel = JiraControlFactory.CreateLabel(title);
-            _metaLabel = JiraControlFactory.CreateLabel("0 issues", true);
+            _metaLabel = JiraControlFactory.CreateLabel("0 issue", true);
             _titleLabel.Location = new Point(0, 0);
             _metaLabel.Location = new Point(0, 26);
             _header.Controls.Add(_titleLabel);
@@ -1242,7 +1271,7 @@ public class ReportsForm : UserControl
             _accent = accent;
             _header.BackColor = Tint(accent, 0.9f);
             _titleLabel.Text = title;
-            _metaLabel.Text = $"{issues.Count} issues | {issues.Sum(x => x.StoryPoints)} SP";
+            _metaLabel.Text = $"{issues.Count} issue | {issues.Sum(x => x.StoryPoints)} SP";
 
             _listView.BeginUpdate();
             _listView.Items.Clear();
@@ -1252,7 +1281,7 @@ public class ReportsForm : UserControl
                 item.SubItems.Add(issue.Title);
                 item.SubItems.Add(issue.StatusName);
                 item.SubItems.Add(issue.StoryPoints.ToString());
-                item.SubItems.Add(string.IsNullOrWhiteSpace(issue.AssigneeSummary) ? "Unassigned" : issue.AssigneeSummary);
+                item.SubItems.Add(string.IsNullOrWhiteSpace(issue.AssigneeSummary) ? "Chưa giao" : issue.AssigneeSummary);
                 _listView.Items.Add(item);
             }
             _listView.EndUpdate();

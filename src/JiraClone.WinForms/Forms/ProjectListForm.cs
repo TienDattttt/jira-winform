@@ -117,20 +117,6 @@ public sealed class ProjectListForm : UserControl
             Padding = new Padding(20, 18, 20, 10),
         };
 
-        var right = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Right,
-            Width = 720,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            BackColor = JiraTheme.BgPage,
-            Padding = new Padding(0),
-        };
-        right.Controls.Add(_createProjectButton);
-        right.Controls.Add(_openProjectButton);
-        right.Controls.Add(_gridViewButton);
-        right.Controls.Add(_cardsViewButton);
-
         var titleRow = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -144,14 +130,10 @@ public sealed class ProjectListForm : UserControl
         titleRow.Controls.Add(_titleLabel);
         titleRow.Controls.Add(_countBadge);
 
-        var left = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgPage };
         titleRow.Location = new Point(0, 0);
         _subtitleLabel.Location = new Point(0, 52);
-        left.Controls.Add(titleRow);
-        left.Controls.Add(_subtitleLabel);
-
-        header.Controls.Add(right);
-        header.Controls.Add(left);
+        header.Controls.Add(titleRow);
+        header.Controls.Add(_subtitleLabel);
         return header;
     }
 
@@ -174,9 +156,38 @@ public sealed class ProjectListForm : UserControl
             using var pen = new Pen(JiraTheme.Border);
             e.Graphics.DrawRectangle(pen, 0, 0, surface.Width - 1, surface.Height - 1);
         };
+
+        var toolbarHost = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 68,
+            BackColor = JiraTheme.BgSurface,
+            Padding = new Padding(16, 12, 16, 8),
+        };
+
+        var toolbar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = JiraTheme.BgSurface,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+        };
+        _cardsViewButton.Margin = new Padding(0, 0, 12, 0);
+        _gridViewButton.Margin = new Padding(0, 0, 12, 0);
+        _openProjectButton.Margin = new Padding(0, 0, 12, 0);
+        _createProjectButton.Margin = new Padding(0);
+        toolbar.Controls.Add(_cardsViewButton);
+        toolbar.Controls.Add(_gridViewButton);
+        toolbar.Controls.Add(_openProjectButton);
+        toolbar.Controls.Add(_createProjectButton);
+        toolbarHost.Controls.Add(toolbar);
+
         surface.Controls.Add(_emptyState);
         surface.Controls.Add(_cardsScrollPanel);
         surface.Controls.Add(_gridView);
+        surface.Controls.Add(toolbarHost);
         host.Controls.Add(surface);
         return host;
     }

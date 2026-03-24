@@ -267,31 +267,28 @@ public static class LayoutHelper
             container.Height = Math.Max(container.Height, contentHeight);
         }
 
+        // Do NOT grow width for docked-Left/Right panels — it pushes them off-screen.
+        // Only grow panels that are not docked or explicitly AutoSize.
         if (container is FlowLayoutPanel flow && !flow.WrapContents)
         {
-            var totalWidth = flow.Padding.Left + flow.Padding.Right;
-            foreach (Control child in flow.Controls)
-            {
-                if (!child.Visible)
-                {
-                    continue;
-                }
-
-                totalWidth += child.Width + child.Margin.Horizontal;
-            }
-
             if (flow.Dock is DockStyle.Top or DockStyle.Bottom)
             {
                 flow.Height = Math.Max(flow.Height, contentHeight);
             }
-            else if (flow.Dock is DockStyle.Left or DockStyle.Right || flow.AutoSize)
+            else if (flow.Dock is DockStyle.None && flow.AutoSize)
             {
+                var totalWidth = flow.Padding.Left + flow.Padding.Right;
+                foreach (Control child in flow.Controls)
+                {
+                    if (!child.Visible)
+                    {
+                        continue;
+                    }
+
+                    totalWidth += child.Width + child.Margin.Horizontal;
+                }
                 flow.Width = Math.Max(flow.Width, totalWidth);
             }
-        }
-        else if (container is Panel panel && panel.Dock is DockStyle.Left or DockStyle.Right)
-        {
-            panel.Width = Math.Max(panel.Width, contentWidth);
         }
     }
 

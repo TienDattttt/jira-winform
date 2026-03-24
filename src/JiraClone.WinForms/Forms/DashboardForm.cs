@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Dashboard;
 using JiraClone.Application.Issues;
@@ -69,6 +69,8 @@ public sealed class DashboardForm : UserControl
         BackColor = JiraTheme.BgPage;
         Font = JiraTheme.FontBody;
         DoubleBuffered = true;
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
 
         _titleLabel.Font = JiraTheme.FontH1;
         ConfigureActionButton(_refreshButton, 108);
@@ -84,9 +86,7 @@ public sealed class DashboardForm : UserControl
 
         _widgetsPanel.Controls.AddRange([_sprintCard, _statisticsCard, _activityCard, _assignedCard, _teamCard]);
 
-        Controls.Add(_widgetsPanel);
-        Controls.Add(BuildToolbar());
-        Controls.Add(BuildHeader());
+        Controls.Add(BuildLayout());
 
         Load += OnDashboardLoad;
         Resize += OnDashboardResize;
@@ -95,6 +95,35 @@ public sealed class DashboardForm : UserControl
 
     public Task RefreshDashboardAsync(CancellationToken cancellationToken = default) => ReloadDashboardAsync(cancellationToken);
 
+    private Control BuildLayout()
+    {
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = JiraTheme.BgPage,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.Controls.Add(BuildHeader(), 0, 0);
+        root.Controls.Add(BuildContentArea(), 0, 1);
+        return root;
+    }
+
+    private Control BuildContentArea()
+    {
+        var content = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = JiraTheme.BgPage,
+        };
+        content.Controls.Add(_widgetsPanel);
+        content.Controls.Add(BuildToolbar());
+        return content;
+    }
     private Task ReloadDashboardAsync(CancellationToken cancellationToken = default) =>
         LoadDashboardAsync(RestartLoadCancellation(cancellationToken));
 
