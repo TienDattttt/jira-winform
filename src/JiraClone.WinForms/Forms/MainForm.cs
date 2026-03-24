@@ -529,12 +529,15 @@ public class MainForm : Form
         _notificationBadge.Location = new Point(_notificationButton.Right - 10, -2);
         right = _notificationButton.Left - 16;
 
-        _searchBox.Location = new Point(right - _searchBox.Width, 0);
-        right = _searchBox.Left - 12;
+        if (_searchBox.Visible)
+        {
+            _searchBox.Location = new Point(right - _searchBox.Width, 0);
+            right = _searchBox.Left - 12;
+        }
 
-        _createIssueButton.Location = new Point(right - _createIssueButton.Width, 0);
         if (_createIssueButton.Visible)
         {
+            _createIssueButton.Location = new Point(right - _createIssueButton.Width, 0);
             right = _createIssueButton.Left - 12;
         }
 
@@ -702,9 +705,12 @@ public class MainForm : Form
 
     private void UpdateTopBarActions()
     {
-        var showCreateIssue = _activeNavItem?.Kind == NavKind.Issues && _session.ActiveProject is not null;
-        _createIssueButton.Visible = showCreateIssue;
-        _createIssueButton.Enabled = showCreateIssue && !_isUiBusy;
+        var isIssueTab = _activeNavItem?.Kind == NavKind.Issues;
+        var showGlobalSearch = !isIssueTab;
+        _searchBox.Visible = showGlobalSearch;
+        _searchBox.Enabled = showGlobalSearch;
+        _createIssueButton.Visible = false;
+        _createIssueButton.Enabled = false;
     }
 
     private string GetSearchPlaceholder()
@@ -1599,9 +1605,9 @@ public class MainForm : Form
 
         private void BindIssues()
         {
-            var status = _statusFilter.SelectedItem as string;
-            var priority = _priorityFilter.SelectedItem as string;
-            var type = _typeFilter.SelectedItem as string;
+            var status = _statusFilter.SelectedIndex <= 0 ? null : _statusFilter.SelectedItem as string;
+            var priority = _priorityFilter.SelectedIndex <= 0 ? null : _priorityFilter.SelectedItem as string;
+            var type = _typeFilter.SelectedIndex <= 0 ? null : _typeFilter.SelectedItem as string;
             var filtered = _issues
                 .Where(issue =>
                     (string.IsNullOrWhiteSpace(_shellSearch) ||
@@ -1609,9 +1615,9 @@ public class MainForm : Form
                      issue.Title.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase) ||
                      issue.ReporterName.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase) ||
                      issue.AssigneeNames.Any(x => x.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase))) &&
-                    (string.IsNullOrWhiteSpace(status) || status.StartsWith("All ") || string.Equals(issue.StatusName, status, StringComparison.OrdinalIgnoreCase)) &&
-                    (string.IsNullOrWhiteSpace(priority) || priority.StartsWith("All ") || string.Equals(issue.Priority.ToString(), priority, StringComparison.OrdinalIgnoreCase)) &&
-                    (string.IsNullOrWhiteSpace(type) || type.StartsWith("All ") || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)))
+                    (string.IsNullOrWhiteSpace(status) || string.Equals(issue.StatusName, status, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(priority) || string.Equals(issue.Priority.ToString(), priority, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(type) || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)))
                 .Select(issue => new IssueSummaryRow(
                     issue.Id,
                     issue.IssueKey,

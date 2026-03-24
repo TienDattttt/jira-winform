@@ -15,7 +15,7 @@ public sealed class EpicSwimlaneControl : UserControl
         AutoSizeMode = AutoSizeMode.GrowAndShrink,
         FlowDirection = FlowDirection.LeftToRight,
         WrapContents = false,
-        BackColor = Color.Transparent,
+        BackColor = JiraTheme.BgPage,
         Margin = new Padding(0),
         Padding = new Padding(0, 8, 0, 0),
     };
@@ -27,12 +27,13 @@ public sealed class EpicSwimlaneControl : UserControl
     {
         _lane = lane;
         _showStoryPointProgress = showStoryPointProgress;
-        BackColor = Color.Transparent;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        BackColor = JiraTheme.BgPage;
+        AutoSize = false;
         Margin = new Padding(0, 0, 0, 16);
         Padding = new Padding(0);
         DoubleBuffered = true;
+        MinimumSize = new Size(0, _headerPanel.Height);
 
         _headerPanel.Dock = DockStyle.Top;
         _headerPanel.ToggleRequested += (_, _) => CollapseChanged?.Invoke(this, new EpicSwimlaneCollapseChangedEventArgs(_lane.LaneKey, !_lane.IsCollapsed));
@@ -89,6 +90,17 @@ public sealed class EpicSwimlaneControl : UserControl
         }
 
         _columnsPanel.Visible = !lane.IsCollapsed;
+        UpdateLayoutMetrics();
+    }
+
+    private void UpdateLayoutMetrics()
+    {
+        _columnsPanel.PerformLayout();
+        var columnsHeight = !_columnsPanel.Visible
+            ? 0
+            : _columnsPanel.GetPreferredSize(new Size(Math.Max(Width, 320), 0)).Height;
+        _columnsPanel.Height = columnsHeight;
+        Height = Math.Max(_headerPanel.Height, _headerPanel.Height + columnsHeight);
     }
 
     private sealed class SwimlaneHeaderPanel : Panel
@@ -103,7 +115,7 @@ public sealed class EpicSwimlaneControl : UserControl
             ActiveLinkColor = JiraTheme.PrimaryActive,
             LinkColor = JiraTheme.TextPrimary,
             VisitedLinkColor = JiraTheme.TextPrimary,
-            BackColor = Color.Transparent,
+            BackColor = JiraTheme.BgPage,
             TextAlign = ContentAlignment.MiddleLeft,
             Margin = new Padding(0),
             Padding = new Padding(0)
@@ -202,6 +214,7 @@ public sealed class EpicSwimlaneControl : UserControl
 
         public SwimlaneProgressBar()
         {
+            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             DoubleBuffered = true;
             BackColor = Color.Transparent;
         }

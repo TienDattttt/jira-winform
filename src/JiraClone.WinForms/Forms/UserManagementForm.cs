@@ -243,12 +243,12 @@ public class UserManagementForm : UserControl
     private void BindUsers()
     {
         var search = _searchBox.Text.Trim();
-        var statusMode = _statusFilter.SelectedItem as string ?? "All users";
+        var statusIndex = _statusFilter.SelectedIndex;
         var filtered = _users
-            .Where(user => statusMode switch
+            .Where(user => statusIndex switch
             {
-                "Active only" => user.IsActive,
-                "Inactive only" => !user.IsActive,
+                1 => user.IsActive,
+                2 => !user.IsActive,
                 _ => true,
             })
             .Where(user =>

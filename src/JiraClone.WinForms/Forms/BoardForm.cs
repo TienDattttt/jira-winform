@@ -78,6 +78,7 @@ public class BoardForm : UserControl
     private BoardType _boardType = BoardType.Scrum;
     private TimeSpan? _averageCycleTime;
     private bool _suppressFilterEvents;
+    private bool _canChangeBoardMode;
     private Color _toastAccentColor = JiraTheme.Blue600;
     private readonly CancellationTokenSource _disposeCts = new();
     private CancellationTokenSource? _loadCts;
@@ -114,7 +115,8 @@ public class BoardForm : UserControl
         _typeFilter.Margin = new Padding(0, 0, 12, 0);
         _searchFilter.Margin = new Padding(0, 0, 12, 0);
         _groupByEpicButton.Margin = new Padding(0, 0, 12, 0);
-        _clearFiltersButton.Margin = new Padding(0);
+        _clearFiltersButton.Margin = new Padding(0, 0, 12, 0);
+        _boardModeButton.Margin = new Padding(0);
 
         _assigneeFilter.SelectedIndexChanged += OnFilterChanged;
         _priorityFilter.SelectedIndexChanged += OnFilterChanged;
@@ -221,7 +223,7 @@ public class BoardForm : UserControl
         var right = new Panel
         {
             Dock = DockStyle.Right,
-            Width = 440,
+            Width = 220,
             BackColor = JiraTheme.BgSurface,
         };
         var actions = new FlowLayoutPanel
@@ -234,7 +236,6 @@ public class BoardForm : UserControl
             Padding = new Padding(0, 11, 0, 0),
         };
         actions.Controls.Add(_startSprintButton);
-        actions.Controls.Add(_boardModeButton);
         right.Controls.Add(actions);
 
         var left = new Panel
@@ -277,6 +278,7 @@ public class BoardForm : UserControl
         _filterBar.Controls.Add(_searchFilter);
         _filterBar.Controls.Add(_groupByEpicButton);
         _filterBar.Controls.Add(_clearFiltersButton);
+        _filterBar.Controls.Add(_boardModeButton);
         host.Controls.Add(_filterBar);
         return host;
     }
@@ -311,6 +313,7 @@ public class BoardForm : UserControl
             Sprint? activeSprint = null;
             IReadOnlyList<BoardColumnDto> columns = Array.Empty<BoardColumnDto>();
             TimeSpan? averageCycleTime = null;
+            var currentUserId = _session.CurrentUserContext.RequireUserId();
 
             await _session.RunSerializedAsync(async () =>
             {
@@ -319,6 +322,8 @@ public class BoardForm : UserControl
                 {
                     return;
                 }
+
+                _canChangeBoardMode = await _session.Permissions.HasPermissionAsync(currentUserId, project.Id, Permission.ManageProject, cancellationToken);
 
                 if (project.BoardType == BoardType.Scrum)
                 {
@@ -367,7 +372,7 @@ public class BoardForm : UserControl
     {
         if (_boardType == BoardType.Kanban)
         {
-            _sprintTitleLabel.Text = $"{_project?.Name ?? "Project"} · Kanban";
+            _sprintTitleLabel.Text = $"{_project?.Name ?? "Project"} ï¿½ Kanban";
             _sprintDateLabel.Text = BuildKanbanSubtitle();
             _startSprintButton.Enabled = false;
             _startSprintButton.Visible = false;
@@ -398,7 +403,7 @@ public class BoardForm : UserControl
         parts.Add(_averageCycleTime.HasValue
             ? $"Avg cycle time: {FormatCycleTime(_averageCycleTime.Value)}"
             : "Avg cycle time: n/a");
-        return string.Join("  ·  ", parts);
+        return string.Join("  ï¿½  ", parts);
     }
 
     private static string FormatCycleTime(TimeSpan duration)
@@ -477,9 +482,9 @@ public class BoardForm : UserControl
 
     private BoardColumnDto GetFilteredColumn(BoardColumnDto column)
     {
-        var assignee = _assigneeFilter.SelectedItem as string;
-        var priority = _priorityFilter.SelectedItem as string;
-        var type = _typeFilter.SelectedItem as string;
+        var assignee = _assigneeFilter.SelectedIndex <= 0 ? null : _assigneeFilter.SelectedItem as string;
+        var priority = _priorityFilter.SelectedIndex <= 0 ? null : _priorityFilter.SelectedItem as string;
+        var type = _typeFilter.SelectedIndex <= 0 ? null : _typeFilter.SelectedItem as string;
         var search = _searchFilter.Text.Trim();
         var boardIssues = GetBoardModeIssues(column);
 
@@ -512,9 +517,9 @@ public class BoardForm : UserControl
 
     private static bool IssueMatchesFilters(IssueSummaryDto issue, string? assignee, string? priority, string? type, string search)
     {
-        return (string.IsNullOrWhiteSpace(assignee) || assignee.StartsWith("All ") || issue.AssigneeNames.Contains(assignee)) &&
-               (string.IsNullOrWhiteSpace(priority) || priority.StartsWith("All ") || string.Equals(issue.Priority.ToString(), priority, StringComparison.OrdinalIgnoreCase)) &&
-               (string.IsNullOrWhiteSpace(type) || type.StartsWith("All ") || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)) &&
+        return (string.IsNullOrWhiteSpace(assignee) || issue.AssigneeNames.Contains(assignee)) &&
+               (string.IsNullOrWhiteSpace(priority) || string.Equals(issue.Priority.ToString(), priority, StringComparison.OrdinalIgnoreCase)) &&
+               (string.IsNullOrWhiteSpace(type) || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)) &&
                (string.IsNullOrWhiteSpace(search) ||
                 issue.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                 issue.IssueKey.Contains(search, StringComparison.OrdinalIgnoreCase) ||
@@ -762,6 +767,7 @@ public class BoardForm : UserControl
     private void UpdateBoardModeButton()
     {
         var isKanban = _boardType == BoardType.Kanban;
+        _boardModeButton.Visible = _canChangeBoardMode;
         _boardModeButton.Text = isKanban ? "Mode: Kanban" : "Mode: Scrum";
         _boardModeButton.BackColor = isKanban ? JiraTheme.Blue100 : JiraTheme.BgSurface;
         _boardModeButton.ForeColor = isKanban ? JiraTheme.PrimaryActive : JiraTheme.TextPrimary;

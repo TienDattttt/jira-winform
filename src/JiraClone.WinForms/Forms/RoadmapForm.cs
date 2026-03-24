@@ -14,24 +14,28 @@ namespace JiraClone.WinForms.Forms;
 public sealed class RoadmapForm : UserControl
 {
     private readonly AppSession _session;
-    private readonly Label _titleLabel = JiraControlFactory.CreateLabel("Lộ trình");
-    private readonly Label _subtitleLabel = JiraControlFactory.CreateLabel("Dòng thời gian epic trong dự án hiện tại. Lọc theo sprint hoặc người phụ trách, phóng to thu nhỏ mốc thời gian và kéo thanh để cập nhật lịch.", true);
+    private readonly Label _titleLabel = JiraControlFactory.CreateLabel("L\u1ed9 tr\u00ecnh");
+    private readonly Label _subtitleLabel = JiraControlFactory.CreateLabel("Theo d\u00f5i ti\u1ebfn \u0111\u1ed9 epic theo th\u1eddi gian. L\u1ecdc theo sprint ho\u1eb7c ng\u01b0\u1eddi ph\u1ee5 tr\u00e1ch, ph\u00f3ng to timeline v\u00e0 k\u00e9o thanh \u0111\u1ec3 c\u1eadp nh\u1eadt l\u1ecbch.", true);
     private readonly ComboBox _sprintFilter = CreateFilterCombo(190);
     private readonly ComboBox _assigneeFilter = CreateFilterCombo(190);
-    private readonly Button _refreshButton = JiraControlFactory.CreateSecondaryButton("Làm mới");
+    private readonly Button _refreshButton = JiraControlFactory.CreateSecondaryButton("L\u00e0m m\u1edbi");
     private readonly Label _zoomLabel = JiraControlFactory.CreateLabel(string.Empty, true);
-    private readonly ListBox _epicList = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 56, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody, IntegralHeight = false };
+    private readonly Label _epicCountBadge = CreateBadgeLabel();
+    private readonly Label _timelineHintLabel = JiraControlFactory.CreateLabel("K\u00e9o thanh \u0111\u1ec3 \u0111\u1ed5i ng\u00e0y. Double click \u0111\u1ec3 m\u1edf chi ti\u1ebft epic.", true);
+    private readonly Label _timelineLegendLabel = JiraControlFactory.CreateLabel("M\u1ed1c \u0111\u1ecf l\u00e0 h\u00f4m nay.", true);
+    private readonly ListBox _epicList = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 72, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody, IntegralHeight = false };
     private readonly RoadmapTimelineCanvas _timelineCanvas = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
-    private readonly Label _emptyState = JiraControlFactory.CreateLabel("Không có epic nào khớp bộ lọc lộ trình hiện tại.", true);
+    private readonly Label _emptyState = JiraControlFactory.CreateLabel("Kh\u00f4ng c\u00f3 epic n\u00e0o kh\u1edbp b\u1ed9 l\u1ecdc l\u1ed9 tr\u00ecnh hi\u1ec7n t\u1ea1i.", true);
     private readonly Panel _detailPanel = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(16, 12, 16, 12) };
-    private readonly Label _detailTitle = JiraControlFactory.CreateLabel("Chọn một epic");
-    private readonly Label _detailMeta = JiraControlFactory.CreateLabel("Bấm vào thanh epic để xem issue con và tiến độ.", true);
+    private readonly Label _detailTitle = JiraControlFactory.CreateLabel("Ch\u1ecdn m\u1ed9t epic");
+    private readonly Label _detailMeta = JiraControlFactory.CreateLabel("B\u1ea5m v\u00e0o thanh epic \u0111\u1ec3 xem issue con v\u00e0 ti\u1ebfn \u0111\u1ed9.", true);
     private readonly ProgressBar _detailProgress = new() { Dock = DockStyle.Top, Height = 14, Style = ProgressBarStyle.Continuous };
     private readonly Label _detailProgressCaption = JiraControlFactory.CreateLabel(string.Empty, true);
-    private readonly Button _openEpicButton = JiraControlFactory.CreateSecondaryButton("Mở epic");
+    private readonly Button _openEpicButton = JiraControlFactory.CreateSecondaryButton("M\u1edf epic");
     private readonly Panel _detailActionHost = new() { Dock = DockStyle.Top, Height = 40, BackColor = JiraTheme.BgSurface };
     private readonly ListView _childIssuesList = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, HeaderStyle = ColumnHeaderStyle.Nonclickable, HideSelection = false, MultiSelect = false };
-    private readonly Label _childIssuesEmpty = JiraControlFactory.CreateLabel("Epic này chưa có issue con nào được liên kết.", true);
+    private readonly Label _childIssuesEmpty = JiraControlFactory.CreateLabel("Epic n\u00e0y ch\u01b0a c\u00f3 issue con n\u00e0o \u0111\u01b0\u1ee3c li\u00ean k\u1ebft.", true);
+    private readonly Label _childIssuesTitle = JiraControlFactory.CreateLabel("Issue con li\u00ean k\u1ebft", true);
 
     private Project? _project;
     private IReadOnlyList<RoadmapEpicDto> _allEpics = Array.Empty<RoadmapEpicDto>();
@@ -53,8 +57,17 @@ public sealed class RoadmapForm : UserControl
 
         _titleLabel.Font = JiraTheme.FontH1;
         _refreshButton.AutoSize = false;
-        _refreshButton.Size = new Size(104, 36);
-        _zoomLabel.Margin = new Padding(0, 10, 0, 0);
+        _refreshButton.Size = new Size(112, 36);
+        _zoomLabel.AutoSize = true;
+        _zoomLabel.Margin = new Padding(0, 6, 10, 0);
+        _zoomLabel.Padding = new Padding(10, 6, 10, 6);
+        _zoomLabel.BackColor = JiraTheme.Blue100;
+        _zoomLabel.ForeColor = JiraTheme.Blue700;
+        _timelineHintLabel.ForeColor = JiraTheme.TextSecondary;
+        _timelineHintLabel.Margin = new Padding(0);
+        _timelineLegendLabel.ForeColor = JiraTheme.TextSecondary;
+        _timelineLegendLabel.Margin = new Padding(16, 0, 0, 0);
+        _epicCountBadge.Margin = new Padding(0, 4, 0, 0);
         _sprintFilter.DisplayMember = nameof(FilterOption.Label);
         _sprintFilter.ValueMember = nameof(FilterOption.Id);
         _assigneeFilter.DisplayMember = nameof(FilterOption.Label);
@@ -64,16 +77,20 @@ public sealed class RoadmapForm : UserControl
         _emptyState.Visible = false;
         JiraTheme.StyleListView(_childIssuesList);
         _childIssuesList.Columns.Add("Key", 90, HorizontalAlignment.Left);
-        _childIssuesList.Columns.Add("Tiêu đề", 240, HorizontalAlignment.Left);
-        _childIssuesList.Columns.Add("Trạng thái", 110, HorizontalAlignment.Left);
+        _childIssuesList.Columns.Add("Ti\u00eau \u0111\u1ec1", 240, HorizontalAlignment.Left);
+        _childIssuesList.Columns.Add("Tr\u1ea1ng th\u00e1i", 110, HorizontalAlignment.Left);
         _childIssuesList.Columns.Add("SP", 50, HorizontalAlignment.Right);
         _childIssuesEmpty.Dock = DockStyle.Fill;
         _childIssuesEmpty.TextAlign = ContentAlignment.MiddleCenter;
         _childIssuesEmpty.Visible = false;
         _detailTitle.Font = JiraTheme.FontH2;
+        _detailMeta.ForeColor = JiraTheme.TextSecondary;
         _detailProgressCaption.Dock = DockStyle.Top;
+        _detailProgressCaption.ForeColor = JiraTheme.TextSecondary;
         _openEpicButton.AutoSize = false;
-        _openEpicButton.Size = new Size(104, 34);
+        _openEpicButton.Size = new Size(112, 34);
+        _childIssuesTitle.Font = JiraTheme.FontSmall;
+        _childIssuesTitle.ForeColor = JiraTheme.TextSecondary;
         _detailPanel.Controls.Add(BuildChildIssuesHost());
         _detailPanel.Controls.Add(BuildDetailHeader());
         Controls.Add(BuildContentArea());
@@ -118,7 +135,7 @@ public sealed class RoadmapForm : UserControl
             _allEpics = epics;
             _sprints = sprints;
             _users = users;
-            _subtitleLabel.Text = project is null ? "Hãy chọn một dự án đang hoạt động để xem lộ trình." : $"Dòng thời gian của {project.Name}. Dùng thanh bên để chuyển giữa các epic và kéo thanh để cập nhật ngày.";
+            _subtitleLabel.Text = project is null ? "H\u00e3y ch\u1ecdn m\u1ed9t d\u1ef1 \u00e1n \u0111ang ho\u1ea1t \u0111\u1ed9ng \u0111\u1ec3 xem l\u1ed9 tr\u00ecnh." : $"Theo d\u00f5i ti\u1ebfn \u0111\u1ed9 epic c\u1ee7a {project.Name}. Ch\u1ecdn epic \u1edf c\u1ed9t tr\u00e1i, k\u00e9o thanh tr\u00ean timeline \u0111\u1ec3 c\u1eadp nh\u1eadt l\u1ecbch v\u00e0 double click \u0111\u1ec3 m\u1edf chi ti\u1ebft.";
             BindFilterChoices();
             ApplyFilters(_selectedEpicId);
         }
@@ -165,11 +182,16 @@ public sealed class RoadmapForm : UserControl
 
     private Control BuildHeader()
     {
-        var header = new Panel { Dock = DockStyle.Top, Height = 92, BackColor = JiraTheme.BgPage, Padding = new Padding(20, 18, 20, 8) };
-        _titleLabel.Location = new Point(0, 0);
-        _subtitleLabel.Location = new Point(0, 42);
-        header.Controls.Add(_titleLabel);
-        header.Controls.Add(_subtitleLabel);
+        var header = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = JiraTheme.BgPage, Padding = new Padding(20, 18, 20, 8) };
+        var titleRow = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 38, WrapContents = false, FlowDirection = FlowDirection.LeftToRight, BackColor = JiraTheme.BgPage, Margin = new Padding(0), Padding = new Padding(0) };
+        _titleLabel.Margin = new Padding(0, 0, 12, 0);
+        titleRow.Controls.Add(_titleLabel);
+        titleRow.Controls.Add(_epicCountBadge);
+        var subtitleHost = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgPage };
+        _subtitleLabel.Location = new Point(0, 4);
+        subtitleHost.Controls.Add(_subtitleLabel);
+        header.Controls.Add(subtitleHost);
+        header.Controls.Add(titleRow);
         return header;
     }
 
@@ -187,15 +209,15 @@ public sealed class RoadmapForm : UserControl
 
     private Control BuildToolbar()
     {
-        var toolbar = new Panel { Dock = DockStyle.Top, Height = 58, BackColor = JiraTheme.BgPage, Padding = new Padding(20, 0, 20, 12) };
+        var toolbar = new Panel { Dock = DockStyle.Top, Height = 66, BackColor = JiraTheme.BgPage, Padding = new Padding(20, 4, 20, 12) };
         var left = new FlowLayoutPanel { Dock = DockStyle.Left, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.LeftToRight, BackColor = JiraTheme.BgPage, Margin = new Padding(0), Padding = new Padding(0) };
         left.Controls.Add(MakeFilterLabel("Sprint"));
         left.Controls.Add(_sprintFilter);
-        left.Controls.Add(MakeFilterLabel("Assignee"));
+        left.Controls.Add(MakeFilterLabel("Ng\u01b0\u1eddi ph\u1ee5 tr\u00e1ch"));
         left.Controls.Add(_assigneeFilter);
-        left.Controls.Add(_zoomLabel);
-        var right = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, BackColor = JiraTheme.BgPage, Margin = new Padding(0), Padding = new Padding(0) };
+        var right = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, BackColor = JiraTheme.BgPage, Margin = new Padding(0), Padding = new Padding(0, 6, 0, 0) };
         right.Controls.Add(_refreshButton);
+        right.Controls.Add(_zoomLabel);
         toolbar.Controls.Add(right);
         toolbar.Controls.Add(left);
         return toolbar;
@@ -204,8 +226,8 @@ public sealed class RoadmapForm : UserControl
     private Control BuildBody()
     {
         var split = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel1, BackColor = JiraTheme.BgPage };
-        split.HandleCreated += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 220, 220, 420);
-        split.SizeChanged += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 220, 220, 420);
+        split.HandleCreated += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 300, 280, 420);
+        split.SizeChanged += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 300, 280, 420);
         split.Panel1.BackColor = JiraTheme.BgSurface;
         split.Panel2.BackColor = JiraTheme.BgPage;
         split.Panel1.Controls.Add(BuildSidebar());
@@ -216,9 +238,14 @@ public sealed class RoadmapForm : UserControl
     private Control BuildSidebar()
     {
         var host = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
-        var header = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = JiraTheme.BgSurface, Padding = new Padding(16, 12, 16, 8) };
-        var label = JiraControlFactory.CreateLabel("Epic", true);
-        label.Dock = DockStyle.Fill;
+        var header = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = JiraTheme.BgSurface, Padding = new Padding(16, 12, 16, 8) };
+        var label = JiraControlFactory.CreateLabel("Danh s\u00e1ch epic", true);
+        label.Font = JiraTheme.FontSmall;
+        label.Location = new Point(0, 0);
+        var hint = JiraControlFactory.CreateLabel("Ch\u1ecdn m\u1ed9t epic \u0111\u1ec3 \u0111\u1ed3ng b\u1ed9 v\u1edbi timeline.", true);
+        hint.ForeColor = JiraTheme.TextSecondary;
+        hint.Location = new Point(0, 22);
+        header.Controls.Add(hint);
         header.Controls.Add(label);
         host.Controls.Add(_epicList);
         host.Controls.Add(header);
@@ -228,24 +255,48 @@ public sealed class RoadmapForm : UserControl
     private Control BuildTimelineAndDetail()
     {
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, FixedPanel = FixedPanel.Panel2, BackColor = JiraTheme.BgPage };
-        split.HandleCreated += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 430, 0, 210);
-        split.SizeChanged += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 430, 0, 210);
+        split.HandleCreated += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 380, 300, 190);
+        split.SizeChanged += (_, _) => SplitContainerHelper.ConfigureSafeLayout(split, 380, 300, 190);
         split.Panel1.BackColor = JiraTheme.BgSurface;
         split.Panel2.BackColor = JiraTheme.BgSurface;
         var timelineHost = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
         timelineHost.Controls.Add(_emptyState);
         timelineHost.Controls.Add(_timelineCanvas);
+        timelineHost.Controls.Add(BuildTimelineHeader());
         split.Panel1.Controls.Add(timelineHost);
         split.Panel2.Controls.Add(_detailPanel);
         return split;
     }
 
+    private Control BuildTimelineHeader()
+    {
+        var header = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = JiraTheme.BgSurface, Padding = new Padding(16, 10, 16, 8) };
+        var left = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
+        var title = JiraControlFactory.CreateLabel("D\u00f2ng th\u1eddi gian epic", true);
+        title.Font = JiraTheme.FontSmall;
+        title.Location = new Point(0, 0);
+        _timelineHintLabel.Location = new Point(0, 20);
+        left.Controls.Add(_timelineHintLabel);
+        left.Controls.Add(title);
+        var right = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.LeftToRight, BackColor = JiraTheme.BgSurface, Margin = new Padding(0), Padding = new Padding(0, 4, 0, 0) };
+        right.Controls.Add(_timelineLegendLabel);
+        right.Controls.Add(_zoomLabel);
+        header.Controls.Add(right);
+        header.Controls.Add(left);
+        return header;
+    }
+
     private Control BuildDetailHeader()
     {
-        var header = new Panel { Dock = DockStyle.Top, Height = 118, BackColor = JiraTheme.BgSurface };
+        var header = new Panel { Dock = DockStyle.Top, Height = 128, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 0, 0, 8) };
         _detailTitle.Dock = DockStyle.Top;
+        _detailTitle.AutoSize = false;
+        _detailTitle.Height = 34;
         _detailMeta.Dock = DockStyle.Top;
+        _detailMeta.Padding = new Padding(0, 4, 0, 0);
         _detailProgress.Dock = DockStyle.Top;
+        _detailProgressCaption.Dock = DockStyle.Top;
+        _detailProgressCaption.Padding = new Padding(0, 6, 0, 0);
         _openEpicButton.Dock = DockStyle.Right;
         _detailActionHost.Controls.Clear();
         _detailActionHost.Controls.Add(_openEpicButton);
@@ -261,8 +312,12 @@ public sealed class RoadmapForm : UserControl
     private Control BuildChildIssuesHost()
     {
         var host = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 10, 0, 0) };
+        var titleHost = new Panel { Dock = DockStyle.Top, Height = 28, BackColor = JiraTheme.BgSurface };
+        _childIssuesTitle.Dock = DockStyle.Fill;
+        titleHost.Controls.Add(_childIssuesTitle);
         host.Controls.Add(_childIssuesEmpty);
         host.Controls.Add(_childIssuesList);
+        host.Controls.Add(titleHost);
         return host;
     }
 
@@ -369,11 +424,11 @@ public sealed class RoadmapForm : UserControl
     {
         var selectedSprintId = _sprintFilter.SelectedValue as int? ?? 0;
         var selectedAssigneeId = _assigneeFilter.SelectedValue as int? ?? 0;
-        var sprintOptions = new List<FilterOption> { new(0, "Tất cả sprint") };
+        var sprintOptions = new List<FilterOption> { new(0, "T\u1ea5t c\u1ea3 sprint") };
         sprintOptions.AddRange(_sprints.Select(sprint => new FilterOption(sprint.Id, sprint.Name)));
         _sprintFilter.DataSource = sprintOptions;
         _sprintFilter.SelectedValue = sprintOptions.Any(option => option.Id == selectedSprintId) ? selectedSprintId : 0;
-        var assigneeOptions = new List<FilterOption> { new(0, "Tất cả người phụ trách") };
+        var assigneeOptions = new List<FilterOption> { new(0, "T\u1ea5t c\u1ea3 ng\u01b0\u1eddi ph\u1ee5 tr\u00e1ch") };
         assigneeOptions.AddRange(_users.Select(user => new FilterOption(user.Id, user.DisplayName)));
         _assigneeFilter.DataSource = assigneeOptions;
         _assigneeFilter.SelectedValue = assigneeOptions.Any(option => option.Id == selectedAssigneeId) ? selectedAssigneeId : 0;
@@ -407,6 +462,7 @@ public sealed class RoadmapForm : UserControl
         }
         _timelineCanvas.SetEpics(_filteredEpics);
         _timelineCanvas.SelectEpic(_selectedEpicId);
+        _epicCountBadge.Text = _filteredEpics.Count == 1 ? "1 epic" : $"{_filteredEpics.Count} epic";
         _emptyState.Visible = _filteredEpics.Count == 0;
         _timelineCanvas.Visible = _filteredEpics.Count > 0;
         _ = LoadSelectedEpicDetailsAsync();
@@ -414,13 +470,15 @@ public sealed class RoadmapForm : UserControl
 
     private void BindDetail(RoadmapEpicDto? epic, IReadOnlyList<Issue> childIssues)
     {
-        _detailTitle.Text = epic?.Title ?? "Chọn một epic";
-        _detailMeta.Text = epic is null ? "Bấm vào thanh epic để xem issue con và tiến độ." : $"{epic.IssueKey} | {epic.Status} | {BuildDateRangeText(epic)}{(string.IsNullOrWhiteSpace(epic.AssigneeName) ? string.Empty : $" | {epic.AssigneeName}")}";
+        _detailTitle.Text = epic?.Title ?? "Ch\u1ecdn m\u1ed9t epic \u0111\u1ec3 xem chi ti\u1ebft";
+        _detailMeta.Text = epic is null
+            ? "Ch\u1ecdn m\u1ed9t epic trong danh s\u00e1ch b\u00ean tr\u00e1i ho\u1eb7c b\u1ea5m tr\u1ef1c ti\u1ebfp tr\u00ean timeline."
+            : $"{epic.IssueKey} \u2022 {epic.Status} \u2022 {BuildDateRangeText(epic)}{(string.IsNullOrWhiteSpace(epic.AssigneeName) ? string.Empty : $" \u2022 {epic.AssigneeName}")}";
         if (epic is null)
         {
             _detailProgress.Maximum = 1;
             _detailProgress.Value = 0;
-            _detailProgressCaption.Text = string.Empty;
+            _detailProgressCaption.Text = "Ch\u01b0a c\u00f3 epic n\u00e0o \u0111\u01b0\u1ee3c ch\u1ecdn.";
             _openEpicButton.Enabled = false;
             _childIssuesList.Items.Clear();
             _childIssuesList.Visible = false;
@@ -432,7 +490,9 @@ public sealed class RoadmapForm : UserControl
         var total = epic.TotalStoryPoints > 0 ? epic.TotalStoryPoints : epic.ChildIssueCount;
         _detailProgress.Maximum = Math.Max(1, total);
         _detailProgress.Value = Math.Clamp(completed, 0, _detailProgress.Maximum);
-        _detailProgressCaption.Text = epic.TotalStoryPoints > 0 ? $"Tiến độ: {epic.DoneStoryPoints}/{epic.TotalStoryPoints} điểm story đã hoàn thành" : $"Tiến độ: {epic.DoneCount}/{epic.ChildIssueCount} issue con đã hoàn thành";
+        _detailProgressCaption.Text = epic.TotalStoryPoints > 0
+            ? $"Ti\u1ebfn \u0111\u1ed9: {epic.DoneStoryPoints}/{epic.TotalStoryPoints} \u0111i\u1ec3m story \u0111\u00e3 ho\u00e0n th\u00e0nh"
+            : $"Ti\u1ebfn \u0111\u1ed9: {epic.DoneCount}/{epic.ChildIssueCount} issue con \u0111\u00e3 ho\u00e0n th\u00e0nh";
         _childIssuesList.BeginUpdate();
         try
         {
@@ -462,20 +522,26 @@ public sealed class RoadmapForm : UserControl
         var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
         using var backgroundBrush = new SolidBrush(isSelected ? JiraTheme.Blue100 : JiraTheme.BgSurface);
         e.Graphics.FillRectangle(backgroundBrush, e.Bounds);
+        if (isSelected)
+        {
+            using var accentBrush = new SolidBrush(JiraTheme.Blue600);
+            e.Graphics.FillRectangle(accentBrush, new Rectangle(e.Bounds.X, e.Bounds.Y, 4, e.Bounds.Height));
+        }
         using var dotBrush = new SolidBrush(ParseColor(epic.Color, ResolveCategoryColor(epic.StatusCategory)));
-        e.Graphics.FillEllipse(dotBrush, new Rectangle(e.Bounds.X + 14, e.Bounds.Y + 22, 8, 8));
-        DrawAvatar(e.Graphics, new Rectangle(e.Bounds.X + 30, e.Bounds.Y + 14, 28, 28), epic.AssigneeName);
-        TextRenderer.DrawText(e.Graphics, epic.Title, JiraTheme.FontSmall, new Rectangle(e.Bounds.X + 70, e.Bounds.Y + 10, e.Bounds.Width - 86, 18), JiraTheme.TextPrimary, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
-        TextRenderer.DrawText(e.Graphics, $"{epic.DoneCount}/{epic.ChildIssueCount} ho�n th�nh | {BuildDateRangeText(epic)}", JiraTheme.FontCaption, new Rectangle(e.Bounds.X + 70, e.Bounds.Y + 28, e.Bounds.Width - 86, 18), JiraTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
+        e.Graphics.FillEllipse(dotBrush, new Rectangle(e.Bounds.X + 16, e.Bounds.Y + 18, 10, 10));
+        DrawAvatar(e.Graphics, new Rectangle(e.Bounds.X + 34, e.Bounds.Y + 12, 30, 30), epic.AssigneeName);
+        TextRenderer.DrawText(e.Graphics, epic.Title, JiraTheme.FontSmall, new Rectangle(e.Bounds.X + 76, e.Bounds.Y + 10, e.Bounds.Width - 92, 20), JiraTheme.TextPrimary, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
+        TextRenderer.DrawText(e.Graphics, $"{epic.IssueKey} \u2022 {epic.Status}{(string.IsNullOrWhiteSpace(epic.AssigneeName) ? string.Empty : $" \u2022 {epic.AssigneeName}")}", JiraTheme.FontCaption, new Rectangle(e.Bounds.X + 76, e.Bounds.Y + 31, e.Bounds.Width - 92, 16), JiraTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
+        TextRenderer.DrawText(e.Graphics, $"{epic.DoneCount}/{epic.ChildIssueCount} ho\u00e0n th\u00e0nh \u2022 {BuildDateRangeText(epic)}", JiraTheme.FontCaption, new Rectangle(e.Bounds.X + 76, e.Bounds.Y + 47, e.Bounds.Width - 92, 16), JiraTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
         if (e.Index < _epicList.Items.Count - 1)
         {
             using var pen = new Pen(JiraTheme.Border);
-            e.Graphics.DrawLine(pen, e.Bounds.X + 14, e.Bounds.Bottom - 1, e.Bounds.Right - 14, e.Bounds.Bottom - 1);
+            e.Graphics.DrawLine(pen, e.Bounds.X + 16, e.Bounds.Bottom - 1, e.Bounds.Right - 16, e.Bounds.Bottom - 1);
         }
         e.DrawFocusRectangle();
     }
 
-    private void UpdateZoomLabel() => _zoomLabel.Text = $"Thu phóng: {_timelineCanvas.GetScaleLabel()}";
+    private void UpdateZoomLabel() => _zoomLabel.Text = $"Thu ph\u00f3ng: {_timelineCanvas.GetScaleLabel()}";
     private void UpdateDetailActionButtonLayout() => _openEpicButton.Location = new Point(Math.Max(0, _detailActionHost.Width - _openEpicButton.Width), 0);
     private static ComboBox CreateFilterCombo(int width)
     {
@@ -492,8 +558,22 @@ public sealed class RoadmapForm : UserControl
         LayoutHelper.ConfigureComboBox(comboBox);
         return comboBox;
     }
-    private static Label MakeFilterLabel(string text) { var label = JiraControlFactory.CreateLabel(text, true); label.Margin = new Padding(0, 10, 6, 0); return label; }
-    private static string BuildDateRangeText(RoadmapEpicDto epic) => epic.StartDate.HasValue && epic.DueDate.HasValue ? $"{epic.StartDate:dd MMM} - {epic.DueDate:dd MMM}" : epic.StartDate.HasValue ? $"B?t d?u {epic.StartDate:dd MMM}" : epic.DueDate.HasValue ? $"H?n {epic.DueDate:dd MMM}" : "Chua l�n l?ch";
+    private static Label MakeFilterLabel(string text)
+    {
+        var label = JiraControlFactory.CreateLabel(text, true);
+        label.Margin = new Padding(0, 10, 6, 0);
+        return label;
+    }
+    private static Label CreateBadgeLabel()
+    {
+        var label = JiraControlFactory.CreateLabel("0 epic", true);
+        label.AutoSize = true;
+        label.BackColor = JiraTheme.Blue100;
+        label.ForeColor = JiraTheme.Blue700;
+        label.Padding = new Padding(10, 6, 10, 6);
+        return label;
+    }
+    private static string BuildDateRangeText(RoadmapEpicDto epic) => epic.StartDate.HasValue && epic.DueDate.HasValue ? $"{epic.StartDate:dd MMM} - {epic.DueDate:dd MMM}" : epic.StartDate.HasValue ? $"B\u1eaft \u0111\u1ea7u {epic.StartDate:dd MMM}" : epic.DueDate.HasValue ? $"H\u1ea1n {epic.DueDate:dd MMM}" : "Ch\u01b0a l\u00ean l\u1ecbch";
     private static Color ResolveCategoryColor(StatusCategory category) => category switch { StatusCategory.Done => JiraTheme.Green700, StatusCategory.InProgress => JiraTheme.Blue600, _ => JiraTheme.Neutral700 };
     private static Color ParseColor(string? value, Color fallback) { try { return string.IsNullOrWhiteSpace(value) ? fallback : ColorTranslator.FromHtml(value); } catch { return fallback; } }
     private static void DrawAvatar(Graphics graphics, Rectangle bounds, string? displayName) { using var brush = new SolidBrush(ResolveAvatarColor(displayName)); graphics.SmoothingMode = SmoothingMode.AntiAlias; graphics.FillEllipse(brush, bounds); TextRenderer.DrawText(graphics, BuildInitials(displayName), JiraTheme.FontCaption, bounds, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter); }
@@ -504,11 +584,11 @@ public sealed class RoadmapForm : UserControl
 
     private sealed class RoadmapTimelineCanvas : ScrollableControl
     {
-        private const int HeaderHeight = 58;
-        private const int RowHeight = 48;
-        private const int RowPadding = 8;
-        private const int BarHeight = 30;
-        private const int LeftPadding = 24;
+        private const int HeaderHeight = 64;
+        private const int RowHeight = 56;
+        private const int RowPadding = 10;
+        private const int BarHeight = 32;
+        private const int LeftPadding = 28;
         private const int RightPadding = 40;
         private const float MinPixelsPerDay = 2f;
         private const float MaxPixelsPerDay = 20f;
@@ -544,7 +624,7 @@ public sealed class RoadmapForm : UserControl
 
         public void SelectEpic(int? epicId) { _selectedEpicId = epicId; Invalidate(); }
         public void ScrollToEpic(int epicId) { var index = _epics.ToList().FindIndex(epic => epic.EpicId == epicId); if (index >= 0) AutoScrollPosition = new Point(Math.Abs(AutoScrollPosition.X), index * RowHeight); }
-        public string GetScaleLabel() => ResolveScale() switch { TimelineScale.Day => "Chế độ ngày", TimelineScale.Week => "Chế độ tuần", _ => "Chế độ tháng" };
+        public string GetScaleLabel() => ResolveScale() switch { TimelineScale.Day => "Ch\u1ebf \u0111\u1ed9 ng\u00e0y", TimelineScale.Week => "Ch\u1ebf \u0111\u1ed9 tu\u1ea7n", _ => "Ch\u1ebf \u0111\u1ed9 th\u00e1ng" };
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -720,7 +800,7 @@ public sealed class RoadmapForm : UserControl
                 graphics.FillPath(fillBrush, path);
                 using var pen = new Pen(epic.EpicId == _selectedEpicId ? JiraTheme.Blue700 : Color.FromArgb(90, Color.Black), epic.EpicId == _selectedEpicId ? 2f : 1f);
                 graphics.DrawPath(pen, path);
-                TextRenderer.DrawText(graphics, epic.Title, JiraTheme.FontSmall, Rectangle.Round(new RectangleF(barBounds.X + 12, barBounds.Y, Math.Max(40, barBounds.Width - 60), barBounds.Height)), Color.White, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                TextRenderer.DrawText(graphics, $"{epic.IssueKey} \u2022 {epic.Title}", JiraTheme.FontSmall, Rectangle.Round(new RectangleF(barBounds.X + 12, barBounds.Y, Math.Max(40, barBounds.Width - 60), barBounds.Height)), Color.White, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
                 if (barBounds.Width > 110)
                 {
                     var progressBounds = new Rectangle((int)(barBounds.Right - 46), (int)barBounds.Y + 6, 34, 18);

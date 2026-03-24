@@ -26,7 +26,7 @@ public class MarkdownEditorControl : UserControl
         Controls.Add(_browser);
 
         _browser.DocumentCompleted += Browser_DocumentCompleted;
-        _browser.Leave += (_, _) => EditorLeave?.Invoke(this, EventArgs.Empty);
+        _browser.LostFocus += (_, _) => EditorLeave?.Invoke(this, EventArgs.Empty);
         _browser.DocumentText = LoadHostDocument();
     }
 
