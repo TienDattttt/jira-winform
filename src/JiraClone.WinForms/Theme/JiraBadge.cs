@@ -12,7 +12,7 @@ public sealed class JiraBadge : UserControl
 
     private JiraBadge(string text, Color backColor, Color textColor)
     {
-        BadgeText = VietnameseUi.Translate(text);
+        BadgeText = text;
         _backColor = backColor;
         _textColor = textColor;
 
@@ -32,13 +32,14 @@ public sealed class JiraBadge : UserControl
 
     public static JiraBadge ForStatus(IssueStatus status)
     {
+        var text = IssueDisplayText.TranslateStatus(status);
         return status switch
         {
-            IssueStatus.Backlog => new JiraBadge("TODO", JiraTheme.StatusTodo, JiraTheme.StatusTodoText),
-            IssueStatus.Selected => new JiraBadge("SELECTED", JiraTheme.StatusTodo, JiraTheme.StatusTodoText),
-            IssueStatus.InProgress => new JiraBadge("IN PROGRESS", JiraTheme.StatusInProgress, JiraTheme.StatusInProgressText),
-            IssueStatus.Done => new JiraBadge("DONE", JiraTheme.StatusDone, JiraTheme.StatusDoneText),
-            _ => new JiraBadge(status.ToString().ToUpperInvariant(), JiraTheme.StatusTodo, JiraTheme.StatusTodoText),
+            IssueStatus.Backlog => new JiraBadge(text, JiraTheme.StatusTodo, JiraTheme.StatusTodoText),
+            IssueStatus.Selected => new JiraBadge(text, JiraTheme.StatusTodo, JiraTheme.StatusTodoText),
+            IssueStatus.InProgress => new JiraBadge(text, JiraTheme.StatusInProgress, JiraTheme.StatusInProgressText),
+            IssueStatus.Done => new JiraBadge(text, JiraTheme.StatusDone, JiraTheme.StatusDoneText),
+            _ => new JiraBadge(text, JiraTheme.StatusTodo, JiraTheme.StatusTodoText),
         };
     }
 
@@ -56,12 +57,13 @@ public sealed class JiraBadge : UserControl
 
     public static JiraBadge ForType(IssueType type)
     {
+        var text = IssueDisplayText.TranslateType(type);
         return type switch
         {
-            IssueType.Task => new JiraBadge("TASK", Color.FromArgb(231, 240, 255), JiraTheme.Blue600),
-            IssueType.Bug => new JiraBadge("BUG", Color.FromArgb(255, 235, 233), JiraTheme.Red500),
-            IssueType.Story => new JiraBadge("STORY", Color.FromArgb(228, 252, 239), JiraTheme.Green700),
-            _ => new JiraBadge(type.ToString().ToUpperInvariant(), Color.FromArgb(245, 234, 255), JiraTheme.Purple500),
+            IssueType.Task => new JiraBadge(text, Color.FromArgb(231, 240, 255), JiraTheme.Blue600),
+            IssueType.Bug => new JiraBadge(text, Color.FromArgb(255, 235, 233), JiraTheme.Red500),
+            IssueType.Story => new JiraBadge(text, Color.FromArgb(228, 252, 239), JiraTheme.Green700),
+            _ => new JiraBadge(text, Color.FromArgb(245, 234, 255), JiraTheme.Purple500),
         };
     }
 

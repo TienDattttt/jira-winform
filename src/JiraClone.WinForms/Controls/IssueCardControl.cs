@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
@@ -179,7 +179,7 @@ public class IssueCardControl : UserControl
         e.Graphics.FillPath(statusBack, statusPath);
         TextRenderer.DrawText(
             e.Graphics,
-            Issue.StatusName,
+            IssueDisplayText.TranslateStatus(Issue.StatusName),
             JiraTheme.FontCaption,
             statusBounds,
             Color.White,
@@ -224,7 +224,7 @@ public class IssueCardControl : UserControl
     private void ConfigureContextMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add($"Status: {Issue.StatusName}");
+        menu.Items.Add($"Trạng thái: {IssueDisplayText.TranslateStatus(Issue.StatusName)}");
         menu.Items[0].Enabled = false;
         ContextMenuStrip = menu;
     }
@@ -474,3 +474,5 @@ public class IssueCardControl : UserControl
 
 public sealed record IssueCardDragData(IssueSummaryDto Issue);
 public sealed record IssueMoveRequestedEventArgs(int IssueId, int SourceStatusId, string SourceStatusName, int TargetStatusId, string TargetStatusName);
+
+

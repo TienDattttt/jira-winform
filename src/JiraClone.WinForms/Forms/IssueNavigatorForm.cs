@@ -1,4 +1,4 @@
-using JiraClone.Application.Jql;
+﻿using JiraClone.Application.Jql;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
@@ -20,9 +20,9 @@ public sealed class IssueNavigatorForm : UserControl
     private readonly Label _subtitleLabel = JiraControlFactory.CreateLabel("Duyệt issue với tìm kiếm JQL nâng cao.", true);
     private readonly Label _countBadge = JiraControlFactory.CreateLabel("0 issue", true);
     private readonly JqlEditorControl _jqlEditor = new() { Dock = DockStyle.Top };
-    private readonly ComboBox _statusFilter = CreateFilterCombo(170);
-    private readonly ComboBox _priorityFilter = CreateFilterCombo(160);
-    private readonly ComboBox _typeFilter = CreateFilterCombo(150);
+    private readonly ComboBox _statusFilter = CreateFilterCombo(190);
+    private readonly ComboBox _priorityFilter = CreateFilterCombo(210);
+    private readonly ComboBox _typeFilter = CreateFilterCombo(170);
     private readonly TextBox _searchBox = JiraControlFactory.CreateTextBox();
     private readonly Button _createIssueButton = JiraControlFactory.CreatePrimaryButton("Tạo issue");
     private readonly Button _runQueryButton = JiraControlFactory.CreatePrimaryButton("Chạy truy vấn");
@@ -54,6 +54,13 @@ public sealed class IssueNavigatorForm : UserControl
         DoubleBuffered = true;
 
         _titleLabel.Font = JiraTheme.FontH1;
+        _statusFilter.AccessibleName = "IssueNav_ComboBox_Status";
+        _priorityFilter.AccessibleName = "IssueNav_ComboBox_Priority";
+        _typeFilter.AccessibleName = "IssueNav_ComboBox_Type";
+        _searchBox.AccessibleName = "IssueNav_TextBox_Search";
+        _createIssueButton.AccessibleName = "IssueNav_Button_CreateIssue";
+        _grid.AccessibleName = "IssueNav_DataGridView_Results";
+        _openButton.AccessibleName = "IssueNav_Button_Open";
         _countBadge.AutoSize = true;
         _countBadge.BackColor = JiraTheme.Blue100;
         _countBadge.ForeColor = JiraTheme.PrimaryActive;
@@ -218,34 +225,42 @@ public sealed class IssueNavigatorForm : UserControl
 
     private Control BuildToolbar()
     {
-        var host = new Panel { Dock = DockStyle.Top, Height = 60, BackColor = JiraTheme.BgPage, Padding = new Padding(0, 0, 0, 12) };
-        var surface = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(14, 10, 14, 10) };
+        var host = new Panel { Dock = DockStyle.Top, Height = 72, BackColor = JiraTheme.BgPage, Padding = new Padding(0, 0, 0, 16) };
+        var surface = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(14, 14, 14, 14) };
         surface.Paint += (_, e) =>
         {
             using var pen = new Pen(JiraTheme.Border);
             e.Graphics.DrawRectangle(pen, 0, 0, surface.Width - 1, surface.Height - 1);
         };
 
-        var filters = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = JiraTheme.BgSurface, Margin = new Padding(0), Padding = new Padding(0) };
-        filters.Controls.Add(_statusFilter);
-        filters.Controls.Add(_priorityFilter);
-        filters.Controls.Add(_typeFilter);
-        filters.Controls.Add(_searchBox);
+        var toolbarItems = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = JiraTheme.BgSurface,
+            Margin = new Padding(0),
+            Padding = new Padding(0)
+        };
+        _searchBox.Margin = new Padding(0, 0, 16, 0);
+        _createIssueButton.Margin = new Padding(0, 0, 10, 0);
+        _openButton.Margin = new Padding(0);
 
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 260, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, BackColor = JiraTheme.BgSurface, Margin = new Padding(0), Padding = new Padding(0) };
-        actions.Controls.Add(_createIssueButton);
-        actions.Controls.Add(_openButton);
-        _openButton.Margin = new Padding(0, 0, 10, 0);
+        toolbarItems.Controls.Add(_statusFilter);
+        toolbarItems.Controls.Add(_priorityFilter);
+        toolbarItems.Controls.Add(_typeFilter);
+        toolbarItems.Controls.Add(_searchBox);
+        toolbarItems.Controls.Add(_createIssueButton);
+        toolbarItems.Controls.Add(_openButton);
 
-        surface.Controls.Add(actions);
-        surface.Controls.Add(filters);
+        surface.Controls.Add(toolbarItems);
         host.Controls.Add(surface);
         return host;
     }
 
     private Control BuildHeader()
     {
-        var header = new Panel { Dock = DockStyle.Top, Height = 78, BackColor = JiraTheme.BgPage };
+        var header = new Panel { Dock = DockStyle.Top, Height = 88, BackColor = JiraTheme.BgPage };
 
         var meta = new FlowLayoutPanel
         {
@@ -263,13 +278,13 @@ public sealed class IssueNavigatorForm : UserControl
         header.Controls.Add(_subtitleLabel);
         header.Controls.Add(meta);
         meta.Location = new Point(0, 0);
-        _subtitleLabel.Location = new Point(0, 42);
+        _subtitleLabel.Location = new Point(0, 48);
         return header;
     }
 
     private Control BuildQueryRegion()
     {
-        var host = new Panel { Dock = DockStyle.Top, Height = 164, BackColor = JiraTheme.BgPage, Padding = new Padding(0, 0, 0, 16) };
+        var host = new Panel { Dock = DockStyle.Top, Height = 176, BackColor = JiraTheme.BgPage, Padding = new Padding(0, 0, 0, 20) };
         var surface = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(14, 12, 14, 12) };
         surface.Paint += (_, e) =>
         {
@@ -471,14 +486,14 @@ public sealed class IssueNavigatorForm : UserControl
                 || issue.AssigneeNames.Any(name => name.Contains(search, StringComparison.OrdinalIgnoreCase))
                 || issue.Labels.Any(label => label.Contains(search, StringComparison.OrdinalIgnoreCase))
                 || issue.Components.Any(component => component.Contains(search, StringComparison.OrdinalIgnoreCase)))
-            .Where(issue => string.IsNullOrWhiteSpace(status) || string.Equals(issue.WorkflowStatusName, status, StringComparison.OrdinalIgnoreCase))
+            .Where(issue => string.IsNullOrWhiteSpace(status) || string.Equals(FormatStatus(issue.WorkflowStatusName), status, StringComparison.OrdinalIgnoreCase))
             .Where(issue => string.IsNullOrWhiteSpace(priority) || string.Equals(FormatPriority(issue.Priority), priority, StringComparison.OrdinalIgnoreCase))
             .Where(issue => string.IsNullOrWhiteSpace(type) || string.Equals(FormatType(issue.Type), type, StringComparison.OrdinalIgnoreCase))
             .Select(issue => new IssueRow(
                 issue.Id,
                 issue.IssueKey,
                 issue.Title,
-                issue.WorkflowStatusName,
+                FormatStatus(issue.WorkflowStatusName),
                 FormatPriority(issue.Priority),
                 FormatType(issue.Type),
                 issue.AssigneeNames.Count == 0 ? "Chưa giao" : string.Join(", ", issue.AssigneeNames)))
@@ -495,7 +510,7 @@ public sealed class IssueNavigatorForm : UserControl
 
     private void PopulateQuickFilters()
     {
-        ResetFilter(_statusFilter, "Tất cả trạng thái", _issues.Select(issue => issue.WorkflowStatusName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x));
+        ResetFilter(_statusFilter, "Tất cả trạng thái", _issues.Select(issue => FormatStatus(issue.WorkflowStatusName)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x));
         ResetFilter(_priorityFilter, "Tất cả mức ưu tiên", _issues.Select(issue => FormatPriority(issue.Priority)).Distinct(StringComparer.OrdinalIgnoreCase));
         ResetFilter(_typeFilter, "Tất cả loại", _issues.Select(issue => FormatType(issue.Type)).Distinct(StringComparer.OrdinalIgnoreCase));
     }
@@ -794,15 +809,9 @@ public sealed class IssueNavigatorForm : UserControl
         _ => priority.ToString()
     };
 
-    private static string FormatType(IssueType type) => type switch
-    {
-        IssueType.Task => "Task",
-        IssueType.Bug => "Bug",
-        IssueType.Story => "Story",
-        IssueType.Epic => "Epic",
-        IssueType.Subtask => "Subtask",
-        _ => type.ToString()
-    };
+    private static string FormatStatus(string status) => IssueDisplayText.TranslateStatus(status);
+
+    private static string FormatType(IssueType type) => IssueDisplayText.TranslateType(type);
 
     private sealed record IssueRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
 
@@ -868,6 +877,8 @@ public sealed class IssueNavigatorForm : UserControl
         public string FilterName => _name.Text.Trim();
     }
 }
+
+
 
 
 

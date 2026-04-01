@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
@@ -38,33 +38,33 @@ public class IssueDetailsForm : Form
     private readonly TextBox _titleEditor = JiraControlFactory.CreateTextBox();
     private readonly MarkdownEditorControl _descriptionEditor = new() { Dock = DockStyle.Fill };
     private readonly MarkdownViewerControl _descriptionViewer = new() { Dock = DockStyle.Fill, Visible = false };
-    private readonly Button _descriptionEdit = CreateModeButton("Edit");
-    private readonly Button _descriptionPreview = CreateModeButton("Preview");
+    private readonly Button _descriptionEdit = CreateModeButton("Sửa");
+    private readonly Button _descriptionPreview = CreateModeButton("Xem trước");
     private readonly AttachmentPicker _attachmentPicker = new() { Dock = DockStyle.Top, Height = 42 };
     private readonly AttachmentListControl _attachments = new() { Dock = DockStyle.Fill };
-    private readonly Button _commentsTab = MakeTab("Comments", true);
-    private readonly Button _historyTab = MakeTab("History", false);
-    private readonly Button _childIssuesTab = MakeTab("Child Issues", false);
+    private readonly Button _commentsTab = MakeTab("Bình luận", true);
+    private readonly Button _historyTab = MakeTab("Lịch sử", false);
+    private readonly Button _childIssuesTab = MakeTab("Issue con", false);
     private readonly Panel _tabIndicator = new() { Height = 2, Width = 100, BackColor = JiraTheme.Primary };
     private readonly Panel _commentComposer = new() { Dock = DockStyle.Top, Height = 116, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 8) };
     private readonly TextBox _commentInput = JiraControlFactory.CreateTextBox();
-    private readonly Button _saveComment = JiraControlFactory.CreatePrimaryButton("Save");
+    private readonly Button _saveComment = JiraControlFactory.CreatePrimaryButton("Lưu");
     private readonly CommentListControl _comments = new() { Dock = DockStyle.Fill };
     private readonly ActivityTimelineControl _history = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly Panel _childIssuesView = new() { Dock = DockStyle.Fill, Visible = false, BackColor = JiraTheme.BgSurface };
     private readonly FlowLayoutPanel _childIssuesPanel = new() { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Visible = true, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 4, 0, 4) };
-    private readonly Button _addExistingIssueButton = JiraControlFactory.CreateSecondaryButton("Add existing issue");
-    private readonly Button _createChildIssueButton = JiraControlFactory.CreatePrimaryButton("Create child issue");
+    private readonly Button _addExistingIssueButton = JiraControlFactory.CreateSecondaryButton("Thêm issue có sẵn");
+    private readonly Button _createChildIssueButton = JiraControlFactory.CreatePrimaryButton("Tạo issue con");
     private readonly ComboBox _status = new() { DrawMode = DrawMode.OwnerDrawFixed, DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
     private readonly ComboBox _priority = new() { DrawMode = DrawMode.OwnerDrawFixed, DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
     private readonly SprintSelectorControl _sprint = new() { Width = 180 };
     private readonly NumericUpDown _storyPoints = new() { Width = 180, Minimum = 0, Maximum = 100, BorderStyle = BorderStyle.FixedSingle };
     private readonly TimeTrackingBar _time = new() { Dock = DockStyle.Top, Height = 52 };
-    private readonly Button _logTime = JiraControlFactory.CreateSecondaryButton("Log Time");
+    private readonly Button _logTime = JiraControlFactory.CreateSecondaryButton("Ghi thời gian");
     private readonly AvatarValueControl _assignee = new() { Width = 220, Cursor = Cursors.Hand };
     private readonly AvatarValueControl _reporter = new() { Width = 220 };
     private readonly FlowLayoutPanel _labelsField = new() { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, FlowDirection = FlowDirection.LeftToRight, MaximumSize = new Size(220, 0), Margin = new Padding(0), BackColor = Color.Transparent };
-    private readonly Button _editLabels = JiraControlFactory.CreateSecondaryButton("Edit Labels");
+    private readonly Button _editLabels = JiraControlFactory.CreateSecondaryButton("Sửa nhãn");
     private readonly ComboBox _component = CreateValueCombo();
     private readonly ComboBox _fixVersion = CreateValueCombo();
     private readonly Panel _dueDateField = new() { Width = 220, Height = 36, BackColor = Color.Transparent };
@@ -73,10 +73,10 @@ public class IssueDetailsForm : Form
     private readonly Panel _watchersField = new() { Width = 220, Height = 58, BackColor = Color.Transparent };
     private readonly Label _watcherCountLabel = JiraControlFactory.CreateLabel(string.Empty, true);
     private readonly FlowLayoutPanel _watcherAvatars = new() { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = false, Margin = new Padding(0), Padding = new Padding(0), BackColor = Color.Transparent };
-    private readonly Button _watchButton = JiraControlFactory.CreateSecondaryButton("Watch");
+    private readonly Button _watchButton = JiraControlFactory.CreateSecondaryButton("Theo dõi");
     private readonly IssueIntegrationsControl _integrations;
-    private readonly Button _delete = JiraControlFactory.CreateSecondaryButton("Delete");
-    private readonly ToolStripMenuItem _deleteIssueMenuItem = new("Delete issue");
+    private readonly Button _delete = JiraControlFactory.CreateSecondaryButton("Xóa");
+    private readonly ToolStripMenuItem _deleteIssueMenuItem = new("Xóa issue");
     private readonly LinkLabel _parentLink = new() { AutoSize = true, Font = JiraTheme.FontBody, LinkColor = JiraTheme.PrimaryActive, Visible = false };
     private readonly Panel _parentSection = new() { Dock = DockStyle.Top, Height = 40, Visible = false, BackColor = JiraTheme.BgSurface };
     private IssueDetailsDto? _details;
@@ -106,7 +106,7 @@ public class IssueDetailsForm : Form
         _openChildIssuesByDefault = openChildIssues;
         _logger = session.CreateLogger<IssueDetailsForm>();
         _integrations = new IssueIntegrationsControl(_session);
-        Text = "Issue Details";
+        Text = "Chi tiết issue";
         StartPosition = FormStartPosition.CenterParent;
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -552,7 +552,7 @@ public class IssueDetailsForm : Form
             BackColor = JiraTheme.BgSurface
         };
 
-        var label = TopLabel("Description");
+        var label = TopLabel("Mô tả");
         label.Dock = DockStyle.Left;
         label.Margin = new Padding(0, 8, 0, 0);
 
@@ -598,7 +598,7 @@ public class IssueDetailsForm : Form
         var host = new Panel { Dock = DockStyle.Top, Height = 230, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 8) };
         host.Controls.Add(_attachments);
         host.Controls.Add(_attachmentPicker);
-        host.Controls.Add(TopLabel("Attachments"));
+        host.Controls.Add(TopLabel("Tệp đính kèm"));
         return host;
     }
 
@@ -654,14 +654,14 @@ public class IssueDetailsForm : Form
         host.Controls.Add(content);
         host.Controls.Add(_commentComposer);
         host.Controls.Add(tabs);
-        host.Controls.Add(TopLabel("Activity"));
+        host.Controls.Add(TopLabel("Hoạt động"));
         return host;
     }
 
     private Control BuildRight()
     {
         var panel = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(20, 24, 20, 24), AutoScroll = true };
-        var detailsLabel = JiraControlFactory.CreateLabel("Details", true);
+        var detailsLabel = JiraControlFactory.CreateLabel("Chi tiết", true);
         detailsLabel.Dock = DockStyle.Top;
         detailsLabel.Font = JiraTheme.FontCaption;
         detailsLabel.Height = 24;
@@ -679,21 +679,21 @@ public class IssueDetailsForm : Form
         var fields = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 8) };
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        AddField(fields, 0, "Assignee", _assignee);
-        AddField(fields, 1, "Watchers", _watchersField);
-        AddField(fields, 2, "Reporter", _reporter);
-        AddField(fields, 3, "Labels", _labelsField);
-        AddField(fields, 4, "Component", _component);
-        AddField(fields, 5, "Fix version", _fixVersion);
-        AddField(fields, 6, "Due date", _dueDateField);
-        AddField(fields, 7, "Priority", _priority);
+        AddField(fields, 0, "Người được giao", _assignee);
+        AddField(fields, 1, "Người theo dõi", _watchersField);
+        AddField(fields, 2, "Người báo cáo", _reporter);
+        AddField(fields, 3, "Nhãn", _labelsField);
+        AddField(fields, 4, "Thành phần", _component);
+        AddField(fields, 5, "Phiên bản sửa lỗi", _fixVersion);
+        AddField(fields, 6, "Hạn chót", _dueDateField);
+        AddField(fields, 7, "Độ ưu tiên", _priority);
         AddField(fields, 8, "Sprint", _sprint);
-        AddField(fields, 9, "Story points", _storyPoints);
+        AddField(fields, 9, "Điểm câu chuyện", _storyPoints);
 
         var detailsBlock = new Panel { Dock = DockStyle.Top, Height = 520, BackColor = JiraTheme.BgSurface };
         detailsBlock.Controls.Add(fields);
         detailsBlock.Controls.Add(statusHost);
-        detailsBlock.Controls.Add(TopLabel("Status"));
+        detailsBlock.Controls.Add(TopLabel("Trạng thái"));
 
         var integrationsBlock = new Panel { Dock = DockStyle.Top, Height = 330, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 0) };
         _integrations.Dock = DockStyle.Fill;
@@ -707,13 +707,13 @@ public class IssueDetailsForm : Form
 
         _parentLink.Dock = DockStyle.Fill;
         _parentSection.Controls.Add(_parentLink);
-        var parentLabel = TopLabel("Parent");
+        var parentLabel = TopLabel("Issue cha");
 
         panel.Controls.Add(integrationsBlock);
-        panel.Controls.Add(TopLabel("Integrations"));
+        panel.Controls.Add(TopLabel("Tích hợp"));
         panel.Controls.Add(JiraControlFactory.CreateSeparator());
         panel.Controls.Add(timeBlock);
-        panel.Controls.Add(TopLabel("Time Tracking"));
+        panel.Controls.Add(TopLabel("Theo dõi thời gian"));
         panel.Controls.Add(JiraControlFactory.CreateSeparator());
         panel.Controls.Add(_parentSection);
         panel.Controls.Add(parentLabel);
@@ -749,7 +749,7 @@ public class IssueDetailsForm : Form
             _details = await _session.Issues.GetDetailsAsync(_issueId, cancellationToken);
             if (_details is null)
             {
-                ErrorDialogService.Show("Issue not found.");
+                ErrorDialogService.Show("Không tìm thấy issue.");
                 Close();
                 return;
             }
@@ -789,15 +789,15 @@ public class IssueDetailsForm : Form
         ApplyMetaBadge(_keyBadge, issue.IssueKey, JiraTheme.Blue100, JiraTheme.PrimaryActive);
         var statusCategory = issue.WorkflowStatus?.Category ?? StatusCategory.ToDo;
         var statusColor = ParseStatusColor(issue.WorkflowStatus?.Color, statusCategory);
-        ApplyMetaBadge(_statusBadge, issue.WorkflowStatus?.Name ?? "Unknown", statusColor, GetStatusTextColor(statusCategory));
-        ApplyMetaBadge(_priorityBadge, issue.Priority.ToString(), issue.Priority switch
+        ApplyMetaBadge(_statusBadge, IssueDisplayText.TranslateStatus(issue.WorkflowStatus?.Name ?? "Không rõ"), statusColor, GetStatusTextColor(statusCategory));
+        ApplyMetaBadge(_priorityBadge, TranslateIssuePriority(issue.Priority), issue.Priority switch
         {
             IssuePriority.Low => JiraTheme.Success,
             IssuePriority.Medium => JiraTheme.Warning,
             IssuePriority.High or IssuePriority.Highest => JiraTheme.Danger,
             _ => JiraTheme.Border
         }, issue.Priority == IssuePriority.Medium ? JiraTheme.TextPrimary : Color.White);
-        _updatedLabel.Text = $"Updated {issue.UpdatedAtUtc:g}";
+        _updatedLabel.Text = $"Cập nhật {issue.UpdatedAtUtc:g}";
         _typeHost.Controls.Clear();
         var badge = JiraBadge.ForType(issue.Type);
         badge.Location = new Point(8, 0);
@@ -861,7 +861,7 @@ public class IssueDetailsForm : Form
             if (details.SubIssues.Count == 0)
             {
                 var empty = JiraControlFactory.CreateLabel(
-                    details.Issue.Type == IssueType.Epic ? "No child issues linked to this epic yet." : "No child issues.",
+                    details.Issue.Type == IssueType.Epic ? "Chưa có issue con nào liên kết với epic này." : "Không có issue con.",
                     true);
                 empty.AutoSize = true;
                 empty.ForeColor = JiraTheme.TextSecondary;
@@ -933,7 +933,7 @@ public class IssueDetailsForm : Form
         meta.ForeColor = JiraTheme.TextSecondary;
         meta.Font = JiraTheme.FontCaption;
 
-        var status = JiraControlFactory.CreateLabel(child.WorkflowStatus.Name, true);
+        var status = JiraControlFactory.CreateLabel(IssueDisplayText.TranslateStatus(child.WorkflowStatus.Name), true);
         status.AutoSize = true;
         status.BackColor = ParseStatusColor(child.WorkflowStatus.Color, child.WorkflowStatus.Category);
         status.ForeColor = GetStatusTextColor(child.WorkflowStatus.Category);
@@ -967,8 +967,8 @@ public class IssueDetailsForm : Form
 
     private static string FormatChildIssueMeta(Issue child)
     {
-        var storyPoints = child.StoryPoints.HasValue ? $" | {child.StoryPoints.Value} pts" : string.Empty;
-        return $"{child.Type} | {child.WorkflowStatus.Name}{storyPoints}";
+        var storyPoints = child.StoryPoints.HasValue ? $" | {child.StoryPoints.Value} điểm" : string.Empty;
+        return $"{IssueDisplayText.TranslateType(child.Type)} | {IssueDisplayText.TranslateStatus(child.WorkflowStatus.Name)}{storyPoints}";
     }
 
     private DetailsTab ResolveInitialTab(IssueDetailsDto details)
@@ -1099,7 +1099,7 @@ public class IssueDetailsForm : Form
     {
         if (names.Count == 0)
         {
-            _assignee.SetPerson("Unassigned", "+", true);
+            _assignee.SetPerson("Chưa phân công", "+", true);
             return;
         }
 
@@ -1140,9 +1140,9 @@ public class IssueDetailsForm : Form
     {
         _watcherCountLabel.Text = _watchers.Count switch
         {
-            0 => "No watchers",
-            1 => "1 watcher",
-            _ => $"{_watchers.Count} watchers"
+            0 => "Không có người theo dõi",
+            1 => "1 người theo dõi",
+            _ => $"{_watchers.Count} người theo dõi"
         };
 
         _watcherAvatars.SuspendLayout();
@@ -1169,7 +1169,7 @@ public class IssueDetailsForm : Form
             _watcherAvatars.ResumeLayout();
         }
 
-        _watchButton.Text = _isWatching ? "Watching" : "Watch";
+        _watchButton.Text = _isWatching ? "Đang theo dõi" : "Theo dõi";
         _watchButton.BackColor = _isWatching ? JiraTheme.Blue100 : JiraTheme.BgSurface;
         _watchButton.ForeColor = _isWatching ? JiraTheme.PrimaryActive : JiraTheme.TextPrimary;
         _watchButton.FlatAppearance.BorderColor = _isWatching ? JiraTheme.Primary : JiraTheme.Border;
@@ -1292,9 +1292,9 @@ public class IssueDetailsForm : Form
 
         _dueDateDisplay.Text = issue.DueDate switch
         {
-            DateOnly dueDate when overdue => $"Overdue {dueDate:dd MMM yyyy}",
+            DateOnly dueDate when overdue => $"Quá hạn {dueDate:dd MMM yyyy}",
             DateOnly dueDate => dueDate.ToString("dd MMM yyyy"),
-            _ => "No due date"
+            _ => "Không có hạn chót"
         };
         _dueDateDisplay.LinkColor = displayColor;
         _dueDateDisplay.ActiveLinkColor = displayColor;
@@ -1307,8 +1307,8 @@ public class IssueDetailsForm : Form
 
     private void BindMetadataOptions()
     {
-        _component.DataSource = BuildLookupOptions(_availableComponents.Select(x => new LookupOption(x.Id, x.Name)).ToList(), "No component");
-        _fixVersion.DataSource = BuildLookupOptions(_availableVersions.Select(x => new LookupOption(x.Id, x.IsReleased ? $"{x.Name} (Released)" : x.Name)).ToList(), "No fix version");
+        _component.DataSource = BuildLookupOptions(_availableComponents.Select(x => new LookupOption(x.Id, x.Name)).ToList(), "Không có thành phần");
+        _fixVersion.DataSource = BuildLookupOptions(_availableVersions.Select(x => new LookupOption(x.Id, x.IsReleased ? $"{x.Name} (Đã phát hành)" : x.Name)).ToList(), "Không có phiên bản sửa lỗi");
     }
 
     private void RenderLabelChips()
@@ -1320,7 +1320,7 @@ public class IssueDetailsForm : Form
             var selectedLabels = _availableLabels.Where(x => _selectedLabelIds.Contains(x.Id)).OrderBy(x => x.Name).ToList();
             if (selectedLabels.Count == 0)
             {
-                var empty = JiraControlFactory.CreateLabel("No labels", true);
+                var empty = JiraControlFactory.CreateLabel("Không có nhãn", true);
                 empty.Margin = new Padding(0, 4, 8, 4);
                 _labelsField.Controls.Add(empty);
             }
@@ -1641,7 +1641,7 @@ public class IssueDetailsForm : Form
 
     private async Task EditCommentAsync(Comment comment)
     {
-        using var editDialog = new CommentEditDialog("Edit Comment", comment.Body);
+        using var editDialog = new CommentEditDialog("Sửa bình luận", comment.Body);
         if (editDialog.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(editDialog.Body)) return;
         try
         {
@@ -1654,7 +1654,7 @@ public class IssueDetailsForm : Form
 
     private async Task DeleteCommentAsync(Comment comment)
     {
-        if (MessageBox.Show(this, "Delete this comment?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (MessageBox.Show(this, "Xóa bình luận này?", "Xác nhận xóa", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         try
         {
             await _session.Comments.SoftDeleteAsync(comment.Id, _session.CurrentUserContext.RequireUserId());
@@ -1680,7 +1680,7 @@ public class IssueDetailsForm : Form
         try
         {
             var source = await _session.Attachments.ResolveDownloadPathAsync(attachment.Id);
-            if (string.IsNullOrWhiteSpace(source) || !File.Exists(source)) { ErrorDialogService.Show("Attachment file was not found."); return; }
+            if (string.IsNullOrWhiteSpace(source) || !File.Exists(source)) { ErrorDialogService.Show("Không tìm thấy tệp đính kèm."); return; }
             using var dialog = new SaveFileDialog { FileName = attachment.OriginalFileName, RestoreDirectory = true };
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             await using var input = File.OpenRead(source);
@@ -1693,7 +1693,7 @@ public class IssueDetailsForm : Form
 
     private async Task DeleteAttachmentAsync(Attachment attachment)
     {
-        if (MessageBox.Show(this, $"Delete attachment '{attachment.OriginalFileName}'?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (MessageBox.Show(this, $"Xóa tệp đính kèm '{attachment.OriginalFileName}'?", "Xác nhận xóa", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         try
         {
             await _session.Attachments.SoftDeleteAsync(attachment.Id, _session.CurrentUserContext.RequireUserId(), _projectId);
@@ -1715,7 +1715,7 @@ public class IssueDetailsForm : Form
             await SaveIssueAsync();
             if (!string.IsNullOrWhiteSpace(dialog.Comment))
             {
-                await _session.Comments.AddAsync(_issueId, _session.CurrentUserContext.RequireUserId(), _projectId, $"Logged {dialog.Hours}h: {dialog.Comment.Trim()}");
+                await _session.Comments.AddAsync(_issueId, _session.CurrentUserContext.RequireUserId(), _projectId, $"đã ghi {dialog.Hours}h: {dialog.Comment.Trim()}");
             }
             await ReloadDetailsAsync(false, _disposeCts.Token);
         }
@@ -1724,10 +1724,10 @@ public class IssueDetailsForm : Form
 
     private async Task DeleteIssueAsync()
     {
-        if (MessageBox.Show(this, "Delete this issue?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        if (MessageBox.Show(this, "Xóa issue này?", "Xác nhận xóa", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
         try
         {
-            if (!await _session.Issues.DeleteAsync(_issueId)) { ErrorDialogService.Show("Issue could not be deleted."); return; }
+            if (!await _session.Issues.DeleteAsync(_issueId)) { ErrorDialogService.Show("Không thể xóa issue."); return; }
             DialogResult = DialogResult.OK;
             Close();
         }
@@ -1787,7 +1787,7 @@ public class IssueDetailsForm : Form
         if (e.Index < 0) return;
         e.DrawBackground();
         var value = (WorkflowStatusOptionDto)_status.Items[e.Index]!;
-        DrawChip(e, value.Name, ParseStatusColor(value.Color, value.Category), GetStatusTextColor(value.Category));
+        DrawChip(e, IssueDisplayText.TranslateStatus(value.Name), ParseStatusColor(value.Color, value.Category), GetStatusTextColor(value.Category));
     }
 
     private void DrawPriority(object? sender, DrawItemEventArgs e)
@@ -1802,7 +1802,7 @@ public class IssueDetailsForm : Form
             IssuePriority.High or IssuePriority.Highest => JiraTheme.Danger,
             _ => JiraTheme.Border
         };
-        DrawChip(e, value.ToString(), color, value == IssuePriority.Medium ? JiraTheme.TextPrimary : Color.White);
+        DrawChip(e, TranslateIssuePriority(value), color, value == IssuePriority.Medium ? JiraTheme.TextPrimary : Color.White);
     }
 
     private static void DrawChip(DrawItemEventArgs e, string text, Color bg, Color fg)
@@ -1856,7 +1856,7 @@ public class IssueDetailsForm : Form
 
     private static Button MakeTab(string text, bool active)
     {
-        var button = new Button { Text = text, FlatStyle = FlatStyle.Flat, AutoSize = false, Width = text == "Comments" ? 100 : 90, Height = 32, BackColor = JiraTheme.BgSurface, Font = JiraTheme.FontSmall };
+        var button = new Button { Text = text, FlatStyle = FlatStyle.Flat, AutoSize = false, Width = text switch { "Bình luận" => 108, "Issue con" => 96, _ => 90 }, Height = 32, BackColor = JiraTheme.BgSurface, Font = JiraTheme.FontSmall };
         button.FlatAppearance.BorderSize = 0;
         button.ForeColor = active ? JiraTheme.TextPrimary : JiraTheme.TextSecondary;
         return button;
@@ -1881,10 +1881,20 @@ public class IssueDetailsForm : Form
         table.Controls.Add(value, 1, row);
     }
 
+    private static string TranslateIssuePriority(IssuePriority issuePriority) => issuePriority switch
+    {
+        IssuePriority.Lowest => "Thấp nhất",
+        IssuePriority.Low => "Thấp",
+        IssuePriority.Medium => "Trung bình",
+        IssuePriority.High => "Cao",
+        IssuePriority.Highest => "Cao nhất",
+        _ => issuePriority.ToString()
+    };
+
     private static string Initials(string name)
     {
         var chars = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(2).Select(x => char.ToUpperInvariant(x[0])).ToArray();
-        return chars.Length == 0 ? "U" : new string(chars);
+        return chars.Length == 0 ? "N" : new string(chars);
     }
 
     private sealed class TinyAvatar : Control
@@ -1914,7 +1924,7 @@ public class IssueDetailsForm : Form
     }
     private sealed class AvatarValueControl : Control
     {
-        private string _initials = "U";
+        private string _initials = "N";
         private string _name = string.Empty;
         private bool _clickable;
         public AvatarValueControl()
@@ -1963,7 +1973,7 @@ public class IssueDetailsForm : Form
                 using var fill = new SolidBrush(JiraTheme.Primary);
                 e.Graphics.FillPath(fill, progress);
             }
-            TextRenderer.DrawText(e.Graphics, $"{LoggedHours}h logged / {EstimatedHours}h estimated", JiraTheme.FontCaption, new Rectangle(0, 28, Width, 20), JiraTheme.TextSecondary, TextFormatFlags.Left);
+            TextRenderer.DrawText(e.Graphics, $"{LoggedHours}h đã ghi / {EstimatedHours}h ước tính", JiraTheme.FontCaption, new Rectangle(0, 28, Width, 20), JiraTheme.TextSecondary, TextFormatFlags.Left);
         }
     }
 
@@ -1973,7 +1983,7 @@ public class IssueDetailsForm : Form
         private readonly TextBox _comment = JiraControlFactory.CreateTextBox();
         public LogTimeDialog()
         {
-            Text = "Log Time";
+            Text = "Ghi thời gian";
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -1986,8 +1996,8 @@ public class IssueDetailsForm : Form
             _comment.Multiline = true;
             _comment.Height = 80;
             _comment.Dock = DockStyle.Fill;
-            var save = JiraControlFactory.CreatePrimaryButton("Save");
-            var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
+            var save = JiraControlFactory.CreatePrimaryButton("Lưu");
+            var cancel = JiraControlFactory.CreateSecondaryButton("Hủy");
 
             void CloseWithResult(DialogResult result)
             {
@@ -2004,9 +2014,9 @@ public class IssueDetailsForm : Form
             buttons.Controls.Add(save);
             buttons.Controls.Add(cancel);
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(16), BackColor = JiraTheme.BgSurface };
-            layout.Controls.Add(JiraControlFactory.CreateLabel("Hours", true), 0, 0);
+            layout.Controls.Add(JiraControlFactory.CreateLabel("Số giờ", true), 0, 0);
             layout.Controls.Add(_hours, 0, 1);
-            layout.Controls.Add(JiraControlFactory.CreateLabel("Comment", true), 0, 2);
+            layout.Controls.Add(JiraControlFactory.CreateLabel("Bình luận", true), 0, 2);
             layout.Controls.Add(_comment, 0, 3);
             Controls.Add(layout);
             Controls.Add(buttons);
@@ -2034,7 +2044,7 @@ public class IssueDetailsForm : Form
 
         public LabelPickerDialog(IReadOnlyList<JiraLabelEntity> labels, IEnumerable<int> selectedLabelIds)
         {
-            Text = "Edit Labels";
+            Text = "Sửa nhãn";
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -2053,8 +2063,8 @@ public class IssueDetailsForm : Form
 
             _labels.DisplayMember = nameof(JiraLabelEntity.Name);
 
-            var save = JiraControlFactory.CreatePrimaryButton("Apply");
-            var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
+            var save = JiraControlFactory.CreatePrimaryButton("Áp dụng");
+            var cancel = JiraControlFactory.CreateSecondaryButton("Hủy");
 
             void CloseWithResult(DialogResult result)
             {
@@ -2079,7 +2089,7 @@ public class IssueDetailsForm : Form
             buttons.Controls.Add(save);
             buttons.Controls.Add(cancel);
 
-            var caption = JiraControlFactory.CreateLabel("Choose one or more labels", true);
+            var caption = JiraControlFactory.CreateLabel("Chọn một hoặc nhiều nhãn", true);
             caption.Dock = DockStyle.Top;
             caption.Height = 28;
 
@@ -2117,7 +2127,7 @@ public class IssueDetailsForm : Form
 
         public ExistingIssuePickerDialog(IReadOnlyList<IssueSummaryDto> issues)
         {
-            Text = "Add Existing Issues";
+            Text = "Thêm issue có sẵn";
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -2130,14 +2140,14 @@ public class IssueDetailsForm : Form
 
             foreach (var issue in issues)
             {
-                var context = string.IsNullOrWhiteSpace(issue.EpicTitle) ? "No epic" : issue.EpicTitle;
+                var context = string.IsNullOrWhiteSpace(issue.EpicTitle) ? "Không có Epic" : issue.EpicTitle;
                 _issues.Items.Add(new ExistingIssueOption(issue.Id, $"{issue.IssueKey} - {issue.Title} ({context})"), false);
             }
 
             _issues.DisplayMember = nameof(ExistingIssueOption.DisplayText);
 
-            var save = JiraControlFactory.CreatePrimaryButton("Link issues");
-            var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
+            var save = JiraControlFactory.CreatePrimaryButton("Liên kết issue");
+            var cancel = JiraControlFactory.CreateSecondaryButton("Hủy");
 
             void CloseWithResult(DialogResult result)
             {
@@ -2162,7 +2172,7 @@ public class IssueDetailsForm : Form
             buttons.Controls.Add(save);
             buttons.Controls.Add(cancel);
 
-            var caption = JiraControlFactory.CreateLabel("Choose one or more existing stories or tasks", true);
+            var caption = JiraControlFactory.CreateLabel("Chọn một hoặc nhiều story hoặc task có sẵn", true);
             caption.Dock = DockStyle.Top;
             caption.Height = 28;
 
@@ -2195,7 +2205,7 @@ public class IssueDetailsForm : Form
 
         public AssigneePickerDialog(IReadOnlyList<User> users, IEnumerable<int> selectedUserIds)
         {
-            Text = "Assign Users";
+            Text = "Giao người dùng";
             StartPosition = FormStartPosition.CenterParent;
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -2214,8 +2224,8 @@ public class IssueDetailsForm : Form
 
             _assignees.DisplayMember = nameof(User.DisplayName);
 
-            var save = JiraControlFactory.CreatePrimaryButton("Apply");
-            var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
+            var save = JiraControlFactory.CreatePrimaryButton("Áp dụng");
+            var cancel = JiraControlFactory.CreateSecondaryButton("Hủy");
 
             void CloseWithResult(DialogResult result)
             {
@@ -2240,7 +2250,7 @@ public class IssueDetailsForm : Form
             buttons.Controls.Add(save);
             buttons.Controls.Add(cancel);
 
-            var caption = JiraControlFactory.CreateLabel("Choose one or more assignees", true);
+            var caption = JiraControlFactory.CreateLabel("Chọn một hoặc nhiều người được giao", true);
             caption.Dock = DockStyle.Top;
             caption.Height = 28;
 
@@ -2260,6 +2270,11 @@ public class IssueDetailsForm : Form
         public IReadOnlyList<int> SelectedUserIds => _assignees.CheckedItems.Cast<User>().Select(x => x.Id).ToList();
     }
 }
+
+
+
+
+
 
 
 

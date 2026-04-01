@@ -51,6 +51,13 @@ public sealed class CreateProjectForm : Form
         Font = JiraTheme.FontBody;
 
         _titleLabel.Font = JiraTheme.FontH1;
+        _nameTextBox.AccessibleName = "CreateProject_TextBox_Name";
+        _keyTextBox.AccessibleName = "CreateProject_TextBox_Key";
+        _categoryComboBox.AccessibleName = "CreateProject_ComboBox_Category";
+        _descriptionTextBox.AccessibleName = "CreateProject_TextBox_Description";
+        _nextButton.AccessibleName = "CreateProject_Button_Next";
+        _createButton.AccessibleName = "CreateProject_Button_Create";
+        _cancelButton.AccessibleName = "CreateProject_Button_Cancel";
         _stepLabel.Font = JiraTheme.FontCaption;
         _validationLabel.ForeColor = JiraTheme.Danger;
         _validationLabel.AutoSize = false;

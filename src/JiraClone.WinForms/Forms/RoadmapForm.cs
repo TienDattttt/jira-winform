@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Globalization;
 using JiraClone.Application.Models;
@@ -473,7 +473,7 @@ public sealed class RoadmapForm : UserControl
         _detailTitle.Text = epic?.Title ?? "Ch\u1ecdn m\u1ed9t epic \u0111\u1ec3 xem chi ti\u1ebft";
         _detailMeta.Text = epic is null
             ? "Ch\u1ecdn m\u1ed9t epic trong danh s\u00e1ch b\u00ean tr\u00e1i ho\u1eb7c b\u1ea5m tr\u1ef1c ti\u1ebfp tr\u00ean timeline."
-            : $"{epic.IssueKey} \u2022 {epic.Status} \u2022 {BuildDateRangeText(epic)}{(string.IsNullOrWhiteSpace(epic.AssigneeName) ? string.Empty : $" \u2022 {epic.AssigneeName}")}";
+            : $"{epic.IssueKey} \u2022 {IssueDisplayText.TranslateStatus(epic.Status)} \u2022 {BuildDateRangeText(epic)}{(string.IsNullOrWhiteSpace(epic.AssigneeName) ? string.Empty : $" \u2022 {epic.AssigneeName}")}";
         if (epic is null)
         {
             _detailProgress.Maximum = 1;
@@ -501,7 +501,7 @@ public sealed class RoadmapForm : UserControl
             {
                 var item = new ListViewItem(issue.IssueKey) { Tag = issue.Id, BackColor = issue.WorkflowStatus.Category == StatusCategory.Done ? JiraTheme.DoneBadgeBg : JiraTheme.BgSurface };
                 item.SubItems.Add(issue.Title);
-                item.SubItems.Add(issue.WorkflowStatus.Name);
+                item.SubItems.Add(IssueDisplayText.TranslateStatus(issue.WorkflowStatus.Name));
                 item.SubItems.Add(issue.StoryPoints?.ToString() ?? "-");
                 _childIssuesList.Items.Add(item);
             }
@@ -531,7 +531,7 @@ public sealed class RoadmapForm : UserControl
         e.Graphics.FillEllipse(dotBrush, new Rectangle(e.Bounds.X + 16, e.Bounds.Y + 18, 10, 10));
         DrawAvatar(e.Graphics, new Rectangle(e.Bounds.X + 34, e.Bounds.Y + 12, 30, 30), epic.AssigneeName);
         TextRenderer.DrawText(e.Graphics, epic.Title, JiraTheme.FontSmall, new Rectangle(e.Bounds.X + 76, e.Bounds.Y + 10, e.Bounds.Width - 92, 20), JiraTheme.TextPrimary, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
-        TextRenderer.DrawText(e.Graphics, $"{epic.IssueKey} \u2022 {epic.Status}{(string.IsNullOrWhiteSpace(epic.AssigneeName) ? string.Empty : $" \u2022 {epic.AssigneeName}")}", JiraTheme.FontCaption, new Rectangle(e.Bounds.X + 76, e.Bounds.Y + 31, e.Bounds.Width - 92, 16), JiraTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
+        TextRenderer.DrawText(e.Graphics, $"{epic.IssueKey} \u2022 {IssueDisplayText.TranslateStatus(epic.Status)}{(string.IsNullOrWhiteSpace(epic.AssigneeName) ? string.Empty : $" \u2022 {epic.AssigneeName}")}", JiraTheme.FontCaption, new Rectangle(e.Bounds.X + 76, e.Bounds.Y + 31, e.Bounds.Width - 92, 16), JiraTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
         TextRenderer.DrawText(e.Graphics, $"{epic.DoneCount}/{epic.ChildIssueCount} ho\u00e0n th\u00e0nh \u2022 {BuildDateRangeText(epic)}", JiraTheme.FontCaption, new Rectangle(e.Bounds.X + 76, e.Bounds.Y + 47, e.Bounds.Width - 92, 16), JiraTheme.TextSecondary, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
         if (e.Index < _epicList.Items.Count - 1)
         {
@@ -860,6 +860,7 @@ public sealed class RoadmapForm : UserControl
 
     private sealed record RoadmapScheduleChangedEventArgs(int EpicId, DateOnly? StartDate, DateOnly? DueDate);
 }
+
 
 
 

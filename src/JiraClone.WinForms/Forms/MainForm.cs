@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
@@ -74,6 +74,7 @@ public class MainForm : Form
         Font = JiraTheme.FontBody;
 
         _searchBox.Width = 340;
+        _searchBox.AccessibleName = "MainForm_TextBox_Search";
         _searchBox.MinimumSize = new Size(260, 40);
         _searchBox.PlaceholderText = "Tìm kiếm dự án";
         _searchBox.TextChanged += OnSearchBoxTextChanged;
@@ -87,12 +88,14 @@ public class MainForm : Form
         _sidebarUserLabel.AutoEllipsis = true;
         _sidebarUserLabel.MaximumSize = new Size(150, 30);
         _logoutButton = JiraControlFactory.CreateSecondaryButton("Đăng xuất");
+        _logoutButton.AccessibleName = "MainForm_Button_Logout";
         _logoutButton.AutoSize = false;
         _logoutButton.Width = 124;
         _logoutButton.Height = 40;
         _logoutButton.MinimumSize = new Size(124, 36);
         _logoutButton.Click += OnLogoutButtonClick;
         _createIssueButton = JiraControlFactory.CreatePrimaryButton("Tạo");
+        _createIssueButton.AccessibleName = "MainForm_Button_CreateIssue";
         _createIssueButton.AutoSize = false;
         _createIssueButton.Size = new Size(120, 40);
         _createIssueButton.Visible = false;
@@ -104,6 +107,7 @@ public class MainForm : Form
         _cancelButton.Enabled = false;
         _cancelButton.Click += OnCancelButtonClick;
         _notificationButton = JiraControlFactory.CreateSecondaryButton(string.Empty);
+        _notificationButton.AccessibleName = "MainForm_Button_Notification";
         _notificationButton.AutoSize = false;
         _notificationButton.Size = new Size(40, 38);
         _notificationButton.Image = JiraIcons.GetBellIcon(JiraTheme.TextPrimary, 16);
@@ -111,6 +115,36 @@ public class MainForm : Form
         _notificationButton.Padding = new Padding(0);
         _notificationButton.Click += OnNotificationButtonClick;
         ConfigureNotificationDropdown();
+        _projectsItem.AccessibleName = "MainForm_Nav_Projects";
+        _projectsItem.Name = "MainForm_Nav_Projects";
+        _projectsItem.AccessibleRole = AccessibleRole.PushButton;
+        _dashboardItem.AccessibleName = "MainForm_Nav_Dashboard";
+        _dashboardItem.Name = "MainForm_Nav_Dashboard";
+        _dashboardItem.AccessibleRole = AccessibleRole.PushButton;
+        _boardItem.AccessibleName = "MainForm_Nav_Board";
+        _boardItem.Name = "MainForm_Nav_Board";
+        _boardItem.AccessibleRole = AccessibleRole.PushButton;
+        _backlogItem.AccessibleName = "MainForm_Nav_Backlog";
+        _backlogItem.Name = "MainForm_Nav_Backlog";
+        _backlogItem.AccessibleRole = AccessibleRole.PushButton;
+        _roadmapItem.AccessibleName = "MainForm_Nav_Roadmap";
+        _roadmapItem.Name = "MainForm_Nav_Roadmap";
+        _roadmapItem.AccessibleRole = AccessibleRole.PushButton;
+        _sprintsItem.AccessibleName = "MainForm_Nav_Sprints";
+        _sprintsItem.Name = "MainForm_Nav_Sprints";
+        _sprintsItem.AccessibleRole = AccessibleRole.PushButton;
+        _issuesItem.AccessibleName = "MainForm_Nav_Issues";
+        _issuesItem.Name = "MainForm_Nav_Issues";
+        _issuesItem.AccessibleRole = AccessibleRole.PushButton;
+        _reportsItem.AccessibleName = "MainForm_Nav_Reports";
+        _reportsItem.Name = "MainForm_Nav_Reports";
+        _reportsItem.AccessibleRole = AccessibleRole.PushButton;
+        _usersItem.AccessibleName = "MainForm_Nav_Users";
+        _usersItem.Name = "MainForm_Nav_Users";
+        _usersItem.AccessibleRole = AccessibleRole.PushButton;
+        _settingsItem.AccessibleName = "MainForm_Nav_Settings";
+        _settingsItem.Name = "MainForm_Nav_Settings";
+        _settingsItem.AccessibleRole = AccessibleRole.PushButton;
 
         BuildLayout();
         WireNavigation();
@@ -1141,14 +1175,13 @@ public class MainForm : Form
         {
             _kind = kind;
             TextLabel = text;
+            Text = text;
             Height = 44;
             Width = JiraTheme.SidebarWidth;
             Cursor = Cursors.Hand;
             Margin = new Padding(0);
             BackColor = Color.Transparent;
-
-
-
+            TabStop = true;
         }
 
         public string TextLabel { get; }
@@ -1615,14 +1648,14 @@ public class MainForm : Form
                      issue.Title.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase) ||
                      issue.ReporterName.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase) ||
                      issue.AssigneeNames.Any(x => x.Contains(_shellSearch, StringComparison.OrdinalIgnoreCase))) &&
-                    (string.IsNullOrWhiteSpace(status) || string.Equals(issue.StatusName, status, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(status) || string.Equals(IssueDisplayText.TranslateStatus(issue.StatusName), status, StringComparison.OrdinalIgnoreCase)) &&
                     (string.IsNullOrWhiteSpace(priority) || string.Equals(issue.Priority.ToString(), priority, StringComparison.OrdinalIgnoreCase)) &&
                     (string.IsNullOrWhiteSpace(type) || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)))
                 .Select(issue => new IssueSummaryRow(
                     issue.Id,
                     issue.IssueKey,
                     issue.Title,
-                    issue.StatusName,
+                    IssueDisplayText.TranslateStatus(issue.StatusName),
                     FormatPriority(issue.Priority),
                     FormatType(issue.Type),
                     issue.AssigneeNames.Count == 0 ? "Unassigned" : string.Join(", ", issue.AssigneeNames)))
@@ -1678,13 +1711,7 @@ public class MainForm : Form
             _ => priority.ToString()
         };
 
-        private static string FormatType(IssueType type) => type switch
-        {
-            IssueType.Task => "Task",
-            IssueType.Bug => "Bug",
-            IssueType.Story => "Story",
-            _ => type.ToString()
-        };
+        private static string FormatType(IssueType type) => IssueDisplayText.TranslateType(type);
 
         private static void ResetFilter(ComboBox comboBox, string allLabel, IEnumerable<string> values)
         {
@@ -1722,6 +1749,10 @@ public class MainForm : Form
         private sealed record IssueSummaryRow(int Id, string Key, string Summary, string Status, string Priority, string Type, string Assignees);
     }
 }
+
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using JiraClone.Application.Models;
 using JiraClone.Application.Roles;
 using JiraClone.Domain.Entities;
@@ -232,7 +232,7 @@ public class WorkflowSettingsControl : UserControl
         _statuses.Items.Clear();
         foreach (var status in statuses)
         {
-            var item = new ListViewItem(status.Name) { Tag = status };
+            var item = new ListViewItem(IssueDisplayText.TranslateStatus(status.Name)) { Tag = status };
             item.SubItems.Add(status.Category.ToString());
             item.SubItems.Add(status.Color);
             _statuses.Items.Add(item);
@@ -252,8 +252,8 @@ public class WorkflowSettingsControl : UserControl
         foreach (var transition in transitions)
         {
             var item = new ListViewItem(transition.Name) { Tag = transition };
-            item.SubItems.Add(transition.FromStatusName);
-            item.SubItems.Add(transition.ToStatusName);
+            item.SubItems.Add(IssueDisplayText.TranslateStatus(transition.FromStatusName));
+            item.SubItems.Add(IssueDisplayText.TranslateStatus(transition.ToStatusName));
             item.SubItems.Add(string.Join(", ", transition.AllowedRoleNames));
             _transitions.Items.Add(item);
             if (selectedId.HasValue && selectedId.Value == transition.Id)
@@ -530,7 +530,7 @@ public class WorkflowSettingsControl : UserControl
             var titleRect = new Rectangle(rect.X + 12, rect.Y + 10, rect.Width - 24, 24);
             var categoryRect = new Rectangle(rect.X + 12, rect.Y + 34, rect.Width - 24, 18);
             var textColor = GetTextColor(status.Category);
-            TextRenderer.DrawText(e.Graphics, status.Name, JiraTheme.FontColumnHeader, titleRect, textColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(e.Graphics, IssueDisplayText.TranslateStatus(status.Name), JiraTheme.FontColumnHeader, titleRect, textColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             TextRenderer.DrawText(e.Graphics, status.Category.ToString(), JiraTheme.FontCaption, categoryRect, textColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
         }
 
@@ -763,6 +763,7 @@ public class WorkflowSettingsControl : UserControl
         public IReadOnlyList<string> SelectedRoleNames => _roles.CheckedItems.Cast<string>().ToList();
     }
 }
+
 
 
 

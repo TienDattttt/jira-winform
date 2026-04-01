@@ -56,6 +56,11 @@ public sealed class ProjectListForm : UserControl
         DoubleBuffered = true;
 
         _titleLabel.Font = JiraTheme.FontH1;
+        _createProjectButton.AccessibleName = "ProjectList_Button_CreateProject";
+        _openProjectButton.AccessibleName = "ProjectList_Button_OpenProject";
+        _gridView.AccessibleName = "ProjectList_ListView_Grid";
+        _cardsViewButton.AccessibleName = "ProjectList_Button_CardsView";
+        _gridViewButton.AccessibleName = "ProjectList_Button_GridView";
         _countBadge.AutoSize = true;
         _countBadge.BackColor = JiraTheme.Blue100;
         _countBadge.ForeColor = JiraTheme.PrimaryActive;

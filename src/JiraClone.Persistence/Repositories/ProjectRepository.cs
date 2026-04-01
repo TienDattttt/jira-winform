@@ -76,7 +76,12 @@ public class ProjectRepository : IProjectRepository
 
     public Task DeleteAsync(Project project, CancellationToken cancellationToken = default)
     {
-        _dbContext.Projects.Remove(project);
+        ArgumentNullException.ThrowIfNull(project);
+
+        // Delete using a fresh tracked stub so EF does not try to reconcile unrelated
+        // issue graphs that were loaded earlier for soft-delete bookkeeping.
+        _dbContext.ChangeTracker.Clear();
+        _dbContext.Entry(new Project { Id = project.Id }).State = EntityState.Deleted;
         return Task.CompletedTask;
     }
 
@@ -109,3 +114,4 @@ public class ProjectRepository : IProjectRepository
             .ThenInclude(x => x.AllowedRoles);
     }
 }
+

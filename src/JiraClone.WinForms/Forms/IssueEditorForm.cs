@@ -1,8 +1,9 @@
-using JiraClone.Application.Models;
+﻿using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 using Microsoft.Extensions.Logging;
@@ -36,7 +37,7 @@ public class IssueEditorForm : Form
     };
     private readonly SprintSelectorControl _sprintSelector = new() { Dock = DockStyle.Fill, MinimumSize = new Size(0, 38) };
     private readonly DateTimePicker _dueDatePicker = new() { Format = DateTimePickerFormat.Short, Width = 180, CalendarForeColor = JiraTheme.TextPrimary, CalendarMonthBackground = JiraTheme.BgSurface };
-    private readonly CheckBox _noDueDateCheckBox = new() { Text = "No due date", AutoSize = true, ForeColor = JiraTheme.TextPrimary, BackColor = JiraTheme.BgSurface, Font = JiraTheme.FontBody };
+    private readonly CheckBox _noDueDateCheckBox = new() { Text = "Không có hạn chót", AutoSize = true, ForeColor = JiraTheme.TextPrimary, BackColor = JiraTheme.BgSurface, Font = JiraTheme.FontBody };
     private readonly ComboBox _parentComboBox = CreateCombo();
     private readonly Panel _dueDateRow;
     private readonly Panel _parentRow;
@@ -61,7 +62,17 @@ public class IssueEditorForm : Form
         _preferredType = preferredType;
         _logger = session.CreateLogger<IssueEditorForm>();
 
-        Text = issueId.HasValue ? "Edit Issue" : "Create Issue";
+        Text = issueId.HasValue ? "Sửa issue" : "Tạo issue";
+        _titleTextBox.AccessibleName = "IssueEditor_TextBox_Title";
+        _descriptionTextBox.AccessibleName = "IssueEditor_TextBox_Description";
+        _typeComboBox.AccessibleName = "IssueEditor_ComboBox_Type";
+        _statusComboBox.AccessibleName = "IssueEditor_ComboBox_Status";
+        _priorityComboBox.AccessibleName = "IssueEditor_ComboBox_Priority";
+        _reporterComboBox.AccessibleName = "IssueEditor_ComboBox_Reporter";
+        _assigneesList.AccessibleName = "IssueEditor_CheckedListBox_Assignees";
+        _dueDatePicker.AccessibleName = "IssueEditor_DatePicker_DueDate";
+        _saveButton.AccessibleName = "IssueEditor_Button_Save";
+        _cancelButton.AccessibleName = "IssueEditor_Button_Cancel";
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
         StartPosition = FormStartPosition.CenterParent;
@@ -76,11 +87,18 @@ public class IssueEditorForm : Form
         _descriptionTextBox.ScrollBars = ScrollBars.Vertical;
         _descriptionTextBox.MinimumSize = new Size(0, 120);
         _descriptionTextBox.Height = 120;
-
-        _typeComboBox.DataSource = Enum.GetValues(typeof(IssueType));
-        _statusComboBox.DisplayMember = nameof(WorkflowStatusOptionDto.Name);
-        _statusComboBox.ValueMember = nameof(WorkflowStatusOptionDto.Id);
-        _priorityComboBox.DataSource = Enum.GetValues(typeof(IssuePriority));
+        _typeComboBox.DisplayMember = nameof(ComboOption<IssueType>.Display);
+        _typeComboBox.ValueMember = nameof(ComboOption<IssueType>.Value);
+        _typeComboBox.DataSource = Enum.GetValues<IssueType>()
+            .Select(issueType => new ComboOption<IssueType>(issueType, TranslateIssueType(issueType)))
+            .ToList();
+        _statusComboBox.DisplayMember = nameof(ComboOption<int>.Display);
+        _statusComboBox.ValueMember = nameof(ComboOption<int>.Value);
+        _priorityComboBox.DisplayMember = nameof(ComboOption<IssuePriority>.Display);
+        _priorityComboBox.ValueMember = nameof(ComboOption<IssuePriority>.Value);
+        _priorityComboBox.DataSource = Enum.GetValues<IssuePriority>()
+            .Select(issuePriority => new ComboOption<IssuePriority>(issuePriority, TranslateIssuePriority(issuePriority)))
+            .ToList();
 
         _saveButton.AutoSize = false;
         _saveButton.Size = new Size(132, 40);
@@ -104,7 +122,7 @@ public class IssueEditorForm : Form
         _parentRow.Visible = false;
 
         Controls.Add(BuildLayout());
-        SetParentFieldState(false, "Parent");
+        SetParentFieldState(false, "Issue cha");
         _typeComboBox.SelectedIndexChanged += async (_, _) => await RefreshParentListAsync();
         Shown += async (_, _) => await LoadDataAsync();
     }
@@ -118,12 +136,12 @@ public class IssueEditorForm : Form
             BackColor = JiraTheme.BgSurface,
         };
 
-        var title = JiraControlFactory.CreateLabel(_issueId.HasValue ? "Edit issue" : "Create issue");
+        var title = JiraControlFactory.CreateLabel(_issueId.HasValue ? "Sửa issue" : "Tạo issue");
         title.Font = JiraTheme.FontH1;
         title.Dock = DockStyle.Top;
         title.Height = 52;
 
-        var subtitle = JiraControlFactory.CreateLabel("Capture the core issue details without leaving the board flow.", true);
+        var subtitle = JiraControlFactory.CreateLabel("Nhập đầy đủ thông tin issue mà không cần rời luồng làm việc hiện tại.", true);
         subtitle.Dock = DockStyle.Top;
         subtitle.Height = 28;
 
@@ -149,16 +167,16 @@ public class IssueEditorForm : Form
         formLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 144));
         formLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        AddRow(formLayout, 0, "Title", WrapControl(_titleTextBox, 44));
-        AddRow(formLayout, 1, "Description", WrapControl(_descriptionTextBox, 132));
-        AddRow(formLayout, 2, "Type", WrapControl(_typeComboBox, 44));
-        AddRow(formLayout, 3, "Status", WrapControl(_statusComboBox, 44));
-        AddRow(formLayout, 4, "Priority", WrapControl(_priorityComboBox, 44));
-        AddRow(formLayout, 5, "Reporter", WrapControl(_reporterComboBox, 44));
+        AddRow(formLayout, 0, "Tiêu đề", WrapControl(_titleTextBox, 44));
+        AddRow(formLayout, 1, "Mô tả", WrapControl(_descriptionTextBox, 132));
+        AddRow(formLayout, 2, "Loại", WrapControl(_typeComboBox, 44));
+        AddRow(formLayout, 3, "Trạng thái", WrapControl(_statusComboBox, 44));
+        AddRow(formLayout, 4, "Độ ưu tiên", WrapControl(_priorityComboBox, 44));
+        AddRow(formLayout, 5, "Người báo cáo", WrapControl(_reporterComboBox, 44));
         AddRow(formLayout, 6, "Sprint", WrapControl(_sprintSelector, 44));
-        AddRow(formLayout, 7, "Due date", _dueDateRow);
-        _parentLabel = AddRow(formLayout, 8, "Parent", _parentRow);
-        AddRow(formLayout, 9, "Assignees", WrapControl(_assigneesList, 148));
+        AddRow(formLayout, 7, "Hạn chót", _dueDateRow);
+        _parentLabel = AddRow(formLayout, 8, "Issue cha", _parentRow);
+        AddRow(formLayout, 9, "Người được giao", WrapControl(_assigneesList, 148));
 
         host.Controls.Add(formLayout);
         host.Controls.Add(footer);
@@ -223,6 +241,7 @@ public class IssueEditorForm : Form
         BackColor = JiraTheme.BgSurface,
         ForeColor = JiraTheme.TextPrimary,
         Font = JiraTheme.FontBody,
+        FormattingEnabled = true,
         MinimumSize = new Size(0, 38),
     };
 
@@ -248,7 +267,9 @@ public class IssueEditorForm : Form
         {
             var workflow = await _session.Workflows.GetDefaultWorkflowAsync(_projectId);
             _workflowStatuses = workflow?.Statuses.OrderBy(x => x.DisplayOrder).ToList() ?? [];
-            _statusComboBox.DataSource = _workflowStatuses.ToList();
+            _statusComboBox.DataSource = _workflowStatuses
+                .Select(status => new ComboOption<int>(status.Id, TranslateStatusName(status.Name)))
+                .ToList();
 
             var users = await _session.Users.GetProjectUsersAsync(_projectId);
             _reporterComboBox.DataSource = users.ToList();
@@ -268,7 +289,7 @@ public class IssueEditorForm : Form
             {
                 if (_preferredType.HasValue)
                 {
-                    _typeComboBox.SelectedItem = _preferredType.Value;
+                    _typeComboBox.SelectedValue = _preferredType.Value;
                 }
 
                 if (_defaultStatusId.HasValue)
@@ -287,16 +308,16 @@ public class IssueEditorForm : Form
             var details = await _session.Issues.GetDetailsAsync(_issueId.Value);
             if (details is null)
             {
-                ErrorDialogService.Show("Issue not found.");
+                ErrorDialogService.Show("Không tìm thấy issue.");
                 Close();
                 return;
             }
 
             _titleTextBox.Text = details.Issue.Title;
             _descriptionTextBox.Text = details.Issue.DescriptionText;
-            _typeComboBox.SelectedItem = details.Issue.Type;
+            _typeComboBox.SelectedValue = details.Issue.Type;
             _statusComboBox.SelectedValue = details.Issue.WorkflowStatusId;
-            _priorityComboBox.SelectedItem = details.Issue.Priority;
+            _priorityComboBox.SelectedValue = details.Issue.Priority;
             _reporterComboBox.SelectedValue = details.Issue.ReporterId;
             if (details.Issue.SprintId.HasValue)
             {
@@ -348,9 +369,9 @@ public class IssueEditorForm : Form
                 ProjectId = _projectId,
                 Title = _titleTextBox.Text,
                 DescriptionText = _descriptionTextBox.Text,
-                Type = (IssueType)_typeComboBox.SelectedItem!,
+                Type = _typeComboBox.SelectedValue is IssueType issueType ? issueType : IssueType.Task,
                 WorkflowStatusId = _statusComboBox.SelectedValue is int workflowStatusId ? workflowStatusId : null,
-                Priority = (IssuePriority)_priorityComboBox.SelectedItem!,
+                Priority = _priorityComboBox.SelectedValue is IssuePriority issuePriority ? issuePriority : IssuePriority.Medium,
                 ReporterId = _reporterComboBox.SelectedValue is int reporterId ? reporterId : 1,
                 CreatedById = currentUserId,
                 DueDate = _noDueDateCheckBox.Checked ? null : DateOnly.FromDateTime(_dueDatePicker.Value.Date),
@@ -381,28 +402,28 @@ public class IssueEditorForm : Form
     {
         try
         {
-            if (_typeComboBox.SelectedItem is not IssueType selectedType)
+            if (_typeComboBox.SelectedValue is not IssueType selectedType)
             {
-                SetParentFieldState(false, "Parent");
+                SetParentFieldState(false, "Issue cha");
                 return;
             }
 
             List<Issue> potentialParents;
-            var labelText = "Parent";
+            var labelText = "Issue cha";
 
             switch (selectedType)
             {
                 case IssueType.Subtask:
                     potentialParents = (await _session.Issues.GetPotentialParentsAsync(_projectId, selectedType)).ToList();
-                    labelText = "Parent";
+                    labelText = "Issue cha";
                     break;
                 case IssueType.Story:
                 case IssueType.Task:
                     potentialParents = (await _session.Issues.GetPotentialParentsAsync(_projectId, selectedType)).ToList();
-                    labelText = "Epic Link";
+                    labelText = "Liên kết epic";
                     break;
                 default:
-                    SetParentFieldState(false, "Parent");
+                    SetParentFieldState(false, "Issue cha");
                     return;
             }
 
@@ -410,7 +431,7 @@ public class IssueEditorForm : Form
                 .Select(p => new { p.Id, Display = $"{p.IssueKey} - {p.Title}" })
                 .ToList();
 
-            items.Insert(0, new { Id = 0, Display = selectedType == IssueType.Subtask ? "(Select parent)" : "(No epic)" });
+            items.Insert(0, new { Id = 0, Display = selectedType == IssueType.Subtask ? "(Chọn issue cha)" : "(Không có epic)" });
             var selectedParentId = _parentComboBox.SelectedValue is int currentParentId ? currentParentId : 0;
             _parentComboBox.DataSource = items;
             _parentComboBox.DisplayMember = "Display";
@@ -425,7 +446,7 @@ public class IssueEditorForm : Form
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Failed to load potential parent issues.");
-            SetParentFieldState(false, "Parent");
+            SetParentFieldState(false, "Issue cha");
         }
     }
 
@@ -439,7 +460,27 @@ public class IssueEditorForm : Form
             _parentComboBox.DataSource = null;
         }
     }
+    private static string TranslateIssueType(IssueType issueType) => IssueDisplayText.TranslateType(issueType);
+
+    private static string TranslateIssuePriority(IssuePriority issuePriority) => issuePriority switch
+    {
+        IssuePriority.Lowest => "Thấp nhất",
+        IssuePriority.Low => "Thấp",
+        IssuePriority.Medium => "Trung bình",
+        IssuePriority.High => "Cao",
+        IssuePriority.Highest => "Cao nhất",
+        _ => issuePriority.ToString()
+    };
+
+    private static string TranslateStatusName(string name) => IssueDisplayText.TranslateStatus(name);
+
+    private sealed record ComboOption<T>(T Value, string Display);
 }
+
+
+
+
+
 
 
 

@@ -1,0 +1,24 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  unit-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore & Test
+        run: |
+          dotnet restore
+          dotnet test tests/JiraClone.Tests/JiraClone.Tests.csproj -v minimal
+        env:
+          JIRACLONE_ConnectionStrings__Default: >
+            Server=(localdb)\mssqllocaldb;Database=JiraCloneTest;
+            Trusted_Connection=True;TrustServerCertificate=True;

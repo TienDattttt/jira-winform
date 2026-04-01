@@ -57,11 +57,13 @@ public class LoginForm : Form
         };
 
         _emailTextBox = JiraControlFactory.CreateTextBox();
+        _emailTextBox.AccessibleName = "LoginForm_TextBox_Email";
         _emailTextBox.Height = 40;
         _emailTextBox.Dock = DockStyle.Fill;
         _emailTextBox.Text = string.Empty;
 
         _passwordTextBox = JiraControlFactory.CreateTextBox();
+        _passwordTextBox.AccessibleName = "LoginForm_TextBox_Password";
         _passwordTextBox.Height = 40;
         _passwordTextBox.Dock = DockStyle.Fill;
         _passwordTextBox.UseSystemPasswordChar = true;
@@ -75,7 +77,8 @@ public class LoginForm : Form
             ForeColor = JiraTheme.TextPrimary,
             BackColor = JiraTheme.BgSurface,
             Font = JiraTheme.FontBody,
-            Margin = new Padding(0, 4, 0, 0)
+            Margin = new Padding(0, 4, 0, 0),
+            AccessibleName = "LoginForm_CheckBox_RememberMe"
         };
 
         _showPasswordButton = new Button
@@ -89,6 +92,7 @@ public class LoginForm : Form
             Font = JiraTheme.FontCaption,
             Cursor = Cursors.Hand,
             TabStop = false,
+            AccessibleName = "LoginForm_Button_ShowPassword",
         };
         _showPasswordButton.MinimumSize = new Size(108, 40);
         _showPasswordButton.FlatAppearance.BorderSize = 0;
@@ -105,6 +109,7 @@ public class LoginForm : Form
         _errorLabel.Visible = false;
 
         _loginButton = JiraControlFactory.CreatePrimaryButton("Log in");
+        _loginButton.AccessibleName = "LoginForm_Button_Login";
         _loginButton.AutoSize = false;
         _loginButton.Dock = DockStyle.Fill;
         _loginButton.MinimumSize = new Size(0, 52);
@@ -125,6 +130,7 @@ public class LoginForm : Form
         _ssoButton.Click += async (_, _) => await LoginWithSsoAsync();
 
         _closeButton = JiraControlFactory.CreateSecondaryButton("X");
+        _closeButton.AccessibleName = "LoginForm_Button_Close";
         _closeButton.AutoSize = false;
         _closeButton.Size = new Size(36, 32);
         _closeButton.FlatAppearance.BorderSize = 0;

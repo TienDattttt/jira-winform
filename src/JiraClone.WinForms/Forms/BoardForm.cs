@@ -1,4 +1,4 @@
-using JiraClone.Application.Models;
+﻿using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
@@ -382,7 +382,7 @@ public class BoardForm : UserControl
 
         if (_activeSprint is null)
         {
-            _sprintTitleLabel.Text = _activeSprintOnly ? "No active sprint" : "Backlog";
+            _sprintTitleLabel.Text = _activeSprintOnly ? "No active sprint" : IssueDisplayText.TranslateStatus("Backlog");
             _sprintDateLabel.Text = _activeSprintOnly ? "Start a planned sprint to focus the board" : "Showing all project issues";
             _startSprintButton.Enabled = _activeSprintOnly;
             _startSprintButton.Visible = _activeSprintOnly;
@@ -390,7 +390,7 @@ public class BoardForm : UserControl
             return;
         }
 
-        _sprintTitleLabel.Text = _activeSprintOnly ? _activeSprint.Name : "Backlog";
+        _sprintTitleLabel.Text = _activeSprintOnly ? _activeSprint.Name : IssueDisplayText.TranslateStatus("Backlog");
         _sprintDateLabel.Text = _activeSprintOnly ? FormatSprintDateRange(_activeSprint) : $"Active sprint: {_activeSprint.Name}";
         _startSprintButton.Enabled = false;
         _startSprintButton.Visible = _activeSprintOnly;
@@ -399,7 +399,7 @@ public class BoardForm : UserControl
 
     private string BuildKanbanSubtitle()
     {
-        var parts = new List<string> { "Showing all issues outside Done" };
+        var parts = new List<string> { $"Hiển thị tất cả issue ngoài {IssueDisplayText.TranslateStatus("Done")}" };
         parts.Add(_averageCycleTime.HasValue
             ? $"Avg cycle time: {FormatCycleTime(_averageCycleTime.Value)}"
             : "Avg cycle time: n/a");
@@ -632,7 +632,7 @@ public class BoardForm : UserControl
             .Union(groupedIssues.Keys)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(key => string.Equals(key, NoEpicLaneKey, StringComparison.Ordinal) ? 1 : 0)
-            .ThenBy(key => metadata.TryGetValue(key, out var entry) ? entry.Title : "No Epic", StringComparer.OrdinalIgnoreCase)
+            .ThenBy(key => metadata.TryGetValue(key, out var entry) ? entry.Title : "Không có Epic", StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         var lanes = new List<EpicSwimlaneViewModel>();
@@ -644,7 +644,7 @@ public class BoardForm : UserControl
                 continue;
             }
 
-            var laneMeta = metadata.GetValueOrDefault(laneKey, (null, "No Epic", JiraTheme.Neutral500));
+            var laneMeta = metadata.GetValueOrDefault(laneKey, (null, "Không có Epic", JiraTheme.Neutral500));
             var laneColumns = columns
                 .OrderBy(column => column.DisplayOrder)
                 .Select(column => new EpicSwimlaneColumnViewModel(
@@ -675,7 +675,7 @@ public class BoardForm : UserControl
 
         if (lanes.Count == 0)
         {
-            lanes.Add(new EpicSwimlaneViewModel(NoEpicLaneKey, null, "No Epic", JiraTheme.Neutral500, false, 0, 0, 0, 0,
+            lanes.Add(new EpicSwimlaneViewModel(NoEpicLaneKey, null, "Không có Epic", JiraTheme.Neutral500, false, 0, 0, 0, 0,
                 columns.OrderBy(column => column.DisplayOrder)
                     .Select(column => new EpicSwimlaneColumnViewModel(column.StatusId, column.Name, column.Color, column.WipLimit, column.TotalIssueCount, []))
                     .ToList()));
@@ -841,7 +841,7 @@ public class BoardForm : UserControl
     }
     private void OnWipLimitWarningRequested(object? sender, BoardColumnWipLimitEventArgs args)
     {
-        ShowWarningToast($"WIP limit reached in {args.StatusName} ({args.CurrentCount}/{args.Limit}). Drop to override.");
+        ShowWarningToast($"Cột {IssueDisplayText.TranslateStatus(args.StatusName)} đã chạm giới hạn WIP ({args.CurrentCount}/{args.Limit}). Thả để xác nhận ghi đè.");
     }
 
     private void RenderMovedColumns(IReadOnlyCollection<int> statusIds, int issueId, int targetStatusId)
@@ -1096,7 +1096,7 @@ public class BoardForm : UserControl
 
     private void ShowMoveToast(string statusName)
     {
-        ShowToast($"Issue moved to {statusName}", JiraTheme.Blue600);
+        ShowToast($"Đã chuyển issue sang {IssueDisplayText.TranslateStatus(statusName)}", JiraTheme.Blue600);
     }
 
     private void ShowWarningToast(string message)
@@ -1275,6 +1275,8 @@ public class BoardForm : UserControl
 
     private const string NoEpicLaneKey = "no-epic";
 }
+
+
 
 
 

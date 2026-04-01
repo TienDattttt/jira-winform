@@ -1,9 +1,10 @@
-using JiraClone.Application.Models;
+﻿using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Permissions;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Controls;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 using JiraComponentEntity = JiraClone.Domain.Entities.Component;
@@ -89,6 +90,14 @@ public class ProjectSettingsForm : UserControl
         AutoScaleDimensions = new SizeF(96F, 96F);
 
         _name.MinimumSize = new Size(360, 38);
+        _name.AccessibleName = "ProjectSettings_TextBox_Name";
+        _description.AccessibleName = "ProjectSettings_TextBox_Description";
+        _saveProject.AccessibleName = "ProjectSettings_Button_SaveProject";
+        _members.AccessibleName = "ProjectSettings_ListView_Members";
+        _addMember.AccessibleName = "ProjectSettings_Button_AddMember";
+        _removeMember.AccessibleName = "ProjectSettings_Button_RemoveMember";
+        _archiveProject.AccessibleName = "ProjectSettings_Button_Archive";
+        _deleteProject.AccessibleName = "ProjectSettings_Button_Delete";
         _url.MinimumSize = new Size(360, 38);
         _category.MinimumSize = new Size(360, 38);
         _boardType.MinimumSize = new Size(260, 38);
@@ -769,7 +778,7 @@ public class ProjectSettingsForm : UserControl
         foreach (var column in columns)
         {
             var item = new ListViewItem(column.Name) { Tag = column };
-            item.SubItems.Add(column.WorkflowStatus.Name);
+            item.SubItems.Add(IssueDisplayText.TranslateStatus(column.WorkflowStatus.Name));
             item.SubItems.Add(column.WipLimit?.ToString() ?? "-");
             _columns.Items.Add(item);
         }
@@ -1912,6 +1921,7 @@ public class ProjectSettingsForm : UserControl
         public bool IsReleased => _released.Checked;
     }
 }
+
 
 
 

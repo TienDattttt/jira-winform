@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Dashboard;
 using JiraClone.Application.Issues;
@@ -815,7 +815,7 @@ public sealed class DashboardForm : UserControl
             foreach (var chip in chips)
             {
                 var color = ParseColor(chip.Color, chip.Category);
-                var text = $"{chip.StatusName}: {chip.Count}";
+                var text = $"{IssueDisplayText.TranslateStatus(chip.StatusName)}: {chip.Count}";
                 var chipSize = TextRenderer.MeasureText(text, JiraTheme.FontCaption);
                 var chipBounds = new Rectangle(left, breakdownTop, Math.Max(94, chipSize.Width + 24), 24);
                 using var chipPath = GraphicsHelper.CreateRoundedPath(chipBounds, 12);
@@ -1155,6 +1155,7 @@ public sealed class DashboardForm : UserControl
         };
     }
 }
+
 
 
 

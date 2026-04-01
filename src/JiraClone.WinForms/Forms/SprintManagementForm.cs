@@ -45,6 +45,11 @@ public class SprintManagementForm : UserControl
         DoubleBuffered = true;
 
         JiraTheme.StyleListView(_listView);
+        _listView.AccessibleName = "SprintMgmt_ListView_Sprints";
+        _createButton.AccessibleName = "SprintMgmt_Button_Create";
+        _assignButton.AccessibleName = "SprintMgmt_Button_Assign";
+        _startButton.AccessibleName = "SprintMgmt_Button_Start";
+        _closeButton.AccessibleName = "SprintMgmt_Button_Close";
         _listView.Columns.Add("Sprint", 240);
         _listView.Columns.Add("Trạng thái", 120);
         _listView.Columns.Add("Bắt đầu", 140);
@@ -421,6 +426,8 @@ public class SprintManagementForm : UserControl
 
         public CreateSprintDialog()
         {
+            _name.AccessibleName = "CreateSprint_TextBox_Name";
+            _goal.AccessibleName = "CreateSprint_TextBox_Goal";
             Text = "Tạo sprint";
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -442,7 +449,9 @@ public class SprintManagementForm : UserControl
             _goal.MinimumSize = new Size(0, 140);
 
             var save = JiraControlFactory.CreatePrimaryButton("Tạo sprint");
+            save.AccessibleName = "CreateSprint_Button_Save";
             var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
+            cancel.AccessibleName = "CreateSprint_Button_Cancel";
             save.AutoSize = false;
             save.Size = new Size(136, 42);
             cancel.AutoSize = false;
@@ -540,6 +549,9 @@ public class SprintManagementForm : UserControl
 
         public CloseSprintDialog(Sprint sprint, IReadOnlyList<Sprint> candidateSprints)
         {
+            _moveToBacklog.AccessibleName = "CloseSprint_RadioButton_MoveToBacklog";
+            _moveToSprint.AccessibleName = "CloseSprint_RadioButton_MoveToSprint";
+            _targetSprint.AccessibleName = "CloseSprint_ComboBox_TargetSprint";
             Text = $"Đóng {sprint.Name}";
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -559,7 +571,9 @@ public class SprintManagementForm : UserControl
             _moveToSprint.CheckedChanged += (_, _) => _targetSprint.Enabled = _moveToSprint.Checked;
 
             var okButton = JiraControlFactory.CreatePrimaryButton("Đóng sprint");
+            okButton.AccessibleName = "CloseSprint_Button_Confirm";
             var cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
+            cancelButton.AccessibleName = "CloseSprint_Button_Cancel";
             okButton.Click += (_, _) =>
             {
                 MoveIncompleteToSprintId = _moveToSprint.Checked && _targetSprint.SelectedValue is int sprintId ? sprintId : null;

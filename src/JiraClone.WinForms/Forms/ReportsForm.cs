@@ -1,9 +1,10 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -1279,7 +1280,7 @@ public class ReportsForm : UserControl
             {
                 var item = new ListViewItem(issue.IssueKey);
                 item.SubItems.Add(issue.Title);
-                item.SubItems.Add(issue.StatusName);
+                item.SubItems.Add(IssueDisplayText.TranslateStatus(issue.StatusName));
                 item.SubItems.Add(issue.StoryPoints.ToString());
                 item.SubItems.Add(string.IsNullOrWhiteSpace(issue.AssigneeSummary) ? "Chưa giao" : issue.AssigneeSummary);
                 _listView.Items.Add(item);
@@ -1849,6 +1850,7 @@ public class ReportsForm : UserControl
     private static string TrimLabel(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..Math.Max(1, maxLength - 3)] + "...";
 }
+
 
 
 

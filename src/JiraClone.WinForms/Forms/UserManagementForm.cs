@@ -52,6 +52,7 @@ public class UserManagementForm : UserControl
         DoubleBuffered = true;
 
         JiraTheme.StyleListView(_listView);
+        _listView.AccessibleName = "UserMgmt_ListView_Users";
         _listView.Columns.Add("Display Name", 220);
         _listView.Columns.Add("User Name", 160);
         _listView.Columns.Add("Email", 260);
@@ -61,6 +62,13 @@ public class UserManagementForm : UserControl
         _listView.DoubleClick += async (_, _) => await EditAsync();
 
         _statusFilter.Items.AddRange(["All users", "Active only", "Inactive only"]);
+        _searchBox.AccessibleName = "UserMgmt_TextBox_Search";
+        _statusFilter.AccessibleName = "UserMgmt_ComboBox_StatusFilter";
+        _createButton.AccessibleName = "UserMgmt_Button_Create";
+        _editButton.AccessibleName = "UserMgmt_Button_Edit";
+        _deactivateButton.AccessibleName = "UserMgmt_Button_Deactivate";
+        _activateButton.AccessibleName = "UserMgmt_Button_Activate";
+        _resetPasswordButton.AccessibleName = "UserMgmt_Button_ResetPassword";
         _statusFilter.SelectedIndex = 0;
         _statusFilter.SelectedIndexChanged += (_, _) => BindUsers();
         _searchBox.Width = 240;
@@ -440,6 +448,14 @@ public class UserManagementForm : UserControl
         public UserEditorDialog(IReadOnlyList<Role> roles, User? user, ProjectRole projectRole = ProjectRole.Developer)
         {
             _isCreateMode = user is null;
+            _userName.AccessibleName = "UserEditor_TextBox_UserName";
+            _displayName.AccessibleName = "UserEditor_TextBox_DisplayName";
+            _email.AccessibleName = "UserEditor_TextBox_Email";
+            _password.AccessibleName = "UserEditor_TextBox_Password";
+            _projectRole.AccessibleName = "UserEditor_ComboBox_ProjectRole";
+            _roles.AccessibleName = "UserEditor_CheckedListBox_Roles";
+            _isActive.AccessibleName = "UserEditor_CheckBox_IsActive";
+            _saveButton.AccessibleName = "UserEditor_Button_Save";
             Text = _isCreateMode ? "Create User" : "Edit User";
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
@@ -487,6 +503,7 @@ public class UserManagementForm : UserControl
             };
 
             var cancel = JiraControlFactory.CreateSecondaryButton("Cancel");
+            cancel.AccessibleName = "UserEditor_Button_Cancel";
             cancel.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
 
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 58, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = JiraTheme.BgSurface };

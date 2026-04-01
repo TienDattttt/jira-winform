@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
 using JiraClone.WinForms.Helpers;
@@ -97,7 +97,7 @@ public class BoardColumnControl : UserControl
     public void Bind(BoardColumnDto column, int? animatedIssueId = null)
     {
         _column = column;
-        _headerPanel.Title = column.Name;
+        _headerPanel.Title = IssueDisplayText.TranslateStatus(column.Name);
         _headerPanel.Count = column.TotalIssueCount;
         _headerPanel.WipLimit = column.WipLimit;
         _headerPanel.IsOverLimit = column.WipLimit is int wipLimit && wipLimit > 0 && column.TotalIssueCount > wipLimit;
@@ -256,7 +256,7 @@ public class BoardColumnControl : UserControl
         ClearDropState();
         if (hasDrop)
         {
-            IssueMoveRequested?.Invoke(this, new IssueMoveRequestedEventArgs(dragData.Issue.Id, dragData.Issue.StatusId, dragData.Issue.StatusName, _column.StatusId, _column.Name));
+            IssueMoveRequested?.Invoke(this, new IssueMoveRequestedEventArgs(dragData.Issue.Id, dragData.Issue.StatusId, IssueDisplayText.TranslateStatus(dragData.Issue.StatusName), _column.StatusId, IssueDisplayText.TranslateStatus(_column.Name)));
         }
     }
 
@@ -442,3 +442,4 @@ public class BoardColumnControl : UserControl
         }
     }
 }
+

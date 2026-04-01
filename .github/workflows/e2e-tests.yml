@@ -1,0 +1,90 @@
+name: E2E Tests - WinForms
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  e2e-test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup SQL Server LocalDB
+        run: |
+          sqllocaldb create JiraCloneE2E
+          sqllocaldb start JiraCloneE2E
+        shell: pwsh
+
+      - name: Install WinAppDriver
+        run: |
+          choco install winappdriver --yes --no-progress
+        shell: pwsh
+
+      - name: Start WinAppDriver
+        run: |
+          $wad = "C:\Program Files (x86)\Windows Application Driver\WinAppDriver.exe"
+          Start-Process -FilePath $wad -WindowStyle Hidden
+          Start-Sleep -Seconds 3
+          Write-Host "WinAppDriver started"
+        shell: pwsh
+
+      - name: Restore & Build
+        run: |
+          dotnet restore src/JiraClone.WinForms/JiraClone.WinForms.csproj
+          dotnet build src/JiraClone.WinForms/JiraClone.WinForms.csproj -c Debug --no-restore
+        env:
+          JIRACLONE_ConnectionStrings__Default: >
+            Server=(localdb)\JiraCloneE2E;Database=JiraCloneE2EDb;
+            Trusted_Connection=True;TrustServerCertificate=True;
+
+      - name: Run Unit Tests (sanity check)
+        run: |
+          dotnet test tests/JiraClone.Tests/JiraClone.Tests.csproj --no-build -v minimal
+
+      - name: Launch App for E2E
+        run: |
+          $appPath = "src\JiraClone.WinForms\bin\Debug\net8.0-windows\JiraClone.WinForms.exe"
+          Start-Process -FilePath $appPath
+          Start-Sleep -Seconds 8
+          Write-Host "App launched"
+        shell: pwsh
+        env:
+          JIRACLONE_ConnectionStrings__Default: >
+            Server=(localdb)\JiraCloneE2E;Database=JiraCloneE2EDb;
+            Trusted_Connection=True;TrustServerCertificate=True;
+
+      - name: Run E2E Tests
+        run: |
+          dotnet test tests/JiraClone.E2ETests/JiraClone.E2ETests.csproj -v normal --logger "trx;LogFileName=e2e.trx"
+        env:
+          JIRACLONE_ConnectionStrings__Default: >
+            Server=(localdb)\JiraCloneE2E;Database=JiraCloneE2EDb;
+            Trusted_Connection=True;TrustServerCertificate=True;
+
+      - name: Upload Screenshots on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-screenshots
+          path: artifacts/screenshots/
+          retention-days: 7
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: "**/*.trx"
+          retention-days: 7
