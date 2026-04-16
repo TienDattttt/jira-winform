@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Dashboard;
 using JiraClone.Application.Issues;
@@ -525,7 +525,8 @@ public sealed class DashboardForm : UserControl
 
     private void ApplyResponsiveLayout()
     {
-        var availableWidth = Math.Max(320, _widgetsPanel.ClientSize.Width - _widgetsPanel.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth);
+        // Added an extra 48px safety margin to ensure FlowLayoutPanel never clips the right side
+        var availableWidth = Math.Max(320, _widgetsPanel.ClientSize.Width - _widgetsPanel.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - 100);
         var halfWidth = Math.Max(360, (availableWidth - 16) / 2);
         var useSingleColumn = availableWidth < 980;
         var fullWidth = availableWidth;
@@ -542,11 +543,11 @@ public sealed class DashboardForm : UserControl
         _assignedCard.Height = 320;
         _teamCard.Height = 320;
 
-        foreach (DashboardWidgetCard card in new[] { _sprintCard, _statisticsCard, _activityCard, _assignedCard, _teamCard })
-        {
-            card.Margin = new Padding(0, 0, 16, 16);
-        }
-
+        var spacing = useSingleColumn ? 0 : 16;
+        _sprintCard.Margin = new Padding(0, 0, spacing, 16);
+        _statisticsCard.Margin = new Padding(0, 0, 0, 16);
+        _activityCard.Margin = new Padding(0, 0, spacing, 16);
+        _assignedCard.Margin = new Padding(0, 0, 0, 16);
         _teamCard.Margin = new Padding(0, 0, 0, 16);
     }
 
@@ -1155,13 +1156,4 @@ public sealed class DashboardForm : UserControl
         };
     }
 }
-
-
-
-
-
-
-
-
-
 

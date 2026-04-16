@@ -51,7 +51,7 @@ public class LoginForm : Form
 
         _cardPanel = new ShadowPanel
         {
-            Size = new Size(560, _oauthEnabled ? 684 : 612),
+            Size = new Size(560, _oauthEnabled ? 760 : 680),
             BackColor = Color.Transparent,
             Anchor = AnchorStyles.None,
         };
@@ -116,7 +116,7 @@ public class LoginForm : Form
         _loginButton.Height = 52;
         _loginButton.Font = JiraTheme.FontBody;
         _loginButton.TextAlign = ContentAlignment.MiddleCenter;
-        _loginButton.Padding = new Padding(12, 8, 12, 8);
+        _loginButton.Padding = new Padding(0);
         _loginButton.Click += async (_, _) => await LoginAsync();
 
         _ssoButton = JiraControlFactory.CreateSecondaryButton($"Sign in with {_oauthProviderName}");
@@ -189,9 +189,9 @@ public class LoginForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, _oauthEnabled ? 32 : 0));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, _oauthEnabled ? 52 : 0));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, _oauthEnabled ? 36 : 0));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, _oauthEnabled ? 64 : 0));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var logoHost = new Panel { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
@@ -251,15 +251,24 @@ public class LoginForm : Form
         _cardPanel.Controls.Add(content);
     }
 
-    private Panel BuildInputHost(Control input)
+    private Control BuildInputHost(Control input)
     {
-        return new Panel
+        var host = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = JiraTheme.BgSurface,
             Padding = new Padding(0),
-            Controls = { input }
+            Margin = new Padding(0),
+            ColumnCount = 2,
+            RowCount = 1,
         };
+        host.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        host.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
+        host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        host.MinimumSize = new Size(0, 40);
+
+        host.Controls.Add(input, 0, 0);
+        return host;
     }
 
     private Control BuildPasswordHost()
