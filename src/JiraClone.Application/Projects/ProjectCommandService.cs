@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using JiraClone.Application.Abstractions;
@@ -70,21 +70,25 @@ public class ProjectCommandService : IProjectCommandService
         var normalizedName = name?.Trim();
         if (string.IsNullOrWhiteSpace(normalizedName))
         {
-            throw new ValidationException("Project name is required.");
+            throw new ValidationException("Tên dự án không được để trống.");
+        }
+        if (normalizedName.Length > 100)
+        {
+            throw new ValidationException("Tên dự án không được vượt quá 100 ký tự.");
         }
 
         var normalizedKey = NormalizeProjectKey(key);
         if (!Regex.IsMatch(normalizedKey, "^[A-Z]{2,10}$", RegexOptions.CultureInvariant))
         {
-            throw new ValidationException("Project key must match [A-Z]{2,10}.");
+            throw new ValidationException("Mã dự án (Key) phải chứa từ 2 đến 10 ký tự in hoa [A-Z].");
         }
 
         if (await _projects.ExistsByKeyAsync(normalizedKey, cancellationToken: cancellationToken))
         {
-            throw new ValidationException("Project key already exists.");
+            throw new ValidationException("Mã dự án (Key) đã tồn tại trong hệ thống.");
         }
 
-        var actor = _currentUserContext.CurrentUser ?? throw new InvalidOperationException("No user is currently logged in.");
+        var actor = _currentUserContext.CurrentUser ?? throw new InvalidOperationException("Không có người dùng nào đang đăng nhập.");
         var now = DateTime.UtcNow;
         var project = new Project
         {
@@ -169,7 +173,7 @@ public class ProjectCommandService : IProjectCommandService
             var user = await _users.GetByIdAsync(member.UserId, cancellationToken);
             if (user is null || !user.IsActive)
             {
-                throw new ValidationException($"User {member.UserId} is not available for project membership.");
+                throw new ValidationException($"Người dùng {member.UserId} không hợp lệ hoặc đã bị vô hiệu hóa.");
             }
 
             AddProjectMember(project, user.Id, member.ProjectRole, now);
@@ -201,7 +205,11 @@ public class ProjectCommandService : IProjectCommandService
         var normalizedName = name?.Trim();
         if (string.IsNullOrWhiteSpace(normalizedName))
         {
-            throw new ValidationException("Project name is required.");
+            throw new ValidationException("Tên dự án không được để trống.");
+        }
+        if (normalizedName.Length > 100)
+        {
+            throw new ValidationException("Tên dự án không được vượt quá 100 ký tự.");
         }
 
         var normalizedDescription = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
@@ -285,7 +293,7 @@ public class ProjectCommandService : IProjectCommandService
         var currentUserId = _currentUserContext.CurrentUser?.Id;
         if (currentUserId.HasValue && currentUserId.Value != userId)
         {
-            throw new ValidationException("Project deletion must be performed by the currently signed-in user.");
+            throw new ValidationException("Quyền thao tác: Việc xóa dự án phải do người dùng đang đăng nhập thực hiện.");
         }
 
         var project = await _projects.GetDeleteSnapshotAsync(projectId, cancellationToken);
@@ -297,7 +305,7 @@ public class ProjectCommandService : IProjectCommandService
         var sprints = await _sprints.GetAllByProjectIdAsync(projectId, cancellationToken);
         if (sprints.Any(x => x.State == SprintState.Active && !x.IsDeleted))
         {
-            throw new ValidationException("Close the active sprint before deleting this project.");
+            throw new ValidationException("Ràng buộc hệ thống: Vui lòng hoàn thành hoặc đóng Sprint đang chạy trước khi xóa dự án.");
         }
 
         var issues = await _issues.GetAllByProjectIdAsync(projectId, cancellationToken);
@@ -461,7 +469,7 @@ public class ProjectCommandService : IProjectCommandService
         var normalizedName = name?.Trim();
         if (string.IsNullOrWhiteSpace(normalizedName))
         {
-            throw new ValidationException("Column name is required.");
+            throw new ValidationException("Tên cột tham chiếu không được để trống.");
         }
 
         var oldValue = $"{column.Name}|{column.WipLimit}";
@@ -598,21 +606,21 @@ public class ProjectCommandService : IProjectCommandService
 
     private async Task EnsurePermissionAsync(int projectId, Permission permission, CancellationToken cancellationToken)
     {
-        var currentUserId = _currentUserContext.CurrentUser?.Id ?? throw new InvalidOperationException("No user is currently logged in.");
+        var currentUserId = _currentUserContext.CurrentUser?.Id ?? throw new InvalidOperationException("Không có người dùng nào đang đăng nhập.");
         if (!await _permissionService.HasPermissionAsync(currentUserId, projectId, permission, cancellationToken))
         {
-            throw new UnauthorizedAccessException("Current user does not have permission to perform this action.");
+            throw new UnauthorizedAccessException("Người dùng hiện tại không có quyền thực hiện hành động này.");
         }
     }
 
     private async Task EnsureProjectAdminAsync(int projectId, CancellationToken cancellationToken)
     {
-        var currentUserId = _currentUserContext.CurrentUser?.Id ?? throw new InvalidOperationException("No user is currently logged in.");
+        var currentUserId = _currentUserContext.CurrentUser?.Id ?? throw new InvalidOperationException("Không có người dùng nào đang đăng nhập.");
         var project = await _projects.GetByIdAsync(projectId, cancellationToken);
         var role = project?.Members.FirstOrDefault(member => member.UserId == currentUserId)?.ProjectRole;
         if (role != ProjectRole.Admin)
         {
-            throw new UnauthorizedAccessException("Current user does not have permission to perform this action.");
+            throw new UnauthorizedAccessException("Người dùng hiện tại không có quyền thực hiện hành động này.");
         }
     }
 

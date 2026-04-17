@@ -33,10 +33,10 @@ public sealed class ApiTokenService : IApiTokenService
     public async Task<GeneratedTokenResult> CreateTokenAsync(int userId, string name, DateTime? expiresAtUtc, IReadOnlyCollection<ApiTokenScope> scopes, CancellationToken cancellationToken = default)
     {
         var user = await _users.GetByIdAsync(userId, cancellationToken)
-            ?? throw new ValidationException("User not found.");
+            ?? throw new ValidationException("Không tìm thấy tài khoản người dùng.");
         if (!user.IsActive)
         {
-            throw new ValidationException("Only active users can create API tokens.");
+            throw new ValidationException("Chỉ tài khoản đang hoạt động mới được phép tạo API token.");
         }
 
         var normalizedName = NormalizeName(name);
@@ -103,10 +103,10 @@ public sealed class ApiTokenService : IApiTokenService
         }
 
         var requestor = await _users.GetByIdAsync(requestingUserId, cancellationToken)
-            ?? throw new UnauthorizedAccessException("Requesting user was not found.");
+            ?? throw new UnauthorizedAccessException("Không tìm thấy người dùng gửi yêu cầu.");
         if (requestor.Id != token.UserId && requestor.UserRoles.All(role => !role.Role.Name.Equals("Admin", StringComparison.OrdinalIgnoreCase)))
         {
-            throw new UnauthorizedAccessException("Only the token owner or an admin can revoke this token.");
+            throw new UnauthorizedAccessException("Chỉ chủ sở hữu Token hoặc Quản trị viên mới có quyền thu hồi Token này.");
         }
 
         if (token.IsRevoked)
@@ -127,7 +127,7 @@ public sealed class ApiTokenService : IApiTokenService
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            throw new ValidationException("Token name is required.");
+            throw new ValidationException("Tên API Token không được để trống.");
         }
 
         return name.Trim();
@@ -141,7 +141,7 @@ public sealed class ApiTokenService : IApiTokenService
             .ToList();
         if (normalizedScopes.Count == 0)
         {
-            throw new ValidationException("Select at least one API token scope.");
+            throw new ValidationException("Vui lòng chọn ít nhất một quyền (scope) cho API Token.");
         }
 
         return normalizedScopes;

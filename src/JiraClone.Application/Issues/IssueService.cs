@@ -67,7 +67,7 @@ public class IssueService
         var project = await _projects.GetByIdAsync(model.ProjectId, cancellationToken);
         if (project is null)
         {
-            throw new ValidationException($"Project with id {model.ProjectId} was not found.");
+            throw new ValidationException($"Dự án với ID {model.ProjectId} không tồn tại.");
         }
 
         var workflowStatus = await ResolveWorkflowStatusAsync(model.ProjectId, model.WorkflowStatusId, cancellationToken);
@@ -120,14 +120,14 @@ public class IssueService
     {
         if (model.Id is null)
         {
-            throw new ValidationException("Issue id is required.");
+            throw new ValidationException("ID của Issue không được để trống.");
         }
 
         ValidateModel(model);
         var issue = await _issues.GetByIdAsync(model.Id.Value, cancellationToken);
         if (issue is null)
         {
-            throw new NotFoundException($"Issue with id {model.Id.Value} was not found.");
+            throw new NotFoundException($"Không tìm thấy Issue với ID {model.Id.Value}.");
         }
 
         await EnsurePermissionAsync(model.CreatedById, issue.ProjectId, Permission.EditIssue, cancellationToken);
@@ -222,7 +222,7 @@ public class IssueService
     {
         if (startDate.HasValue && dueDate.HasValue && startDate.Value > dueDate.Value)
         {
-            throw new ValidationException("Start date must be on or before the due date.");
+            throw new ValidationException("Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày hết hạn (Due date).");
         }
         var issue = await _issues.GetByIdAsync(issueId, cancellationToken);
         if (issue is null)
@@ -232,7 +232,7 @@ public class IssueService
         await EnsurePermissionAsync(userId, issue.ProjectId, Permission.EditIssue, cancellationToken);
         if (issue.Type != IssueType.Epic)
         {
-            throw new ValidationException("Roadmap scheduling is only available for epic issues.");
+            throw new ValidationException("Tính năng xếp lịch trên Roadmap chỉ khả dụng cho định dạng Epic.");
         }
         if (issue.StartDate == startDate && issue.DueDate == dueDate)
         {
@@ -343,22 +343,26 @@ public class IssueService
     {
         if (string.IsNullOrWhiteSpace(model.Title))
         {
-            throw new ValidationException("Title is required.");
+            throw new ValidationException("Tiêu đề công việc không được để trống.");
+        }
+        if (model.Title.Length > 200)
+        {
+            throw new ValidationException("Tiêu đề công việc không được vượt quá 200 ký tự.");
         }
 
         if (model.StoryPoints < 0)
         {
-            throw new ValidationException("Story points cannot be negative.");
+            throw new ValidationException("Điểm quy mô (Story points) không được là số âm.");
         }
 
         if (model.Type == IssueType.Subtask && !model.ParentIssueId.HasValue)
         {
-            throw new ValidationException("Subtask must have a parent issue.");
+            throw new ValidationException("Subtask bắt buộc phải phụ thuộc vào một Issue cha.");
         }
 
         if (model.Type == IssueType.Epic && model.ParentIssueId.HasValue)
         {
-            throw new ValidationException("Epic cannot have a parent issue.");
+            throw new ValidationException("Epic (Luồng công việc lớn) không thể phụ thuộc vào một Issue khác.");
         }
     }
 
@@ -376,19 +380,19 @@ public class IssueService
             var selectedStatus = await _workflows.GetStatusByIdAsync(workflowStatusId.Value, cancellationToken);
             if (selectedStatus is null || selectedStatus.WorkflowDefinition.ProjectId != projectId)
             {
-                throw new ValidationException("The selected workflow status was not found in this project.");
+                throw new ValidationException("Trạng thái Workflow đã chọn không thuộc dự án này.");
             }
 
             return selectedStatus;
         }
 
         var workflow = await _workflows.GetDefaultByProjectAsync(projectId, cancellationToken)
-            ?? throw new ValidationException("The project does not have a default workflow.");
+            ?? throw new ValidationException("Dự án hiện chưa được thiết lập Workflow mặc định.");
         var defaultStatus = workflow.Statuses
             .OrderBy(x => x.Category)
             .ThenBy(x => x.DisplayOrder)
             .FirstOrDefault();
-        return defaultStatus ?? throw new ValidationException("The project workflow does not contain any statuses.");
+        return defaultStatus ?? throw new ValidationException("Workflow của dự án hiện không có bất kỳ trạng thái nào.");
     }
 
     private async Task<Issue?> ValidateParentRelationshipAsync(int projectId, IssueType childType, int? parentIssueId, int? issueId, CancellationToken cancellationToken)
@@ -400,25 +404,25 @@ public class IssueService
 
         if (issueId.HasValue && parentIssueId.Value == issueId.Value)
         {
-            throw new ValidationException("An issue cannot be linked to itself.");
+            throw new ValidationException("Issue không thể tự liên kết với chính nó.");
         }
 
         var parent = await _issues.GetByIdAsync(parentIssueId.Value, cancellationToken);
         if (parent is null)
         {
-            throw new ValidationException($"Parent issue with id {parentIssueId.Value} was not found.");
+            throw new ValidationException($"Không tìm thấy Parent issue với ID {parentIssueId.Value}.");
         }
 
         if (parent.ProjectId != projectId)
         {
-            throw new ValidationException("The selected parent issue belongs to a different project.");
+            throw new ValidationException("Parent issue đã chọn không thuộc dự án này.");
         }
 
         if (childType == IssueType.Subtask)
         {
             if (parent.Type is IssueType.Subtask or IssueType.Epic)
             {
-                throw new ValidationException("Subtasks can only be created under stories, tasks, or bugs.");
+                throw new ValidationException("Subtask chỉ có thể được tạo dưới các loại Story, Task hoặc Bug.");
             }
 
             return parent;
@@ -428,13 +432,13 @@ public class IssueService
         {
             if (parent.Type != IssueType.Epic)
             {
-                throw new ValidationException("Only epics can be selected for Epic Link.");
+                throw new ValidationException("Chỉ Epic mới có thể được chọn làm Epic Link.");
             }
 
             return parent;
         }
 
-        throw new ValidationException($"{childType} cannot be linked to a parent issue.");
+        throw new ValidationException($"{childType} không thể phụ thuộc vào một Issue khác.");
     }
 
     private async Task<ICollection<IssueAssignee>> BuildAssigneesAsync(IEnumerable<int> assigneeIds, Issue issue, CancellationToken cancellationToken)
@@ -522,7 +526,7 @@ public class IssueService
     {
         if (!await _permissionService.HasPermissionAsync(userId, projectId, permission, cancellationToken))
         {
-            throw new UnauthorizedAccessException("Current user does not have permission to perform this action.");
+            throw new UnauthorizedAccessException("Người dùng hiện tại không có quyền thực hiện hành động này.");
         }
     }
 

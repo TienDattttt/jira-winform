@@ -118,7 +118,7 @@ public class WebhookService : IWebhookService
     public async Task<IReadOnlyList<WebhookDelivery>> GetDeliveryHistoryAsync(int endpointId, int take = 50, CancellationToken cancellationToken = default)
     {
         var endpoint = await _endpoints.GetByIdAsync(endpointId, cancellationToken)
-            ?? throw new ValidationException($"Webhook endpoint {endpointId} was not found.");
+            ?? throw new ValidationException($"Không tìm thấy Webhook Endpoint với ID {endpointId}.");
         await EnsurePermissionAsync(endpoint.ProjectId, Permission.ManageProject, cancellationToken);
         return await _deliveries.GetByEndpointIdAsync(endpointId, take, cancellationToken);
     }
@@ -126,7 +126,7 @@ public class WebhookService : IWebhookService
     public async Task<WebhookDelivery?> SendTestAsync(int endpointId, CancellationToken cancellationToken = default)
     {
         var endpoint = await _endpoints.GetByIdAsync(endpointId, cancellationToken)
-            ?? throw new ValidationException($"Webhook endpoint {endpointId} was not found.");
+            ?? throw new ValidationException($"Không tìm thấy Webhook Endpoint với ID {endpointId}.");
         await EnsurePermissionAsync(endpoint.ProjectId, Permission.ManageProject, cancellationToken);
 
         return await _dispatcher.SendTestAsync(
@@ -148,14 +148,14 @@ public class WebhookService : IWebhookService
         var currentUserId = _currentUserContext.RequireUserId();
         if (!await _permissionService.HasPermissionAsync(currentUserId, projectId, permission, cancellationToken))
         {
-            throw new UnauthorizedAccessException("Current user does not have permission to manage project webhooks.");
+            throw new UnauthorizedAccessException("Người dùng hiện tại không có quyền quản lý Webhook của dự án.");
         }
     }
 
     private async Task<Project> RequireProjectAsync(int projectId, CancellationToken cancellationToken)
     {
         return await _projects.GetByIdAsync(projectId, cancellationToken)
-            ?? throw new ValidationException($"Project {projectId} was not found.");
+            ?? throw new ValidationException($"Không tìm thấy Dự án với ID {projectId}.");
     }
 
     private WebhookEndpoint CloneEndpointForView(WebhookEndpoint endpoint, WebhookDelivery? latestDelivery)
@@ -208,7 +208,7 @@ public class WebhookService : IWebhookService
             .ToList();
         if (normalizedEvents.Count == 0)
         {
-            throw new ValidationException("Select at least one webhook event.");
+            throw new ValidationException("Vui lòng chọn ít nhất một sự kiện (event) để nhận Webhook.");
         }
 
         endpoint.Subscriptions.Clear();
@@ -227,7 +227,7 @@ public class WebhookService : IWebhookService
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            throw new ValidationException("Webhook name is required.");
+            throw new ValidationException("Tên Webhook không được để trống.");
         }
 
         return name.Trim();
@@ -237,12 +237,12 @@ public class WebhookService : IWebhookService
     {
         if (string.IsNullOrWhiteSpace(url))
         {
-            throw new ValidationException("Webhook URL is required.");
+            throw new ValidationException("Đường dẫn URL của Webhook không được để trống.");
         }
 
         if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
-            throw new ValidationException("Webhook URL must be a valid http or https address.");
+            throw new ValidationException("Đường dẫn URL của Webhook phải hợp lệ và bắt đầu bằng http:// hoặc https://.");
         }
 
         return uri.ToString();
@@ -252,7 +252,7 @@ public class WebhookService : IWebhookService
     {
         if (string.IsNullOrWhiteSpace(secret))
         {
-            throw new ValidationException("Webhook secret is required.");
+            throw new ValidationException("Chuỗi bí mật (Secret) của Webhook không được để trống.");
         }
 
         return secret.Trim();

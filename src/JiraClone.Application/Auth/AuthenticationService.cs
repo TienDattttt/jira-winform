@@ -41,13 +41,13 @@ public class AuthenticationService
         if (user is null || !user.IsActive)
         {
             _logger.LogWarning("Authentication failed for user {UserName}: user not found or inactive.", userName);
-            return new AuthResult(false, "Invalid username or password.", null);
+            return new AuthResult(false, "Tên đăng nhập hoặc mật khẩu không chính xác.", null);
         }
 
         if (!_passwordHasher.Verify(password, user.PasswordHash, user.PasswordSalt))
         {
             _logger.LogWarning("Authentication failed for user {UserName}: invalid password.", userName);
-            return new AuthResult(false, "Invalid username or password.", null);
+            return new AuthResult(false, "Tên đăng nhập hoặc mật khẩu không chính xác.", null);
         }
 
         _currentUserContext.Set(user);
@@ -60,16 +60,16 @@ public class AuthenticationService
         var normalizedEmail = NormalizeEmail(email);
         _logger.LogInformation("Attempting SSO authentication for email {Email}.", normalizedEmail);
 
-        if (string.IsNullOrWhiteSpace(normalizedEmail))
+        if (string.IsNullOrWhiteSpace(normalizedEmail) || !System.Text.RegularExpressions.Regex.IsMatch(normalizedEmail, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
         {
-            return new AuthResult(false, "A valid email address is required for SSO login.", null);
+            return new AuthResult(false, "Yêu cầu địa chỉ email hợp lệ để đăng nhập SSO.", null);
         }
 
         var user = await _users.GetByEmailAsync(normalizedEmail, cancellationToken);
         if (user is not null && !user.IsActive)
         {
             _logger.LogWarning("SSO authentication failed for email {Email}: user is inactive.", normalizedEmail);
-            return new AuthResult(false, "This account is inactive.", null);
+            return new AuthResult(false, "Tài khoản này đã bị khóa hoặc chưa được kích hoạt.", null);
         }
 
         if (user is null)
@@ -96,7 +96,7 @@ public class AuthenticationService
         if (user is null || !user.IsActive)
         {
             _logger.LogWarning("Unable to create persistent session for user {UserId}: user not found or inactive.", userId);
-            throw new InvalidOperationException("The user is not available for persistent sessions.");
+            throw new InvalidOperationException("Người dùng không khả dụng cho phiên đăng nhập tự động.");
         }
 
         var refreshToken = GenerateRefreshToken();
@@ -162,12 +162,12 @@ public class AuthenticationService
     {
         if (string.IsNullOrWhiteSpace(password))
         {
-            return "Password is required.";
+            return "Mật khẩu không được để trống.";
         }
 
         return IsPasswordValid(password)
             ? null
-            : "Password must be at least 8 characters and include at least 1 uppercase letter and 1 number.";
+            : "Mật khẩu phải có ít nhất 8 ký tự, bao gồm ít nhất 1 chữ hoa và 1 chữ số.";
     }
 
     private async Task<User> CreateSsoUserAsync(string normalizedEmail, string? displayName, string? suggestedUserName, CancellationToken cancellationToken)

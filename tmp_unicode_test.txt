@@ -1,1 +1,0 @@
-Khóa chính định danh người dùng. Trạng thái, Mô tả, Đường dẫn.

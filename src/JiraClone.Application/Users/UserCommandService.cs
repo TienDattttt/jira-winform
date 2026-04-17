@@ -194,7 +194,7 @@ public class UserCommandService
     {
         _logger.LogInformation("Updating email notification preference for user {UserId} to {IsEnabled}.", userId, isEnabled);
         var currentUser = _currentUserContext.CurrentUser
-            ?? throw new InvalidOperationException("No user is currently logged in.");
+            ?? throw new InvalidOperationException("Không có người dùng nào đang đăng nhập.");
 
         if (currentUser.Id != userId)
         {
