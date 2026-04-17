@@ -91,7 +91,7 @@ Quản trị toàn quyền về tài khoản hệ thống, dự án tổng và c
 ### 5.1. Quản lý Toàn cầu (Global Users)
 - **Bước 1:** (Menu chỉ hiện với quyền Admin). Tại Sidebar bên tay trái, bấm vào **Người dùng (Users)**.
 - **Bước 2:** Danh sách tất cả tài khoản hiển thị. Bấm nút Thêm hoặc quản lý tài khoản User.
-- **Bước 3:** Tạo Username, gắn Role hệ thống (Admin/Thành viên) và nhập mật khẩu mới.
+- **Bước 3:** Tạo Username, gắn Role hệ thống (Admin/Thành viên) và nhập mật khẩu mới. Sao role admin lại gắn role Admin nữa ?
 
 ### 5.2. Quản lý Dự Án (Projects Lifecycle)
 - **Bước 1:** Click tab **Dự án (Projects)** ở top menu sidebar. 
@@ -104,3 +104,6 @@ Quản trị toàn quyền về tài khoản hệ thống, dự án tổng và c
 - **Bước 2:** Mở mục **API Tokens** (CreateApiTokenDialog) -> Nhấn tạo Token mới. Copy chuỗi Token sinh ra để giao cho phần mềm thứ 3 gọi vào Jira.
 - **Bước 3:** Mở mục **Webhooks** (WebhookEndpointDialog) -> Nhấn **Thêm (Add Endpoint)**. Nhập URL Server nhận tin (HTTP POST) và tick chọn sự kiện bắt (Issue Created/Updated).
 - **Bước 4:** Nhấn **Save**. Bạn có thể kiểm tra danh sách WebhookDeliveryHistory để xem log gọi có thành công hay không.
+
+tại sao text Search your project hoặc Search in Jira vẫn còn là tiếng anh ? bên cạnh đó ô để nhập tìm kiếm vào thì bị lệch sang phải quá nhiều khiến tràn bị che đi mất
+

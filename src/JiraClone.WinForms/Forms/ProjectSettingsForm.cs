@@ -1,4 +1,4 @@
-﻿using JiraClone.Application.Models;
+using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
 using JiraClone.Domain.Permissions;
 using JiraClone.Domain.Enums;
@@ -36,42 +36,42 @@ public class ProjectSettingsForm : UserControl
     private readonly ProfileSettingsControl _profileSettings;
     private readonly WorkflowSettingsControl _workflowSettings;
     private readonly IntegrationSettingsControl _integrationSettings;
-    private readonly Button _saveProject = JiraControlFactory.CreatePrimaryButton("Save Project");
-    private readonly Button _saveBoardSettings = JiraControlFactory.CreateSecondaryButton("Save Board");
-    private readonly Button _archiveProject = JiraControlFactory.CreateSecondaryButton("Archive Project");
-    private readonly Button _deleteProject = JiraControlFactory.CreateSecondaryButton("Delete Project");
-    private readonly Button _addMember = JiraControlFactory.CreateSecondaryButton("Add Member");
-    private readonly Button _changeMemberRole = JiraControlFactory.CreateSecondaryButton("Change Role");
-    private readonly Button _removeMember = JiraControlFactory.CreateSecondaryButton("Remove Member");
-    private readonly Button _editColumn = JiraControlFactory.CreateSecondaryButton("Edit Column");
-    private readonly Button _addLabel = JiraControlFactory.CreateSecondaryButton("Add Label");
-    private readonly Button _editLabel = JiraControlFactory.CreateSecondaryButton("Edit Label");
-    private readonly Button _deleteLabel = JiraControlFactory.CreateSecondaryButton("Delete Label");
-    private readonly Button _addComponent = JiraControlFactory.CreateSecondaryButton("Add Component");
-    private readonly Button _editComponent = JiraControlFactory.CreateSecondaryButton("Edit Component");
-    private readonly Button _deleteComponent = JiraControlFactory.CreateSecondaryButton("Delete Component");
-    private readonly Button _addVersion = JiraControlFactory.CreateSecondaryButton("Add Version");
-    private readonly Button _editVersion = JiraControlFactory.CreateSecondaryButton("Edit Version");
-    private readonly Button _deleteVersion = JiraControlFactory.CreateSecondaryButton("Delete Version");
-    private readonly Button _markVersionReleased = JiraControlFactory.CreateSecondaryButton("Mark Released");
-    private readonly Button _addWebhook = JiraControlFactory.CreateSecondaryButton("Add Webhook");
-    private readonly Button _editWebhook = JiraControlFactory.CreateSecondaryButton("Edit Webhook");
-    private readonly Button _deleteWebhook = JiraControlFactory.CreateSecondaryButton("Delete Webhook");
-    private readonly Button _testWebhook = JiraControlFactory.CreateSecondaryButton("Test");
-    private readonly Button _viewWebhookHistory = JiraControlFactory.CreateSecondaryButton("Delivery History");
-    private readonly Button _savePermissions = JiraControlFactory.CreatePrimaryButton("Save Permissions");
-    private readonly Label _memberCountBadge = CreateBadgeLabel();
-    private readonly Label _columnCountBadge = CreateBadgeLabel();
-    private readonly Label _labelCountBadge = CreateBadgeLabel();
-    private readonly Label _componentCountBadge = CreateBadgeLabel();
-    private readonly Label _versionCountBadge = CreateBadgeLabel();
-    private readonly Label _webhookCountBadge = CreateBadgeLabel();
-    private readonly Label _membersEmptyState = CreateEmptyState("No members on this project yet.");
-    private readonly Label _columnsEmptyState = CreateEmptyState("No board columns configured.");
-    private readonly Label _labelsEmptyState = CreateEmptyState("No labels created for this project yet.");
-    private readonly Label _componentsEmptyState = CreateEmptyState("No components created for this project yet.");
-    private readonly Label _versionsEmptyState = CreateEmptyState("No versions created for this project yet.");
-    private readonly Label _webhooksEmptyState = CreateEmptyState("No webhooks configured for this project yet.");
+    private readonly Button _saveProject = JiraControlFactory.CreatePrimaryButton("Lưu dự án");
+private readonly Button _saveBoardSettings = JiraControlFactory.CreateSecondaryButton("Lưu bảng");
+private readonly Button _archiveProject = JiraControlFactory.CreateSecondaryButton("Lưu trữ dự án");
+private readonly Button _deleteProject = JiraControlFactory.CreateSecondaryButton("Xóa dự án");
+private readonly Button _addMember = JiraControlFactory.CreateSecondaryButton("Thêm thành viên");
+private readonly Button _changeMemberRole = JiraControlFactory.CreateSecondaryButton("Đổi vai trò");
+private readonly Button _removeMember = JiraControlFactory.CreateSecondaryButton("Xóa thành viên");
+private readonly Button _editColumn = JiraControlFactory.CreateSecondaryButton("Sửa cột");
+private readonly Button _addLabel = JiraControlFactory.CreateSecondaryButton("Thêm nhãn");
+private readonly Button _editLabel = JiraControlFactory.CreateSecondaryButton("Sửa nhãn");
+private readonly Button _deleteLabel = JiraControlFactory.CreateSecondaryButton("Xóa nhãn");
+private readonly Button _addComponent = JiraControlFactory.CreateSecondaryButton("Thêm thành phần");
+private readonly Button _editComponent = JiraControlFactory.CreateSecondaryButton("Sửa thành phần");
+private readonly Button _deleteComponent = JiraControlFactory.CreateSecondaryButton("Xóa thành phần");
+private readonly Button _addVersion = JiraControlFactory.CreateSecondaryButton("Thêm phiên bản");
+private readonly Button _editVersion = JiraControlFactory.CreateSecondaryButton("Sửa phiên bản");
+private readonly Button _deleteVersion = JiraControlFactory.CreateSecondaryButton("Xóa phiên bản");
+private readonly Button _markVersionReleased = JiraControlFactory.CreateSecondaryButton("Đánh dấu đã phát hành");
+private readonly Button _addWebhook = JiraControlFactory.CreateSecondaryButton("Thêm webhook");
+private readonly Button _editWebhook = JiraControlFactory.CreateSecondaryButton("Sửa webhook");
+private readonly Button _deleteWebhook = JiraControlFactory.CreateSecondaryButton("Xóa webhook");
+private readonly Button _testWebhook = JiraControlFactory.CreateSecondaryButton("Kiểm tra");
+private readonly Button _viewWebhookHistory = JiraControlFactory.CreateSecondaryButton("Lịch sử gửi");
+private readonly Button _savePermissions = JiraControlFactory.CreatePrimaryButton("Lưu quyền");
+private readonly Label _memberCountBadge = CreateBadgeLabel();
+private readonly Label _columnCountBadge = CreateBadgeLabel();
+private readonly Label _labelCountBadge = CreateBadgeLabel();
+private readonly Label _componentCountBadge = CreateBadgeLabel();
+private readonly Label _versionCountBadge = CreateBadgeLabel();
+private readonly Label _webhookCountBadge = CreateBadgeLabel();
+private readonly Label _membersEmptyState = CreateEmptyState("Chưa có thành viên nào trong dự án này.");
+private readonly Label _columnsEmptyState = CreateEmptyState("Chưa có cột nào được cấu hình cho bảng.");
+private readonly Label _labelsEmptyState = CreateEmptyState("Chưa có nhãn nào được tạo cho dự án này.");
+private readonly Label _componentsEmptyState = CreateEmptyState("Chưa có thành phần nào được tạo cho dự án này.");
+private readonly Label _versionsEmptyState = CreateEmptyState("Chưa có phiên bản nào được tạo cho dự án này.");
+private readonly Label _webhooksEmptyState = CreateEmptyState("Chưa có webhook nào được cấu hình cho dự án này.");
     private Project? _project;
     private IReadOnlyList<WebhookEndpoint> _webhookEndpoints = [];
     private bool _isLoading;
@@ -313,11 +313,11 @@ public class ProjectSettingsForm : UserControl
 
     private Control BuildHeader()
     {
-        var title = JiraControlFactory.CreateLabel("Project Settings");
+        var title = JiraControlFactory.CreateLabel("Cài đặt dự án");
         title.Font = JiraTheme.FontH1;
         title.Margin = new Padding(0, 0, 0, 4);
 
-        var caption = JiraControlFactory.CreateLabel("Adjust project details, members, board structure, workflows, permissions, labels, components, release versions, and outbound webhooks without leaving the desktop flow.", true);
+        var caption = JiraControlFactory.CreateLabel("Điều chỉnh thông tin dự án, thành viên, cấu trúc bảng (board), quy trình làm việc (workflow), quyền hạn, nhãn (label), thành phần (component), phiên bản phát hành (release), và webhook gửi ra (outbound) mà không cần rời khỏi luồng thao tác trên desktop.", true);
         caption.MaximumSize = new Size(980, 0);
         caption.AutoSize = true;
         caption.Margin = new Padding(0, 0, 0, 10);
@@ -412,11 +412,11 @@ public class ProjectSettingsForm : UserControl
 
     private Control BuildBoardSettingsSection()
     {
-        var title = JiraControlFactory.CreateLabel("Board Mode");
+        var title = JiraControlFactory.CreateLabel("Chế độ bảng");
         title.Font = JiraTheme.FontH2;
         title.Margin = new Padding(0, 0, 0, 4);
 
-        var caption = JiraControlFactory.CreateLabel("Switch this project between Scrum and Kanban. WIP limits remain configured per workflow column.", true);
+        var caption = JiraControlFactory.CreateLabel("Chuyển đổi dự án này giữa Scrum và Kanban. Giới hạn WIP vẫn được cấu hình theo từng cột trong quy trình làm việc.", true);
         caption.MaximumSize = new Size(760, 0);
         caption.AutoSize = true;
         caption.Margin = new Padding(0, 0, 0, 12);
@@ -488,9 +488,9 @@ public class ProjectSettingsForm : UserControl
 
     private TabPage BuildPermissionsTab()
     {
-        var page = CreatePage("Permissions");
+        var page = CreatePage("Quyền hạn");
 
-        var summary = JiraControlFactory.CreateLabel("Choose which project roles can create, edit, transition, and manage work in this project. Changes apply immediately to project-scoped service checks.", true);
+        var summary = JiraControlFactory.CreateLabel("Chọn các vai trò trong dự án có thể tạo, chỉnh sửa, chuyển trạng thái và quản lý công việc trong dự án này. Các thay đổi sẽ được áp dụng ngay lập tức cho các kiểm tra dịch vụ trong phạm vi dự án.", true);
         summary.MaximumSize = new Size(860, 0);
         summary.AutoSize = true;
 
@@ -1621,17 +1621,17 @@ public class ProjectSettingsForm : UserControl
 
     private sealed class MemberDialog : Form
     {
-        private readonly ComboBox _users = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody, Width = 280 };
-        private readonly ComboBox _role = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody, Width = 280 };
+        private readonly ComboBox _users = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody, Width = 380 };
+        private readonly ComboBox _role = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody, Width = 380 };
 
         public MemberDialog(IReadOnlyList<User> users)
         {
-            Text = "Add Member";
+            Text = "Thêm thành viên";
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
-            Width = 380;
-            Height = 230;
-            MinimumSize = new Size(380, 230);
+            Width = 480;
+            Height = 280;
+            MinimumSize = new Size(480, 280);
             StartPosition = FormStartPosition.CenterParent;
             BackColor = JiraTheme.BgSurface;
             Font = JiraTheme.FontBody;
@@ -1664,16 +1664,16 @@ public class ProjectSettingsForm : UserControl
 
     private sealed class MemberRoleDialog : Form
     {
-        private readonly ComboBox _role = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody, Width = 260 };
+        private readonly ComboBox _role = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = JiraTheme.BgSurface, ForeColor = JiraTheme.TextPrimary, Font = JiraTheme.FontBody, Width = 350 };
 
         public MemberRoleDialog(ProjectRole currentRole)
         {
             Text = "Change Member Role";
             AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
-            Width = 340;
-            Height = 190;
-            MinimumSize = new Size(340, 190);
+            Width = 420;
+            Height = 240;
+            MinimumSize = new Size(420, 240);
             StartPosition = FormStartPosition.CenterParent;
             BackColor = JiraTheme.BgSurface;
             Font = JiraTheme.FontBody;

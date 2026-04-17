@@ -1,4 +1,4 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
 using JiraClone.Domain.Entities;
@@ -422,7 +422,14 @@ public class MainForm : Form
     private void StartNotificationWorker()
     {
         _notificationTimer ??= new System.Threading.Timer(
-            async _ => await PollNotificationsAsync(),
+            _ =>
+            {
+                // Marshal to UI thread to avoid concurrent DbContext access from ThreadPool
+                if (!IsDisposed && IsHandleCreated)
+                {
+                    BeginInvoke((MethodInvoker)(async () => await PollNotificationsAsync()));
+                }
+            },
             null,
             TimeSpan.FromSeconds(5),
             TimeSpan.FromSeconds(30));
@@ -447,7 +454,7 @@ public class MainForm : Form
             var notifications = await _session.Notifications.GetRecentAsync(userId, 20);
             if (!IsDisposed && IsHandleCreated)
             {
-                BeginInvoke((MethodInvoker)(() => BindNotifications(notifications, unreadCount)));
+                BindNotifications(notifications, unreadCount);
             }
         }
         catch (Exception exception)

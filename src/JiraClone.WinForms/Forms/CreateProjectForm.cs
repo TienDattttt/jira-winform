@@ -25,10 +25,10 @@ public sealed class CreateProjectForm : Form
     private readonly Panel _stepTwoPanel = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface };
     private readonly DataGridView _memberGrid = new();
     private readonly BindingSource _memberBindingSource = new();
-    private readonly Button _backButton = JiraControlFactory.CreateSecondaryButton("Back");
-    private readonly Button _nextButton = JiraControlFactory.CreatePrimaryButton("Next");
-    private readonly Button _createButton = JiraControlFactory.CreatePrimaryButton("Create Project");
-    private readonly Button _cancelButton = JiraControlFactory.CreateSecondaryButton("Cancel");
+    private readonly Button _backButton = JiraControlFactory.CreateSecondaryButton("Quay lại");
+    private readonly Button _nextButton = JiraControlFactory.CreatePrimaryButton("Tiếp theo");
+    private readonly Button _createButton = JiraControlFactory.CreatePrimaryButton("Tạo dự án");
+    private readonly Button _cancelButton = JiraControlFactory.CreateSecondaryButton("Hủy");
 
     private bool _isBusy;
     private bool _isKeyDirty;
@@ -189,7 +189,7 @@ public sealed class CreateProjectForm : Form
         AddRow(layout, 2, "Category", _categoryComboBox);
         AddRow(layout, 3, "Description", _descriptionTextBox);
 
-        var helperLabel = JiraControlFactory.CreateLabel("Project key must match [A-Z]{2,10}. You can edit the suggested key before continuing.", true);
+        var helperLabel = JiraControlFactory.CreateLabel("Khóa dự án phải phù hợp với định dạng [A-Z]{2,10}. Bạn có thể chỉnh sửa khóa được đề xuất trước khi tiếp tục.", true);
         helperLabel.Dock = DockStyle.Top;
         helperLabel.MaximumSize = new Size(720, 0);
 
@@ -200,7 +200,7 @@ public sealed class CreateProjectForm : Form
 
     private void BuildStepTwo()
     {
-        var intro = JiraControlFactory.CreateLabel("Invite members and set their project roles. You will be added to the project automatically as Admin.", true);
+        var intro = JiraControlFactory.CreateLabel("Mời các thành viên và thiết lập vai trò của họ trong dự án. Bạn sẽ được tự động thêm vào dự án với vai trò Quản trị viên (Admin).", true);
         intro.Dock = DockStyle.Top;
         intro.Height = 36;
 
@@ -275,8 +275,8 @@ public sealed class CreateProjectForm : Form
         _createButton.Visible = _stepIndex == 1;
         _stepLabel.Text = _stepIndex == 0 ? "Step 1 of 2" : "Step 2 of 2";
         _subtitleLabel.Text = _stepIndex == 0
-            ? "Set the project name, key, category, and description before inviting teammates."
-            : "Invite teammates, assign project roles, and create the project when you are ready.";
+            ? "Đặt tên dự án, khóa (key), danh mục và mô tả trước khi mời các thành viên trong nhóm."
+            : "Mời các thành viên trong nhóm, phân công vai trò trong dự án và tạo dự án khi bạn đã sẵn sàng.";
         AcceptButton = _stepIndex == 0 ? _nextButton : _createButton;
         _validationLabel.Visible = false;
         _validationLabel.Text = string.Empty;
@@ -336,14 +336,14 @@ public sealed class CreateProjectForm : Form
 
         if (string.IsNullOrWhiteSpace(_nameTextBox.Text))
         {
-            ShowValidation("Project name is required.");
+            ShowValidation("Tên dự án là bắt buộc.");
             return false;
         }
 
         var normalizedKey = NormalizeProjectKey(_keyTextBox.Text);
         if (!Regex.IsMatch(normalizedKey, "^[A-Z]{2,10}$", RegexOptions.CultureInvariant))
         {
-            ShowValidation("Project key must match [A-Z]{2,10}.");
+            ShowValidation("Khóa dự án phải phù hợp với định dạng [A-Z]{2,10} (từ 2 đến 10 ký tự in hoa).");
             return false;
         }
 
@@ -351,7 +351,7 @@ public sealed class CreateProjectForm : Form
         {
             if (await _session.ProjectCommands.ProjectKeyExistsAsync(normalizedKey))
             {
-                ShowValidation("That project key is already in use.");
+                ShowValidation("Khóa dự án đó đã được sử dụng.");
                 return false;
             }
         }

@@ -13,16 +13,16 @@ public class BoardForm : UserControl
 {
     private readonly AppSession _session;
     private readonly bool _activeSprintOnly;
-    private readonly Label _sprintTitleLabel = JiraControlFactory.CreateLabel("No active sprint");
+    private readonly Label _sprintTitleLabel = JiraControlFactory.CreateLabel("Chưa có sprint đang hoạt động");
     private readonly Label _sprintDateLabel = JiraControlFactory.CreateLabel(string.Empty, true);
-    private readonly Button _startSprintButton = JiraControlFactory.CreatePrimaryButton("Start Sprint");
-    private readonly Button _boardModeButton = JiraControlFactory.CreateSecondaryButton("Mode: Scrum");
+    private readonly Button _startSprintButton = JiraControlFactory.CreatePrimaryButton("Bắt đầu sprint");
+    private readonly Button _boardModeButton = JiraControlFactory.CreateSecondaryButton("Chế độ: Scrum");
     private readonly ComboBox _assigneeFilter = CreateFilterCombo(210);
     private readonly ComboBox _priorityFilter = CreateFilterCombo(170);
     private readonly ComboBox _typeFilter = CreateFilterCombo(160);
     private readonly TextBox _searchFilter = JiraControlFactory.CreateTextBox();
-    private readonly Button _groupByEpicButton = JiraControlFactory.CreateSecondaryButton("Group by Epic");
-    private readonly Button _clearFiltersButton = JiraControlFactory.CreateSecondaryButton("Clear filters");
+    private readonly Button _groupByEpicButton = JiraControlFactory.CreateSecondaryButton("Nhóm theo Epic");
+    private readonly Button _clearFiltersButton = JiraControlFactory.CreateSecondaryButton("Xóa bộ lọc");
     private readonly Dictionary<int, BoardColumnControl> _columnControls = new();
     private readonly HashSet<string> _collapsedLaneKeys = [];
     private readonly Panel _toastPanel = new();
@@ -105,7 +105,7 @@ public class BoardForm : UserControl
         _boardModeButton.Click += OnBoardModeButtonClick;
 
         _searchFilter.Width = 280;
-        _searchFilter.PlaceholderText = "Search issues";
+        _searchFilter.PlaceholderText = "Tìm kiếm công việc";
         _groupByEpicButton.AutoSize = false;
         _groupByEpicButton.Size = new Size(148, 40);
         _clearFiltersButton.AutoSize = false;
@@ -309,7 +309,8 @@ public class BoardForm : UserControl
         cancellationToken.ThrowIfCancellationRequested();
 
         try
-        {            Project? project = null;
+        {
+            Project? project = null;
             Sprint? activeSprint = null;
             IReadOnlyList<BoardColumnDto> columns = Array.Empty<BoardColumnDto>();
             TimeSpan? averageCycleTime = null;
@@ -342,7 +343,7 @@ public class BoardForm : UserControl
             cancellationToken.ThrowIfCancellationRequested();
             if (project is null)
             {
-                ErrorDialogService.Show("No active project was found.");
+                ErrorDialogService.Show("Không tìm thấy dự án đang hoạt động.");
                 return;
             }
 
@@ -365,67 +366,68 @@ public class BoardForm : UserControl
             ErrorDialogService.Show(exception);
         }
         finally
-        {        }
+        {
+        }
     }
 
     private void PopulateHeader()
     {
         if (_boardType == BoardType.Kanban)
         {
-            _sprintTitleLabel.Text = $"{_project?.Name ?? "Project"} � Kanban";
+            _sprintTitleLabel.Text = $"{_project?.Name ?? "Dự án"} - Kanban";
             _sprintDateLabel.Text = BuildKanbanSubtitle();
             _startSprintButton.Enabled = false;
             _startSprintButton.Visible = false;
-            _startSprintButton.Text = "Start Sprint";
+            _startSprintButton.Text = "Bắt đầu sprint";
             return;
         }
 
         if (_activeSprint is null)
         {
-            _sprintTitleLabel.Text = _activeSprintOnly ? "No active sprint" : IssueDisplayText.TranslateStatus("Backlog");
-            _sprintDateLabel.Text = _activeSprintOnly ? "Start a planned sprint to focus the board" : "Showing all project issues";
+            _sprintTitleLabel.Text = _activeSprintOnly ? "Chưa có sprint đang hoạt động" : IssueDisplayText.TranslateStatus("Backlog");
+            _sprintDateLabel.Text = _activeSprintOnly ? "Hãy bắt đầu một sprint đã lập kế hoạch để tập trung bảng công việc" : "Đang hiển thị tất cả công việc của dự án";
             _startSprintButton.Enabled = _activeSprintOnly;
             _startSprintButton.Visible = _activeSprintOnly;
-            _startSprintButton.Text = "Start Sprint";
+            _startSprintButton.Text = "Bắt đầu sprint";
             return;
         }
 
         _sprintTitleLabel.Text = _activeSprintOnly ? _activeSprint.Name : IssueDisplayText.TranslateStatus("Backlog");
-        _sprintDateLabel.Text = _activeSprintOnly ? FormatSprintDateRange(_activeSprint) : $"Active sprint: {_activeSprint.Name}";
+        _sprintDateLabel.Text = _activeSprintOnly ? FormatSprintDateRange(_activeSprint) : $"Sprint đang hoạt động: {_activeSprint.Name}";
         _startSprintButton.Enabled = false;
         _startSprintButton.Visible = _activeSprintOnly;
-        _startSprintButton.Text = "Running";
+        _startSprintButton.Text = "Đang chạy";
     }
 
     private string BuildKanbanSubtitle()
     {
         var parts = new List<string> { $"Hiển thị tất cả issue ngoài {IssueDisplayText.TranslateStatus("Done")}" };
         parts.Add(_averageCycleTime.HasValue
-            ? $"Avg cycle time: {FormatCycleTime(_averageCycleTime.Value)}"
-            : "Avg cycle time: n/a");
-        return string.Join("  �  ", parts);
+            ? $"Thời gian chu kỳ trung bình: {FormatCycleTime(_averageCycleTime.Value)}"
+            : "Thời gian chu kỳ trung bình: không có");
+        return string.Join("  -  ", parts);
     }
 
     private static string FormatCycleTime(TimeSpan duration)
     {
         if (duration.TotalDays >= 1d)
         {
-            return $"{duration.TotalDays:0.0} days";
+            return $"{duration.TotalDays:0.0} ngày";
         }
 
         if (duration.TotalHours >= 1d)
         {
-            return $"{duration.TotalHours:0.#} hrs";
+            return $"{duration.TotalHours:0.#} giờ";
         }
 
-        return $"{Math.Max(1d, duration.TotalMinutes):0} mins";
+        return $"{Math.Max(1d, duration.TotalMinutes):0} phút";
     }
 
     private static string FormatSprintDateRange(Sprint sprint)
     {
         if (!sprint.StartDate.HasValue && !sprint.EndDate.HasValue)
         {
-            return "No date range";
+            return "Không có khoảng thời gian";
         }
 
         var start = sprint.StartDate?.ToString("dd MMM yyyy") ?? "?";
@@ -441,9 +443,9 @@ public class BoardForm : UserControl
         _suppressFilterEvents = true;
         try
         {
-            ResetCombo(_assigneeFilter, "All assignees", assignees);
-            ResetCombo(_priorityFilter, "All priorities", Enum.GetNames<IssuePriority>());
-            ResetCombo(_typeFilter, "All types", Enum.GetNames<IssueType>());
+            ResetCombo(_assigneeFilter, "Tất cả người được giao", assignees);
+            ResetCombo(_priorityFilter, "Tất cả độ ưu tiên", Enum.GetNames<IssuePriority>());
+            ResetCombo(_typeFilter, "Tất cả loại", Enum.GetNames<IssueType>());
         }
         finally
         {
@@ -768,7 +770,7 @@ public class BoardForm : UserControl
     {
         var isKanban = _boardType == BoardType.Kanban;
         _boardModeButton.Visible = _canChangeBoardMode;
-        _boardModeButton.Text = isKanban ? "Mode: Kanban" : "Mode: Scrum";
+        _boardModeButton.Text = isKanban ? "Chế độ: Kanban" : "Chế độ: Scrum";
         _boardModeButton.BackColor = isKanban ? JiraTheme.Blue100 : JiraTheme.BgSurface;
         _boardModeButton.ForeColor = isKanban ? JiraTheme.PrimaryActive : JiraTheme.TextPrimary;
         _boardModeButton.FlatAppearance.BorderSize = 1;
@@ -839,6 +841,7 @@ public class BoardForm : UserControl
             control.Dispose();
         }
     }
+
     private void OnWipLimitWarningRequested(object? sender, BoardColumnWipLimitEventArgs args)
     {
         ShowWarningToast($"Cột {IssueDisplayText.TranslateStatus(args.StatusName)} đã chạm giới hạn WIP ({args.CurrentCount}/{args.Limit}). Thả để xác nhận ghi đè.");
@@ -901,7 +904,7 @@ public class BoardForm : UserControl
 
             if (nextSprint is null)
             {
-                ErrorDialogService.Show("No planned sprint is available to start.");
+                ErrorDialogService.Show("Không có sprint đã lập kế hoạch nào để bắt đầu.");
                 return;
             }
 
@@ -979,13 +982,13 @@ public class BoardForm : UserControl
                 var currentCount = GetBoardModeTotalCount(targetColumn);
                 var confirm = MessageBox.Show(
                     this,
-                    $"{targetColumn.Name} has reached its WIP limit ({currentCount}/{targetColumn.WipLimit}). Move the issue anyway?",
-                    "WIP Limit Reached",
+                    $"{targetColumn.Name} đã đạt giới hạn WIP ({currentCount}/{targetColumn.WipLimit}). Vẫn chuyển công việc?",
+                    "Đã đạt giới hạn WIP",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning);
                 if (confirm != DialogResult.Yes)
                 {
-                    ShowWarningToast($"Move cancelled because {targetColumn.Name} is at its WIP limit.");
+                    ShowWarningToast($"Đã hủy chuyển vì {targetColumn.Name} đã đạt giới hạn WIP.");
                     return;
                 }
             }
@@ -1261,6 +1264,7 @@ public class BoardForm : UserControl
     {
         await MoveIssueAsync(args, _disposeCts.Token);
     }
+
     private static Color ParseColor(string? value, Color fallback)
     {
         try
@@ -1275,40 +1279,3 @@ public class BoardForm : UserControl
 
     private const string NoEpicLaneKey = "no-epic";
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

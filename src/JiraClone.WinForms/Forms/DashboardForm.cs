@@ -27,10 +27,10 @@ public sealed class DashboardForm : UserControl
     ];
 
     private readonly AppSession _session;
-    private readonly Label _titleLabel = JiraControlFactory.CreateLabel("Dashboard");
-    private readonly Label _subtitleLabel = JiraControlFactory.CreateLabel("Project overview across sprint progress, issue mix, activity, and team workload.", true);
-    private readonly Label _autoRefreshLabel = JiraControlFactory.CreateLabel("Auto-refresh every 5 minutes", true);
-    private readonly Button _refreshButton = JiraControlFactory.CreateSecondaryButton("Refresh");
+    private readonly Label _titleLabel = JiraControlFactory.CreateLabel("Bảng điều khiển");
+    private readonly Label _subtitleLabel = JiraControlFactory.CreateLabel("Tổng quan dự án theo tiến độ sprint, phân loại công việc, hoạt động và khối lượng công việc của nhóm.", true);
+    private readonly Label _autoRefreshLabel = JiraControlFactory.CreateLabel("Tự động làm mới mỗi 5 phút", true);
+    private readonly Button _refreshButton = JiraControlFactory.CreateSecondaryButton("Làm mới");
     private readonly FlowLayoutPanel _widgetsPanel = new()
     {
         Dock = DockStyle.Fill,
@@ -41,18 +41,18 @@ public sealed class DashboardForm : UserControl
         Padding = new Padding(20, 0, 20, 20),
         Margin = new Padding(0)
     };
-    private readonly DashboardWidgetCard _sprintCard = new("Sprint Progress", "No active sprint");
-    private readonly DashboardWidgetCard _statisticsCard = new("Issue Statistics", "Type and priority mix for the active project");
-    private readonly DashboardWidgetCard _activityCard = new("Recent Activity", "The latest 10 changes across the project");
-    private readonly DashboardWidgetCard _assignedCard = new("Assigned To Me", "In-progress issues that currently need your attention");
-    private readonly DashboardWidgetCard _teamCard = new("Team Workload", "Open and in-progress load by teammate");
+    private readonly DashboardWidgetCard _sprintCard = new("Tiến độ Sprint", "Chưa có sprint đang hoạt động");
+    private readonly DashboardWidgetCard _statisticsCard = new("Thống kê công việc", "Phân loại theo loại và độ ưu tiên của dự án hiện tại");
+    private readonly DashboardWidgetCard _activityCard = new("Hoạt động gần đây", "10 thay đổi mới nhất trong dự án");
+    private readonly DashboardWidgetCard _assignedCard = new("Công việc của tôi", "Các công việc đang thực hiện cần bạn chú ý");
+    private readonly DashboardWidgetCard _teamCard = new("Khối lượng công việc nhóm", "Khối lượng công việc đang mở và đang xử lý của từng thành viên");
     private readonly SprintProgressPanel _sprintPanel = new() { Dock = DockStyle.Fill };
     private readonly IssueStatisticsPanel _statisticsPanel = new() { Dock = DockStyle.Fill };
-    private readonly Label _activityEmptyState = CreateEmptyState("No recent activity to show.");
+    private readonly Label _activityEmptyState = CreateEmptyState("Không có hoạt động gần đây.");
     private readonly DoubleBufferedPanel _activityBody = new() { Dock = DockStyle.Fill, AutoScroll = true, BackColor = JiraTheme.BgSurface };
-    private readonly Label _assignedEmptyState = CreateEmptyState("You have no in-progress issues right now.");
+    private readonly Label _assignedEmptyState = CreateEmptyState("Hiện tại bạn không có công việc nào đang thực hiện.");
     private readonly DoubleBufferedPanel _assignedBody = new() { Dock = DockStyle.Fill, AutoScroll = true, BackColor = JiraTheme.BgSurface };
-    private readonly Label _teamEmptyState = CreateEmptyState("No team members are available in the active project.");
+    private readonly Label _teamEmptyState = CreateEmptyState("Không có thành viên nào trong dự án hiện tại.");
     private readonly DoubleBufferedPanel _teamBody = new() { Dock = DockStyle.Fill, AutoScroll = true, BackColor = JiraTheme.BgSurface };
     private readonly Panel _teamHeader = CreateTeamHeader();
     private readonly System.Windows.Forms.Timer _autoRefreshTimer = new() { Interval = 5 * 60 * 1000 };
@@ -270,7 +270,8 @@ public sealed class DashboardForm : UserControl
         cancellationToken.ThrowIfCancellationRequested();
 
         try
-        {            SetBusyState(true);
+        {
+            SetBusyState(true);
 
             Project? project = null;
             DashboardOverviewDto? overview = null;
@@ -291,8 +292,8 @@ public sealed class DashboardForm : UserControl
             _project = project;
             _overview = overview;
             _subtitleLabel.Text = project is null
-                ? "Choose an active project to see sprint health, activity, and workload."
-                : $"Overview for {project.Name}. Search filters activity, assigned work, and team rows.";
+                ? "Hãy chọn một dự án đang hoạt động để xem tình trạng sprint, hoạt động và khối lượng công việc."
+                : $"Tổng quan cho {project.Name}. Tìm kiếm sẽ lọc hoạt động, công việc được giao và danh sách thành viên nhóm.";
 
             BindOverview();
         }
@@ -307,7 +308,8 @@ public sealed class DashboardForm : UserControl
             ErrorDialogService.Show(exception);
         }
         finally
-        {            SetBusyState(false);
+        {
+            SetBusyState(false);
         }
     }
 
@@ -329,26 +331,26 @@ public sealed class DashboardForm : UserControl
 
     private void ApplyNoProjectState()
     {
-        _sprintCard.SetSubtitle("No active project");
+        _sprintCard.SetSubtitle("Chưa có dự án đang hoạt động");
         _sprintPanel.Data = null;
 
-        _statisticsCard.SetSubtitle("No active project");
+        _statisticsCard.SetSubtitle("Chưa có dự án đang hoạt động");
         _statisticsPanel.Data = null;
 
-        _activityCard.SetSubtitle("No active project");
+        _activityCard.SetSubtitle("Chưa có dự án đang hoạt động");
         _activityBody.Controls.Clear();
-        _activityEmptyState.Text = "Choose an active project to see the latest changes.";
+        _activityEmptyState.Text = "Hãy chọn một dự án đang hoạt động để xem các thay đổi mới nhất.";
         _activityEmptyState.Visible = true;
 
-        _assignedCard.SetSubtitle("No active project");
+        _assignedCard.SetSubtitle("Chưa có dự án đang hoạt động");
         _assignedBody.Controls.Clear();
-        _assignedEmptyState.Text = "Choose an active project to see your assigned work.";
+        _assignedEmptyState.Text = "Hãy chọn một dự án đang hoạt động để xem các công việc được giao cho bạn.";
         _assignedEmptyState.Visible = true;
 
-        _teamCard.SetSubtitle("No active project");
+        _teamCard.SetSubtitle("Chưa có dự án đang hoạt động");
         _teamBody.Controls.Clear();
         _teamHeader.Visible = false;
-        _teamEmptyState.Text = "Choose an active project to see team workload.";
+        _teamEmptyState.Text = "Hãy chọn một dự án đang hoạt động để xem khối lượng công việc của nhóm.";
         _teamEmptyState.Visible = true;
     }
 
@@ -356,14 +358,14 @@ public sealed class DashboardForm : UserControl
     {
         if (!data.HasActiveSprint || string.IsNullOrWhiteSpace(data.SprintName))
         {
-            _sprintCard.SetSubtitle("No active sprint");
+            _sprintCard.SetSubtitle("Chưa có sprint đang hoạt động");
             _sprintPanel.Data = data;
             return;
         }
 
         var range = data.StartDate.HasValue && data.EndDate.HasValue
             ? $"{data.StartDate:dd MMM} - {data.EndDate:dd MMM yyyy}"
-            : "Sprint dates pending";
+            : "Ngày sprint đang chờ cập nhật";
         _sprintCard.SetSubtitle($"{data.SprintName} | {range}");
         _sprintPanel.Data = data;
     }
@@ -376,8 +378,8 @@ public sealed class DashboardForm : UserControl
             .ToList();
 
         _activityCard.SetSubtitle(filtered.Count == 0
-            ? "No recent activity matches the current filter"
-            : $"Showing {filtered.Count} recent activit{(filtered.Count == 1 ? "y" : "ies")}");
+            ? "Không có hoạt động gần đây nào khớp với bộ lọc hiện tại"
+            : $"Đang hiển thị {filtered.Count} hoạt động gần đây");
 
         RebuildStack(
             _activityBody,
@@ -388,7 +390,7 @@ public sealed class DashboardForm : UserControl
                 return row;
             }).Cast<Control>().ToList(),
             _activityEmptyState,
-            filtered.Count == 0 ? "No recent activity matches the current filter." : "No recent activity to show.");
+            filtered.Count == 0 ? "Không có hoạt động gần đây nào khớp với bộ lọc hiện tại." : "Không có hoạt động gần đây.");
     }
 
     private void BindAssignedIssues(IReadOnlyList<DashboardIssueDto> allIssues)
@@ -399,8 +401,8 @@ public sealed class DashboardForm : UserControl
             .ToList();
 
         _assignedCard.SetSubtitle(filtered.Count == 0
-            ? "Nothing in progress matches the current filter"
-            : $"{filtered.Count} in-progress issue{(filtered.Count == 1 ? string.Empty : "s")} assigned to you");
+            ? "Không có công việc đang thực hiện nào khớp với bộ lọc hiện tại"
+            : $"{filtered.Count} công việc đang thực hiện được giao cho bạn");
 
         RebuildStack(
             _assignedBody,
@@ -411,7 +413,7 @@ public sealed class DashboardForm : UserControl
                 return row;
             }).Cast<Control>().ToList(),
             _assignedEmptyState,
-            filtered.Count == 0 ? "No assigned in-progress issues match the current filter." : "You have no in-progress issues right now.");
+            filtered.Count == 0 ? "Không có công việc đang thực hiện được giao nào khớp với bộ lọc hiện tại." : "Hiện tại bạn không có công việc nào đang thực hiện.");
     }
 
     private void BindTeamWorkload(IReadOnlyList<DashboardTeamWorkloadDto> allRows)
@@ -422,15 +424,15 @@ public sealed class DashboardForm : UserControl
             .ToList();
 
         _teamCard.SetSubtitle(filtered.Count == 0
-            ? "No team members match the current filter"
-            : $"{filtered.Count} teammate{(filtered.Count == 1 ? string.Empty : "s")} in the active project");
+            ? "Không có thành viên nào khớp với bộ lọc hiện tại"
+            : $"{filtered.Count} thành viên trong dự án hiện tại");
         _teamHeader.Visible = filtered.Count > 0;
 
         RebuildStack(
             _teamBody,
             filtered.Select(row => (Control)new TeamWorkloadRowControl(row)).ToList(),
             _teamEmptyState,
-            filtered.Count == 0 ? "No team members match the current filter." : "No team members are available in the active project.",
+            filtered.Count == 0 ? "Không có thành viên nào khớp với bộ lọc hiện tại." : "Không có thành viên nào trong dự án hiện tại.",
             topOffset: _teamHeader.Height);
     }
 
@@ -525,7 +527,7 @@ public sealed class DashboardForm : UserControl
 
     private void ApplyResponsiveLayout()
     {
-        // Added an extra 48px safety margin to ensure FlowLayoutPanel never clips the right side
+        // Đã thêm khoảng an toàn 48px để đảm bảo FlowLayoutPanel không bao giờ bị cắt bên phải
         var availableWidth = Math.Max(320, _widgetsPanel.ClientSize.Width - _widgetsPanel.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - 100);
         var halfWidth = Math.Max(360, (availableWidth - 16) / 2);
         var useSingleColumn = availableWidth < 980;
@@ -576,10 +578,10 @@ public sealed class DashboardForm : UserControl
             Padding = new Padding(16, 8, 16, 6)
         };
 
-        header.Controls.Add(CreateHeaderLabel("In Progress", 520, 120, ContentAlignment.MiddleRight));
-        header.Controls.Add(CreateHeaderLabel("Open", 392, 90, ContentAlignment.MiddleRight));
-        header.Controls.Add(CreateHeaderLabel("Name", 64, 250, ContentAlignment.MiddleLeft));
-        header.Controls.Add(CreateHeaderLabel("Avatar", 16, 42, ContentAlignment.MiddleLeft));
+        header.Controls.Add(CreateHeaderLabel("Đang thực hiện", 520, 120, ContentAlignment.MiddleRight));
+        header.Controls.Add(CreateHeaderLabel("Đang mở", 392, 90, ContentAlignment.MiddleRight));
+        header.Controls.Add(CreateHeaderLabel("Tên", 64, 250, ContentAlignment.MiddleLeft));
+        header.Controls.Add(CreateHeaderLabel("Ảnh đại diện", 16, 42, ContentAlignment.MiddleLeft));
         return header;
     }
 
@@ -604,21 +606,21 @@ public sealed class DashboardForm : UserControl
 
     private static string FormatActivityText(DashboardActivityDto activity)
     {
-        var issuePart = string.IsNullOrWhiteSpace(activity.IssueKey) ? "an issue" : activity.IssueKey;
+        var issuePart = string.IsNullOrWhiteSpace(activity.IssueKey) ? "một công việc" : activity.IssueKey;
         return activity.ActionType switch
         {
-            ActivityActionType.Created => $"{activity.UserDisplayName} created {issuePart}",
-            ActivityActionType.Updated => $"{activity.UserDisplayName} updated {activity.FieldName ?? "details"} on {issuePart}",
-            ActivityActionType.Deleted => $"{activity.UserDisplayName} deleted {issuePart}",
-            ActivityActionType.StatusChanged => $"{activity.UserDisplayName} moved {issuePart} to {activity.NewValue ?? "a new status"}",
-            ActivityActionType.CommentAdded => $"{activity.UserDisplayName} commented on {issuePart}",
-            ActivityActionType.CommentUpdated => $"{activity.UserDisplayName} edited a comment on {issuePart}",
-            ActivityActionType.CommentDeleted => $"{activity.UserDisplayName} removed a comment on {issuePart}",
-            ActivityActionType.AttachmentAdded => $"{activity.UserDisplayName} added an attachment to {issuePart}",
-            ActivityActionType.AttachmentRemoved => $"{activity.UserDisplayName} removed an attachment from {issuePart}",
-            ActivityActionType.SprintAssigned => $"{activity.UserDisplayName} assigned {issuePart} to sprint {activity.NewValue ?? "backlog"}",
-            ActivityActionType.SprintClosed => $"{activity.UserDisplayName} closed sprint {activity.NewValue ?? string.Empty}".TrimEnd(),
-            _ => $"{activity.UserDisplayName} changed {issuePart}"
+            ActivityActionType.Created => $"{activity.UserDisplayName} đã tạo {issuePart}",
+            ActivityActionType.Updated => $"{activity.UserDisplayName} đã cập nhật {activity.FieldName ?? "thông tin"} của {issuePart}",
+            ActivityActionType.Deleted => $"{activity.UserDisplayName} đã xóa {issuePart}",
+            ActivityActionType.StatusChanged => $"{activity.UserDisplayName} đã chuyển {issuePart} sang {activity.NewValue ?? "một trạng thái mới"}",
+            ActivityActionType.CommentAdded => $"{activity.UserDisplayName} đã bình luận vào {issuePart}",
+            ActivityActionType.CommentUpdated => $"{activity.UserDisplayName} đã chỉnh sửa bình luận trong {issuePart}",
+            ActivityActionType.CommentDeleted => $"{activity.UserDisplayName} đã xóa một bình luận trong {issuePart}",
+            ActivityActionType.AttachmentAdded => $"{activity.UserDisplayName} đã thêm tệp đính kèm vào {issuePart}",
+            ActivityActionType.AttachmentRemoved => $"{activity.UserDisplayName} đã xóa tệp đính kèm khỏi {issuePart}",
+            ActivityActionType.SprintAssigned => $"{activity.UserDisplayName} đã đưa {issuePart} vào sprint {activity.NewValue ?? "backlog"}",
+            ActivityActionType.SprintClosed => $"{activity.UserDisplayName} đã đóng sprint {activity.NewValue ?? string.Empty}".TrimEnd(),
+            _ => $"{activity.UserDisplayName} đã thay đổi {issuePart}"
         };
     }
 
@@ -630,25 +632,25 @@ public sealed class DashboardForm : UserControl
         var delta = DateTime.UtcNow - utcTimestamp.ToUniversalTime();
         if (delta.TotalSeconds < 60)
         {
-            return "just now";
+            return "vừa xong";
         }
 
         if (delta.TotalMinutes < 60)
         {
             var minutes = Math.Max(1, (int)Math.Floor(delta.TotalMinutes));
-            return $"{minutes} minute{(minutes == 1 ? string.Empty : "s")} ago";
+            return $"{minutes} phút trước";
         }
 
         if (delta.TotalHours < 24)
         {
             var hours = Math.Max(1, (int)Math.Floor(delta.TotalHours));
-            return $"{hours} hour{(hours == 1 ? string.Empty : "s")} ago";
+            return $"{hours} giờ trước";
         }
 
         if (delta.TotalDays < 7)
         {
             var days = Math.Max(1, (int)Math.Floor(delta.TotalDays));
-            return $"{days} day{(days == 1 ? string.Empty : "s")} ago";
+            return $"{days} ngày trước";
         }
 
         return utcTimestamp.ToLocalTime().ToString("dd MMM yyyy");
@@ -774,23 +776,23 @@ public sealed class DashboardForm : UserControl
 
             if (_data is null)
             {
-                DrawEmptyState(e.Graphics, "Choose an active project to see sprint progress.");
+                DrawEmptyState(e.Graphics, "Hãy chọn một dự án đang hoạt động để xem tiến độ sprint.");
                 return;
             }
 
             if (!_data.HasActiveSprint)
             {
-                DrawEmptyState(e.Graphics, "No active sprint is running for this project.");
+                DrawEmptyState(e.Graphics, "Hiện không có sprint nào đang chạy cho dự án này.");
                 return;
             }
 
             var storyPointsTotal = Math.Max(0, _data.TotalStoryPoints);
             var storyPointsDone = Math.Max(0, _data.DoneStoryPoints);
             var progress = storyPointsTotal == 0 ? 0d : Math.Clamp(storyPointsDone / (double)storyPointsTotal, 0d, 1d);
-            var issueSummary = $"{_data.DoneIssues} / {_data.TotalIssues} issues done";
+            var issueSummary = $"{_data.DoneIssues} / {_data.TotalIssues} công việc đã hoàn thành";
             var pointSummary = storyPointsTotal == 0
-                ? "No story points committed yet"
-                : $"{storyPointsDone} / {storyPointsTotal} story points complete";
+                ? "Chưa có story point nào được cam kết"
+                : $"{storyPointsDone} / {storyPointsTotal} story point đã hoàn thành";
 
             TextRenderer.DrawText(e.Graphics, pointSummary, JiraTheme.FontBody, new Rectangle(0, 0, Width, 24), JiraTheme.TextPrimary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
             TextRenderer.DrawText(e.Graphics, issueSummary, JiraTheme.FontCaption, new Rectangle(0, 26, Width, 18), JiraTheme.TextSecondary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
@@ -864,13 +866,13 @@ public sealed class DashboardForm : UserControl
 
             if (_data is null)
             {
-                TextRenderer.DrawText(e.Graphics, "Choose an active project to see issue mix.", JiraTheme.FontBody, ClientRectangle, JiraTheme.TextSecondary, TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.WordBreak);
+                TextRenderer.DrawText(e.Graphics, "Hãy chọn một dự án đang hoạt động để xem phân loại công việc.", JiraTheme.FontBody, ClientRectangle, JiraTheme.TextSecondary, TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.WordBreak);
                 return;
             }
 
             var halfWidth = Math.Max(180, Width / 2);
-            DrawDonutSection(e.Graphics, new Rectangle(0, 0, halfWidth, Height), "By Type", _data.TypeBreakdown);
-            DrawDonutSection(e.Graphics, new Rectangle(halfWidth, 0, Width - halfWidth, Height), "By Priority", _data.PriorityBreakdown);
+            DrawDonutSection(e.Graphics, new Rectangle(0, 0, halfWidth, Height), "Theo loại", _data.TypeBreakdown);
+            DrawDonutSection(e.Graphics, new Rectangle(halfWidth, 0, Width - halfWidth, Height), "Theo độ ưu tiên", _data.PriorityBreakdown);
         }
 
         private static void DrawDonutSection(Graphics graphics, Rectangle bounds, string title, IReadOnlyList<DashboardChartSliceDto> slices)
@@ -879,7 +881,7 @@ public sealed class DashboardForm : UserControl
 
             if (slices.Count == 0)
             {
-                TextRenderer.DrawText(graphics, "No issue data", JiraTheme.FontCaption, new Rectangle(bounds.X, bounds.Y + 30, bounds.Width, 22), JiraTheme.TextSecondary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+                TextRenderer.DrawText(graphics, "Không có dữ liệu công việc", JiraTheme.FontCaption, new Rectangle(bounds.X, bounds.Y + 30, bounds.Width, 22), JiraTheme.TextSecondary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
                 return;
             }
 
@@ -1050,8 +1052,8 @@ public sealed class DashboardForm : UserControl
             DrawPill(e.Graphics, new Rectangle(96, 50, 88, 18), _issue.Priority.ToString(), ResolvePriorityColor(_issue.Priority));
 
             var meta = _issue.StoryPoints.HasValue
-                ? $"{_issue.StoryPoints.Value} pts"
-                : "No estimate";
+                ? $"{_issue.StoryPoints.Value} điểm"
+                : "Chưa ước lượng";
             TextRenderer.DrawText(e.Graphics, meta, JiraTheme.FontCaption, new Rectangle(Width - 90, 48, 76, 18), JiraTheme.TextSecondary, TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
         }
     }
@@ -1156,4 +1158,3 @@ public sealed class DashboardForm : UserControl
         };
     }
 }
-
