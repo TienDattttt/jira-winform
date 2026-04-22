@@ -7,56 +7,56 @@
 </HEAD>
 <BODY>
   <h1>Troubleshooting</h1>
-  <p class="meta">Hướng dẫn xử lý các sự cố thường gặp khi vận hành ứng dụng.</p>
+  <p class="meta">Hướng dẫn xử lý các sự cố thường gặp trong môi trường vận hành.</p>
 
   <h2 id="dang-nhap-va-du-lieu">Không đăng nhập được hoặc không thấy dữ liệu</h2>
   <ul class="section-list">
-    <li>Kiểm tra lại tài khoản, mật khẩu và trạng thái tài khoản có đang bị khóa hay không.</li>
+    <li>Kiểm tra lại tài khoản, mật khẩu và trạng thái khóa của tài khoản.</li>
     <li>Xác nhận ứng dụng đang kết nối đúng môi trường dữ liệu.</li>
-    <li>Nếu đăng nhập được nhưng không thấy project mong đợi, kiểm tra membership của người dùng trong project đó.</li>
-    <li>Nếu một số màn hình chỉ hiện trạng thái rỗng, kiểm tra lại project đang active và bộ lọc tìm kiếm trên thanh trên cùng.</li>
+    <li>Nếu không thấy project mong đợi, kiểm tra membership của người dùng trong project đó.</li>
+    <li>Nếu màn hình chỉ hiển thị trạng thái rỗng, kiểm tra project active và bộ lọc search hiện tại.</li>
   </ul>
 
   <h2 id="database">Ứng dụng không khởi động do lỗi database</h2>
   <ul class="section-list">
-    <li>Kiểm tra chuỗi kết nối đang được cấp cho ứng dụng.</li>
-    <li>Xác nhận SQL Server đang chạy và máy trạm có thể truy cập tới máy chủ cơ sở dữ liệu.</li>
-    <li>Xác nhận tài khoản kết nối có quyền đọc/ghi và áp dụng migration nếu môi trường yêu cầu.</li>
-    <li>Đọc log khởi động để lấy thông báo lỗi chi tiết trước khi can thiệp tiếp.</li>
+    <li>Kiểm tra chuỗi kết nối đã cấp cho ứng dụng.</li>
+    <li>Xác nhận SQL Server đang chạy và máy trạm truy cập được tới máy chủ dữ liệu.</li>
+    <li>Xác nhận tài khoản kết nối có quyền phù hợp với môi trường.</li>
+    <li>Đọc log khởi động trước khi thao tác tiếp.</li>
   </ul>
 
   <h2 id="attachment">Không upload được attachment</h2>
   <ul class="section-list">
-    <li>Kiểm tra quyền của người dùng trên issue hiện hành.</li>
-    <li>Kiểm tra dung lượng file có vượt giới hạn cấu hình hay không.</li>
-    <li>Kiểm tra thư mục lưu attachment hoặc đường dẫn chia sẻ mạng còn truy cập được không.</li>
+    <li>Kiểm tra quyền của người dùng trên issue.</li>
+    <li>Kiểm tra dung lượng file và giới hạn cấu hình.</li>
+    <li>Kiểm tra storage path hoặc network share cho attachment.</li>
   </ul>
 
   <h2 id="xuat-bao-cao">Không xuất được Excel hoặc PNG</h2>
   <ul class="section-list">
-    <li>Xác nhận màn hình báo cáo đã tải xong dữ liệu trước khi xuất.</li>
-    <li>Kiểm tra thư mục lưu đích có quyền ghi.</li>
-    <li>Nếu xuất Excel thất bại, thử lưu vào thư mục khác và kiểm tra file đích không đang bị mở bởi Excel.</li>
-    <li>Nếu dữ liệu trong file xuất không đúng kỳ vọng, kiểm tra lại project và sprint đang được chọn trên màn hình Báo cáo.</li>
+    <li>Xác nhận màn hình báo cáo đã tải xong dữ liệu.</li>
+    <li>Kiểm tra thư mục đích có quyền ghi.</li>
+    <li>Nếu xuất Excel thất bại, kiểm tra file đích không đang bị khóa bởi Excel hoặc LibreOffice.</li>
+    <li>Kiểm tra lại project và sprint đang chọn nếu dữ liệu xuất ra không đúng.</li>
   </ul>
 
   <h2 id="notification">Không nhận được notification, email hoặc webhook</h2>
   <ul class="section-list">
-    <li>Kiểm tra người dùng có đang là assignee, watcher hoặc đối tượng nhận sự kiện tương ứng không.</li>
-    <li>Với email, kiểm tra cấu hình SMTP, thông tin xác thực và chính sách gửi mail.</li>
+    <li>Kiểm tra assignee, watcher hoặc điều kiện phát notification.</li>
+    <li>Với email, kiểm tra SMTP và thông tin xác thực.</li>
     <li>Với webhook, kiểm tra endpoint, secret, response code và delivery history.</li>
   </ul>
 
   <h2 id="tro-giup">Không mở được file trợ giúp</h2>
   <ul class="section-list">
-    <li>Kiểm tra file <code>JiraClone.chm</code> có tồn tại trong thư mục <code>Help</code> của bản cài đặt hay không.</li>
-    <li>Nếu file tồn tại nhưng không mở được, thử đóng ứng dụng và mở lại bằng quyền người dùng thông thường.</li>
-    <li>Nếu vừa chép file từ nguồn ngoài, mở Properties của file và bỏ chặn file nếu Windows đánh dấu là tải từ Internet.</li>
-    <li>Nếu vẫn lỗi, cài đặt lại ứng dụng để khôi phục file trợ giúp đi kèm.</li>
+    <li>Kiểm tra file <code>JiraClone.chm</code> có tồn tại trong thư mục <code>Help</code> của bản cài đặt.</li>
+    <li>Đóng hoàn toàn cửa sổ HTML Help cũ trước khi mở lại file trợ giúp mới.</li>
+    <li>Nếu file vừa được chép từ nguồn ngoài, bỏ chặn file trong Properties nếu Windows đánh dấu là tải từ Internet.</li>
+    <li>Nếu vẫn lỗi, cài đặt lại ứng dụng để khôi phục artifact trợ giúp đi kèm.</li>
   </ul>
 
   <div class="warning">
-    Khi sự cố có liên quan tới database, permission, webhook hoặc SMTP, người dùng cuối không nên tự thay đổi cấu hình.
+    Khi sự cố liên quan tới database, permission, webhook hoặc SMTP, người dùng cuối không nên tự thay đổi cấu hình.
     Hãy chuyển thông tin lỗi cho quản trị viên hoặc đội vận hành.
   </div>
 </BODY>

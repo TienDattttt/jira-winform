@@ -11,12 +11,36 @@
       <param name="Local" value="topics/index.html">
     </OBJECT>
     <LI> <OBJECT type="text/sitemap">
-      <param name="Name" value="Users">
-      <param name="Local" value="topics/nguoi-dung.html">
+      <param name="Name" value="Introduction">
+      <param name="Local" value="topics/introduction.html">
     </OBJECT>
     <LI> <OBJECT type="text/sitemap">
-      <param name="Name" value="Administrators">
-      <param name="Local" value="topics/quan-tri-vien.html">
+      <param name="Name" value="Installation and Setup">
+      <param name="Local" value="topics/installation-setup.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Getting Started">
+      <param name="Local" value="topics/getting-started.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="User Interface">
+      <param name="Local" value="topics/user-interface.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Projects and Issues">
+      <param name="Local" value="topics/projects-and-issues.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Board and Sprint">
+      <param name="Local" value="topics/board-and-sprint.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Roadmap and Reports">
+      <param name="Local" value="topics/roadmap-and-reports.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Administration">
+      <param name="Local" value="topics/administration.html">
     </OBJECT>
     <LI> <OBJECT type="text/sitemap">
       <param name="Name" value="Troubleshooting">

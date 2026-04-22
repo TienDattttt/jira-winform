@@ -7,14 +7,20 @@ Default topic=topics/index.html
 Display compile progress=No
 Full-text search=No
 Language=0x042A Vietnamese
-Title=Jira Clone Desktop - Trợ giúp
+Title=Jira Clone Desktop Help
 
 [WINDOWS]
-main="Jira Clone Desktop - Trợ giúp","JiraCloneHelp.hhc","","topics/index.html","topics/index.html",,,,,0x23520,,0x6030000,,,,,,,,0
+main="Jira Clone Desktop Help","JiraCloneHelp.hhc","","topics/index.html","topics/index.html",,,,,0x23520,,0x6030000,,,,,,,,0
 
 [FILES]
 assets/help.css
 topics/index.html
-topics/nguoi-dung.html
-topics/quan-tri-vien.html
+topics/introduction.html
+topics/installation-setup.html
+topics/getting-started.html
+topics/user-interface.html
+topics/projects-and-issues.html
+topics/board-and-sprint.html
+topics/roadmap-and-reports.html
+topics/administration.html
 topics/troubleshooting.html

@@ -2,66 +2,58 @@
 <HTML>
 <HEAD>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <TITLE>Jira Clone Desktop - Trợ giúp</TITLE>
+  <TITLE>Jira Clone Desktop Help</TITLE>
   <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
 </HEAD>
 <BODY>
-  <h1>Jira Clone Desktop</h1>
-  <p class="meta">Tài liệu trợ giúp cho bản ứng dụng WinForms.</p>
+  <h1>Jira Clone Desktop Help</h1>
+  <p class="meta">Tài liệu trợ giúp cho bản ứng dụng desktop dùng trong môi trường vận hành nội bộ.</p>
 
   <p class="lead">
-    Tài liệu này hướng dẫn sử dụng ứng dụng theo góc nhìn người dùng cuối và quản trị viên.
-    Nội dung tập trung vào thao tác thực tế trong môi trường vận hành, không bao gồm checklist test nội bộ.
+    Cấu trúc tài liệu này đi theo dạng help file thực tế cho phần mềm desktop:
+    giới thiệu, cài đặt, bắt đầu nhanh, giao diện, tác vụ chính, quản trị và troubleshooting.
+    Nội dung chỉ mô tả các chức năng hiện có trong hệ thống.
   </p>
 
   <div class="note">
-    Dùng mục lục bên trái để mở nhanh từng chủ đề hoặc nhấn các liên kết bên dưới.
+    Đây là tài liệu phục vụ sử dụng và vận hành. Tài liệu này không thay thế checklist test, tài liệu mã nguồn hoặc tài liệu API.
   </div>
 
-  <h2>Nội dung chính</h2>
+  <h2>Main sections</h2>
   <ul class="toc-links">
-    <li><a href="nguoi-dung.html">Người dùng</a>: đăng nhập, điều hướng, xử lý issue, làm việc với board, backlog, roadmap, báo cáo và xuất dữ liệu.</li>
-    <li><a href="quan-tri-vien.html">Quản trị viên</a>: quản trị dự án, quản trị hệ thống, workflow, permission, tích hợp và vận hành.</li>
-    <li><a href="troubleshooting.html">Troubleshooting</a>: cách xử lý các lỗi thường gặp khi đăng nhập, truy cập dữ liệu, xuất báo cáo và mở file trợ giúp.</li>
+    <li><a href="introduction.html">Introduction</a>: tổng quan sản phẩm, vai trò sử dụng và yêu cầu môi trường.</li>
+    <li><a href="installation-setup.html">Installation and Setup</a>: cài đặt client, cấu hình kết nối và kiểm tra sau cài đặt.</li>
+    <li><a href="getting-started.html">Getting Started</a>: đăng nhập, chọn project và luồng bắt đầu làm việc.</li>
+    <li><a href="user-interface.html">User Interface</a>: bố cục màn hình chính, điều hướng, search, notification và help.</li>
+    <li><a href="projects-and-issues.html">Projects and Issues</a>: project, issue, comment, attachment và watcher.</li>
+    <li><a href="board-and-sprint.html">Board and Sprint</a>: board, backlog, sprint và nguyên tắc thao tác theo workflow.</li>
+    <li><a href="roadmap-and-reports.html">Roadmap and Reports</a>: roadmap, báo cáo và xuất PNG/Excel.</li>
+    <li><a href="administration.html">Administration</a>: quản trị dự án, quản trị hệ thống, tích hợp và token.</li>
+    <li><a href="troubleshooting.html">Troubleshooting</a>: lỗi đăng nhập, database, attachment, export, webhook và help file.</li>
   </ul>
 
-  <h2>Phạm vi áp dụng</h2>
+  <h2>Document scope</h2>
   <table>
     <tr>
-      <th>Nhóm người dùng</th>
-      <th>Mục tiêu chính</th>
-      <th>Màn hình sử dụng nhiều</th>
+      <th>Audience</th>
+      <th>Primary goal</th>
+      <th>Main sections</th>
     </tr>
     <tr>
       <td>Viewer / Developer</td>
-      <td>Theo dõi tiến độ, cập nhật issue, cộng tác trong dự án</td>
-      <td>Tổng quan, Bảng, Backlog, Lộ trình, Issue, Báo cáo</td>
+      <td>Sử dụng phần mềm trong công việc hàng ngày</td>
+      <td>Getting Started, User Interface, Projects and Issues, Board and Sprint, Roadmap and Reports</td>
     </tr>
     <tr>
-      <td>Project Manager / Admin dự án</td>
-      <td>Điều hành sprint, quản lý thành viên, workflow, cấu hình dự án</td>
-      <td>Sprint, Backlog, Cài đặt dự án, Báo cáo</td>
+      <td>Project Manager / Project Admin</td>
+      <td>Điều hành sprint và quản trị cấu hình dự án</td>
+      <td>Board and Sprint, Roadmap and Reports, Administration</td>
     </tr>
     <tr>
-      <td>System Admin</td>
-      <td>Quản trị tài khoản, cấu hình hệ thống và vận hành tổng thể</td>
-      <td>Users, Settings, API token, tích hợp, webhook</td>
+      <td>System Admin / Support</td>
+      <td>Quản trị hệ thống và xử lý sự cố</td>
+      <td>Installation and Setup, Administration, Troubleshooting</td>
     </tr>
   </table>
-
-  <h2>Vai trò và quyền</h2>
-  <div class="panel">
-    <p><strong>Viewer</strong>: chỉ xem dữ liệu trong dự án mà mình là thành viên.</p>
-    <p><strong>Developer</strong>: xử lý issue, cập nhật trạng thái, comment, attachment, watcher.</p>
-    <p><strong>Project Manager</strong>: quản lý sprint, board, thành viên, workflow, labels, components, versions, webhooks và tích hợp của dự án.</p>
-    <p><strong>Admin</strong>: có quyền quản trị hệ thống và/hoặc quyền cao nhất trong project tùy theo vai trò được gán.</p>
-  </div>
-
-  <h2>Cách mở tài liệu trợ giúp</h2>
-  <ol class="section-list">
-    <li>Mở ứng dụng và chọn menu <strong>Trợ giúp</strong> trong màn hình chính.</li>
-    <li>Ứng dụng sẽ mở file <code>JiraClone.chm</code> từ thư mục cài đặt.</li>
-    <li>Nếu file trợ giúp không mở được, xem mục <a href="troubleshooting.html#tro-giup">Không mở được file trợ giúp</a>.</li>
-  </ol>
 </BODY>
 </HTML>

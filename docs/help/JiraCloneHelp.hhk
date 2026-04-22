@@ -7,32 +7,52 @@
 <BODY>
   <UL>
     <LI> <OBJECT type="text/sitemap">
-      <param name="Name" value="Sign in">
-      <param name="Local" value="topics/nguoi-dung.html">
+      <param name="Name" value="System requirements">
+      <param name="Local" value="topics/introduction.html">
     </OBJECT>
     <LI> <OBJECT type="text/sitemap">
-      <param name="Name" value="Issue">
-      <param name="Local" value="topics/nguoi-dung.html">
+      <param name="Name" value="Installation">
+      <param name="Local" value="topics/installation-setup.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Configuration">
+      <param name="Local" value="topics/installation-setup.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Sign in">
+      <param name="Local" value="topics/getting-started.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Navigation">
+      <param name="Local" value="topics/user-interface.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Projects">
+      <param name="Local" value="topics/projects-and-issues.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Issues">
+      <param name="Local" value="topics/projects-and-issues.html">
     </OBJECT>
     <LI> <OBJECT type="text/sitemap">
       <param name="Name" value="Board">
-      <param name="Local" value="topics/nguoi-dung.html">
+      <param name="Local" value="topics/board-and-sprint.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Sprint">
+      <param name="Local" value="topics/board-and-sprint.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Roadmap">
+      <param name="Local" value="topics/roadmap-and-reports.html">
     </OBJECT>
     <LI> <OBJECT type="text/sitemap">
       <param name="Name" value="Reports">
-      <param name="Local" value="topics/nguoi-dung.html">
+      <param name="Local" value="topics/roadmap-and-reports.html">
     </OBJECT>
     <LI> <OBJECT type="text/sitemap">
-      <param name="Name" value="Workflow">
-      <param name="Local" value="topics/quan-tri-vien.html">
-    </OBJECT>
-    <LI> <OBJECT type="text/sitemap">
-      <param name="Name" value="Permission">
-      <param name="Local" value="topics/quan-tri-vien.html">
-    </OBJECT>
-    <LI> <OBJECT type="text/sitemap">
-      <param name="Name" value="Webhook">
-      <param name="Local" value="topics/quan-tri-vien.html">
+      <param name="Name" value="Administration">
+      <param name="Local" value="topics/administration.html">
     </OBJECT>
     <LI> <OBJECT type="text/sitemap">
       <param name="Name" value="Database issues">
