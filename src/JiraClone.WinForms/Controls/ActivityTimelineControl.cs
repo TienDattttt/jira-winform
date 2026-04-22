@@ -1,4 +1,5 @@
 using JiraClone.Domain.Entities;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Theme;
 
 namespace JiraClone.WinForms.Controls;
@@ -40,7 +41,7 @@ public class ActivityTimelineControl : UserControl
         foreach (var log in activityLogs.OrderByDescending(x => x.OccurredAtUtc))
         {
             var value = string.IsNullOrWhiteSpace(log.NewValue) ? log.OldValue : log.NewValue;
-            _listBox.Items.Add($"{log.OccurredAtUtc:g}  {log.ActionType}  {value}");
+            _listBox.Items.Add($"{UtcDateTimeHelper.FormatLocal(log.OccurredAtUtc, "g")}  {log.ActionType}  {value}");
         }
 
         var hasItems = _listBox.Items.Count > 0;

@@ -265,6 +265,7 @@ public class IssueEditorForm : Form
     {
         try
         {
+            var currentUserId = _session.CurrentUserContext.RequireUserId();
             var workflow = await _session.Workflows.GetDefaultWorkflowAsync(_projectId);
             _workflowStatuses = workflow?.Statuses.OrderBy(x => x.DisplayOrder).ToList() ?? [];
             _statusComboBox.DataSource = _workflowStatuses
@@ -283,10 +284,13 @@ public class IssueEditorForm : Form
             }
             _assigneesList.DisplayMember = nameof(User.DisplayName);
 
-            _sprintSelector.Bind(await _session.Sprints.GetByProjectAsync(_projectId));
+            var sprints = await _session.Sprints.GetByProjectAsync(_projectId);
 
             if (_issueId is null)
             {
+                TrySelectReporter(currentUserId, users);
+                _sprintSelector.Bind(sprints, selectedSprintId: null, includeClosed: false, includeEmpty: true);
+
                 if (_preferredType.HasValue)
                 {
                     _typeComboBox.SelectedValue = _preferredType.Value;
@@ -319,10 +323,7 @@ public class IssueEditorForm : Form
             _statusComboBox.SelectedValue = details.Issue.WorkflowStatusId;
             _priorityComboBox.SelectedValue = details.Issue.Priority;
             _reporterComboBox.SelectedValue = details.Issue.ReporterId;
-            if (details.Issue.SprintId.HasValue)
-            {
-                _sprintSelector.SelectedValue = details.Issue.SprintId.Value;
-            }
+            _sprintSelector.Bind(sprints, details.Issue.SprintId, includeClosed: false, includeEmpty: true);
 
             if (details.Issue.DueDate.HasValue)
             {
@@ -372,10 +373,10 @@ public class IssueEditorForm : Form
                 Type = _typeComboBox.SelectedValue is IssueType issueType ? issueType : IssueType.Task,
                 WorkflowStatusId = _statusComboBox.SelectedValue is int workflowStatusId ? workflowStatusId : null,
                 Priority = _priorityComboBox.SelectedValue is IssuePriority issuePriority ? issuePriority : IssuePriority.Medium,
-                ReporterId = _reporterComboBox.SelectedValue is int reporterId ? reporterId : 1,
+                ReporterId = ResolveSelectedReporterId(currentUserId),
                 CreatedById = currentUserId,
                 DueDate = _noDueDateCheckBox.Checked ? null : DateOnly.FromDateTime(_dueDatePicker.Value.Date),
-                SprintId = _sprintSelector.SelectedValue is int sprintId ? sprintId : null,
+                SprintId = _sprintSelector.SelectedValue is int sprintId && sprintId > 0 ? sprintId : null,
                 ParentIssueId = _parentRow.Visible && _parentComboBox.SelectedValue is int parentId && parentId > 0 ? parentId : null,
                 AssigneeIds = _assigneesList.CheckedItems.Cast<User>().Select(x => x.Id).ToArray()
             };
@@ -397,6 +398,22 @@ public class IssueEditorForm : Form
             ErrorDialogService.Show(exception);
         }
     }
+
+    private void TrySelectReporter(int currentUserId, IReadOnlyList<User> users)
+    {
+        if (users.Any(user => user.Id == currentUserId))
+        {
+            _reporterComboBox.SelectedValue = currentUserId;
+            return;
+        }
+
+        _reporterComboBox.SelectedIndex = users.Count == 0 ? -1 : 0;
+    }
+
+    private int ResolveSelectedReporterId(int currentUserId) =>
+        _reporterComboBox.SelectedValue is int reporterId && reporterId > 0
+            ? reporterId
+            : currentUserId;
 
     private async Task RefreshParentListAsync()
     {

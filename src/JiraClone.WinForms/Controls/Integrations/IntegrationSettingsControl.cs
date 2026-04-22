@@ -3,6 +3,7 @@ using JiraClone.Domain.Entities;
 using JiraClone.Domain.Enums;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Forms.Integrations;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -347,7 +348,7 @@ public sealed class IntegrationSettingsControl : UserControl
             _badge.BackColor = status.IsConfigured && status.IsEnabled ? Color.FromArgb(227, 252, 239) : JiraTheme.Neutral100;
             _badge.ForeColor = status.IsConfigured && status.IsEnabled ? JiraTheme.Green700 : JiraTheme.TextSecondary;
             _detail.Text = status.LastSyncAtUtc.HasValue
-                ? $"{status.Detail}  Last sync: {status.LastSyncAtUtc.Value.ToLocalTime():dd MMM yyyy HH:mm}"
+                ? $"{status.Detail}  Last sync: {UtcDateTimeHelper.FormatLocal(status.LastSyncAtUtc.Value, "dd MMM yyyy HH:mm")}"
                 : status.Detail ?? "Not configured.";
             _configure.Enabled = canManage;
             _disconnect.Enabled = canManage && status.IsConfigured;

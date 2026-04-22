@@ -13,6 +13,9 @@ namespace JiraClone.WinForms.Forms;
 public class ReportsForm : UserControl
 {
     private const string DefaultSubtitle = "Theo dõi burndown, velocity, luồng tích lũy và tín hiệu kết thúc sprint ngay trên desktop.";
+    private const int ChartSurfaceMinHeight = 300;
+    private const int ChartSurfaceMaxHeight = 400;
+    private const int ChartSurfaceReservedSpace = 72;
     private const int ChartMetaHeight = 66;
 
     private readonly AppSession _session;
@@ -115,6 +118,7 @@ public class ReportsForm : UserControl
         _tabs.TabPages.Add(_sprintReportTab);
 
         Controls.Add(BuildLayout());
+        Resize += OnReportsResize;
 
         _sprintReportBody.Controls.Add(_completedBucket, 0, 0);
         _sprintReportBody.Controls.Add(_notCompletedBucket, 1, 0);
@@ -122,6 +126,7 @@ public class ReportsForm : UserControl
 
         Load += OnReportsLoad;
         ApplySprintReportData(null);
+        UpdateChartSurfaceHeights();
         UpdateToolbarState();
     }
 
@@ -232,6 +237,7 @@ public class ReportsForm : UserControl
         {
             CancelPendingLoad();
             _disposeCts.Cancel();
+            Resize -= OnReportsResize;
             Load -= OnReportsLoad;
             _refreshButton.Click -= OnRefreshButtonClick;
             _exportButton.Click -= OnExportButtonClick;
@@ -802,7 +808,7 @@ public class ReportsForm : UserControl
         }
 
         var closedLabel = data.ClosedAtUtc.HasValue
-            ? $"Đóng lúc {data.ClosedAtUtc.Value.ToLocalTime():dd MMM yyyy HH:mm}"
+            ? $"Đóng lúc {UtcDateTimeHelper.FormatLocal(data.ClosedAtUtc.Value, "dd MMM yyyy HH:mm")}"
             : "Sprint đã đóng";
         _sprintReportTitleLabel.Text = $"{data.SprintName} | {FormatDateRange(data.StartDate, data.EndDate)}";
         _sprintReportMetaLabel.Text = $"{closedLabel} | {data.CompletedWork.Count} hoàn thành, {data.NotCompleted.Count} mang sang, {data.RemovedFromSprint.Count} bị loại bỏ.";
@@ -866,6 +872,7 @@ public class ReportsForm : UserControl
 
     private async void OnReportsLoad(object? sender, EventArgs e)
     {
+        BeginInvoke(UpdateChartSurfaceHeights);
         await ReloadReportsAsync(_disposeCts.Token);
     }
 
@@ -902,6 +909,12 @@ public class ReportsForm : UserControl
     private void OnTabsSelectedIndexChanged(object? sender, EventArgs e)
     {
         UpdateToolbarState();
+        BeginInvoke(UpdateChartSurfaceHeights);
+    }
+
+    private void OnReportsResize(object? sender, EventArgs e)
+    {
+        UpdateChartSurfaceHeights();
     }
 
     private void ExportCurrentReport()
@@ -1018,10 +1031,46 @@ public class ReportsForm : UserControl
 
     private static DoubleBufferedPanel CreateChartExportSurface() => new()
     {
-        Dock = DockStyle.Fill,
+        Dock = DockStyle.Top,
+        Height = 380,
         BackColor = JiraTheme.BgSurface,
         Padding = new Padding(20)
     };
+
+    private void UpdateChartSurfaceHeights()
+    {
+        if (_tabs.DisplayRectangle.Height <= 0)
+        {
+            return;
+        }
+
+        UpdateChartSurfaceHeight(_burndownExportSurface);
+        UpdateChartSurfaceHeight(_velocityExportSurface);
+        UpdateChartSurfaceHeight(_cfdExportSurface);
+    }
+
+    private void UpdateChartSurfaceHeight(Control surface)
+    {
+        if (surface.Parent is null)
+        {
+            return;
+        }
+
+        var availableHeight = _tabs.DisplayRectangle.Height - surface.Parent.Padding.Vertical;
+        if (availableHeight <= 0)
+        {
+            return;
+        }
+
+        var targetHeight = Math.Min(
+            availableHeight,
+            Math.Clamp(availableHeight - ChartSurfaceReservedSpace, ChartSurfaceMinHeight, ChartSurfaceMaxHeight));
+
+        if (surface.Height != targetHeight)
+        {
+            surface.Height = targetHeight;
+        }
+    }
 
     private static TableLayoutPanel BuildSprintReportBody()
     {

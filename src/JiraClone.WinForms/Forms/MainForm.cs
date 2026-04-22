@@ -612,7 +612,7 @@ public class MainForm : Form
 
     private static string FormatRelativeTime(DateTime utc)
     {
-        var elapsed = DateTime.UtcNow - utc;
+        var elapsed = UtcDateTimeHelper.GetElapsedSinceUtc(utc);
         if (elapsed.TotalMinutes < 1)
         {
             return "now";

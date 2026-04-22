@@ -857,7 +857,7 @@ private readonly Label _webhooksEmptyState = CreateEmptyState("Chưa có webhook
         }
         var status = latestDelivery.Success ? "Success" : "Failed";
         var code = latestDelivery.ResponseCode == 0 ? "-" : latestDelivery.ResponseCode.ToString();
-        return $"{status} ({code}) at {latestDelivery.AttemptedAtUtc.ToLocalTime():dd MMM yyyy HH:mm}";
+        return $"{status} ({code}) at {UtcDateTimeHelper.FormatLocal(latestDelivery.AttemptedAtUtc, "dd MMM yyyy HH:mm")}";
     }
     private async Task LoadWebhooksAsync(CancellationToken cancellationToken = default)
     {

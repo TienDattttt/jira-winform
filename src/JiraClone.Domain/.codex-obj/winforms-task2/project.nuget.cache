@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "z22gT9kntHY=",
+  "success": true,
+  "projectFilePath": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.Domain\\JiraClone.Domain.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\DAT\\.nuget\\packages\\serilog\\4.2.0\\serilog.4.2.0.nupkg.sha512"
+  ],
+  "logs": []
+}

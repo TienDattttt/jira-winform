@@ -1,10 +1,19 @@
 using JiraClone.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace JiraClone.Persistence;
 
 public class JiraCloneDbContext : DbContext
 {
+    private static readonly ValueConverter<DateTime, DateTime> UtcDateTimeConverter = new(
+        value => EnsureUtc(value),
+        value => EnsureUtc(value));
+
+    private static readonly ValueConverter<DateTime?, DateTime?> NullableUtcDateTimeConverter = new(
+        value => EnsureUtc(value),
+        value => EnsureUtc(value));
+
     public JiraCloneDbContext(DbContextOptions<JiraCloneDbContext> options) : base(options)
     {
     }
@@ -44,7 +53,35 @@ public class JiraCloneDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(JiraCloneDbContext).Assembly);
+        ApplyUtcDateTimeConverters(modelBuilder);
         Seed.SeedData.Apply(modelBuilder);
         base.OnModelCreating(modelBuilder);
     }
+
+    private static void ApplyUtcDateTimeConverters(ModelBuilder modelBuilder)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties().Where(property => property.Name.EndsWith("Utc", StringComparison.Ordinal)))
+            {
+                if (property.ClrType == typeof(DateTime))
+                {
+                    property.SetValueConverter(UtcDateTimeConverter);
+                }
+                else if (property.ClrType == typeof(DateTime?))
+                {
+                    property.SetValueConverter(NullableUtcDateTimeConverter);
+                }
+            }
+        }
+    }
+
+    private static DateTime EnsureUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
+
+    private static DateTime? EnsureUtc(DateTime? value) => value.HasValue ? EnsureUtc(value.Value) : null;
 }

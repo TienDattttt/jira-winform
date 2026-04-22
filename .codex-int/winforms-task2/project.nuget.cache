@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "dgSpecHash": "NuHuT2+7K6E=",
+  "success": true,
+  "projectFilePath": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.Infrastructure\\JiraClone.Infrastructure.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\DAT\\.nuget\\packages\\bouncycastle.cryptography\\2.4.0\\bouncycastle.cryptography.2.4.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\mailkit\\4.8.0\\mailkit.4.8.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\markdig\\0.37.0\\markdig.0.37.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.2\\microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\8.0.2\\microsoft.extensions.logging.abstractions.8.0.2.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\microsoft.identitymodel.abstractions\\8.14.0\\microsoft.identitymodel.abstractions.8.14.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\microsoft.identitymodel.jsonwebtokens\\8.14.0\\microsoft.identitymodel.jsonwebtokens.8.14.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\microsoft.identitymodel.logging\\8.14.0\\microsoft.identitymodel.logging.8.14.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\microsoft.identitymodel.tokens\\8.14.0\\microsoft.identitymodel.tokens.8.14.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\mimekit\\4.8.0\\mimekit.4.8.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\octokit\\13.0.1\\octokit.13.0.1.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\serilog\\4.2.0\\serilog.4.2.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\system.formats.asn1\\8.0.1\\system.formats.asn1.8.0.1.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\system.identitymodel.tokens.jwt\\8.14.0\\system.identitymodel.tokens.jwt.8.14.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\system.security.cryptography.pkcs\\8.0.0\\system.security.cryptography.pkcs.8.0.0.nupkg.sha512",
+    "C:\\Users\\DAT\\.nuget\\packages\\system.security.cryptography.protecteddata\\8.0.0\\system.security.cryptography.protecteddata.8.0.0.nupkg.sha512"
+  ],
+  "logs": [
+    {
+      "code": "NU1902",
+      "level": "Warning",
+      "message": "Package 'MailKit' 4.8.0 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-9j88-vvj5-vhgr",
+      "projectPath": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.Infrastructure\\JiraClone.Infrastructure.csproj",
+      "warningLevel": 1,
+      "filePath": "D:\\Ki2Nam4\\.Net\\jira_clone\\src\\JiraClone.Infrastructure\\JiraClone.Infrastructure.csproj",
+      "libraryId": "MailKit",
+      "targetGraphs": [
+        "net8.0"
+      ]
+    }
+  ]
+}

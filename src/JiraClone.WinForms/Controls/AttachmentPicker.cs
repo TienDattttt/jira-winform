@@ -11,6 +11,8 @@ public class AttachmentPicker : UserControl
     };
 
     private const long MaxFileSizeBytes = 10 * 1024 * 1024;
+    private const int InteractiveHeight = 132;
+    private const int ReadOnlyHeight = 152;
 
     private readonly TextBox _pathTextBox = JiraControlFactory.CreateTextBox();
     private readonly Button _browseButton = JiraControlFactory.CreateSecondaryButton("Browse");
@@ -24,58 +26,71 @@ public class AttachmentPicker : UserControl
         DoubleBuffered = true;
         BackColor = JiraTheme.BgPage;
         Font = JiraTheme.FontBody;
-        Height = 96;
+        Height = InteractiveHeight;
+        MinimumSize = new Size(0, InteractiveHeight);
 
         _pathTextBox.ReadOnly = true;
         _pathTextBox.Dock = DockStyle.Fill;
+        _pathTextBox.Margin = new Padding(0, 8, 0, 0);
 
         _browseButton.AutoSize = false;
         _browseButton.Size = new Size(92, 36);
+        _browseButton.Margin = new Padding(8, 0, 0, 0);
         _uploadButton.AutoSize = false;
         _uploadButton.Size = new Size(92, 36);
+        _uploadButton.Margin = Padding.Empty;
 
         _readOnlyHint.Dock = DockStyle.Top;
-        _readOnlyHint.AutoSize = false;
-        _readOnlyHint.Height = 20;
+        _readOnlyHint.AutoSize = true;
+        _readOnlyHint.Margin = new Padding(0, 4, 0, 0);
         _readOnlyHint.ForeColor = JiraTheme.TextSecondary;
         _readOnlyHint.Visible = false;
 
         var title = JiraControlFactory.CreateLabel("Drop files here or browse to attach", true);
-        title.Dock = DockStyle.Top;
-        title.AutoSize = false;
-        title.Height = 22;
+        title.AutoSize = true;
+        title.Margin = Padding.Empty;
 
         var buttonBar = new FlowLayoutPanel
         {
-            Dock = DockStyle.Bottom,
+            Dock = DockStyle.Fill,
             Height = 44,
             FlowDirection = FlowDirection.RightToLeft,
             BackColor = Color.Transparent,
             Padding = new Padding(0),
+            Margin = new Padding(0, 8, 0, 0),
+            WrapContents = false,
         };
         buttonBar.Controls.Add(_uploadButton);
         buttonBar.Controls.Add(_browseButton);
 
-        var inner = new Panel
+        var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
             Padding = new Padding(JiraTheme.Md),
             BackColor = JiraTheme.BgSurface,
+            Margin = Padding.Empty,
         };
-        inner.Paint += (_, e) =>
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, Math.Max(_pathTextBox.MinimumSize.Height, 36)));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+
+        layout.Paint += (_, e) =>
         {
             using var pen = new Pen(JiraTheme.Border) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash };
-            e.Graphics.DrawRectangle(pen, 0, 0, inner.Width - 1, inner.Height - 1);
+            e.Graphics.DrawRectangle(pen, 0, 0, layout.Width - 1, layout.Height - 1);
         };
-        inner.Controls.Add(_pathTextBox);
-        inner.Controls.Add(buttonBar);
-        inner.Controls.Add(_readOnlyHint);
-        inner.Controls.Add(title);
+        layout.Controls.Add(title, 0, 0);
+        layout.Controls.Add(_readOnlyHint, 0, 1);
+        layout.Controls.Add(_pathTextBox, 0, 2);
+        layout.Controls.Add(buttonBar, 0, 3);
 
         _browseButton.Click += (_, _) => BrowseFile();
         _uploadButton.Click += async (_, _) => await UploadAsync();
 
-        Controls.Add(inner);
+        Controls.Add(layout);
         UpdateActionState();
     }
 
@@ -91,6 +106,8 @@ public class AttachmentPicker : UserControl
 
         _readOnlyHint.Text = string.IsNullOrWhiteSpace(message) ? string.Empty : message;
         _readOnlyHint.Visible = _isReadOnly && !string.IsNullOrWhiteSpace(_readOnlyHint.Text);
+        Height = _isReadOnly ? ReadOnlyHeight : InteractiveHeight;
+        MinimumSize = new Size(0, Height);
         UpdateActionState();
     }
 

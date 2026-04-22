@@ -1,5 +1,6 @@
 using JiraClone.Domain.Entities;
 using JiraClone.WinForms.Composition;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -122,7 +123,7 @@ public sealed class WebhookDeliveryHistoryForm : Form
             foreach (var delivery in deliveries)
             {
                 _grid.Rows.Add(
-                    delivery.AttemptedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss"),
+                    UtcDateTimeHelper.FormatLocal(delivery.AttemptedAtUtc, "dd MMM yyyy HH:mm:ss"),
                     delivery.EventType.ToString(),
                     delivery.ResponseCode == 0 ? "-" : delivery.ResponseCode.ToString(),
                     delivery.Success ? "Success" : "Failed",

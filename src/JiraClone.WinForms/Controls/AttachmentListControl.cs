@@ -1,5 +1,6 @@
 using System.Drawing.Text;
 using JiraClone.Domain.Entities;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Theme;
 
 namespace JiraClone.WinForms.Controls;
@@ -95,7 +96,7 @@ public class AttachmentListControl : UserControl
             _name.Font = JiraTheme.FontBody;
             _name.AutoEllipsis = true;
 
-            _meta = JiraControlFactory.CreateLabel($"{attachment.FileSizeBytes:N0} bytes | {attachment.UploadedAtUtc:g}", true);
+            _meta = JiraControlFactory.CreateLabel($"{attachment.FileSizeBytes:N0} bytes | {UtcDateTimeHelper.FormatLocal(attachment.UploadedAtUtc, "g")}", true);
             _meta.Location = new Point(44, 34);
             _meta.AutoSize = true;
 

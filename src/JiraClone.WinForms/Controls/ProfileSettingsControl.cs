@@ -1,6 +1,7 @@
 ﻿using JiraClone.Domain.Entities;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Forms;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -315,9 +316,9 @@ public sealed class ProfileSettingsControl : UserControl
             _tokensGrid.Rows.Add(
                 token.Name,
                 token.Scopes.Count == 0 ? "-" : string.Join(", ", token.Scopes),
-                token.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy"),
-                token.LastUsedAtUtc.HasValue ? token.LastUsedAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "Never",
-                token.ExpiresAtUtc.HasValue ? token.ExpiresAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy") : "Never",
+                UtcDateTimeHelper.FormatLocal(token.CreatedAtUtc, "dd MMM yyyy"),
+                UtcDateTimeHelper.FormatLocal(token.LastUsedAtUtc, "dd MMM yyyy HH:mm", "Never"),
+                UtcDateTimeHelper.FormatLocal(token.ExpiresAtUtc, "dd MMM yyyy", "Never"),
                 GetTokenStatus(token),
                 token.IsRevoked ? "Revoked" : "Revoke");
         }

@@ -596,7 +596,7 @@ public class IssueDetailsForm : Form
 
     private Control BuildAttachments()
     {
-        var host = new Panel { Dock = DockStyle.Top, Height = 230, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 8) };
+        var host = new Panel { Dock = DockStyle.Top, Height = 252, BackColor = JiraTheme.BgSurface, Padding = new Padding(0, 8, 0, 8) };
         host.Controls.Add(_attachments);
         host.Controls.Add(_attachmentPicker);
         host.Controls.Add(TopLabel("Tệp đính kèm"));
@@ -743,7 +743,6 @@ public class IssueDetailsForm : Form
                 _availableLabels = await _session.Labels.GetByProjectAsync(_projectId, cancellationToken);
                 _availableComponents = await _session.Components.GetByProjectAsync(_projectId, cancellationToken);
                 _availableVersions = await _session.Versions.GetByProjectAsync(_projectId, cancellationToken);
-                _sprint.Bind(await _session.Sprints.GetByProjectAsync(_projectId, cancellationToken));
                 BindMetadataOptions();
             }
 
@@ -754,6 +753,9 @@ public class IssueDetailsForm : Form
                 Close();
                 return;
             }
+
+            var sprints = await _session.Sprints.GetByProjectAsync(_projectId, cancellationToken);
+            _sprint.Bind(sprints, _details.Issue.SprintId, includeClosed: false, includeEmpty: true);
 
             _watchers = await _session.Watchers.GetWatchersAsync(_issueId, _disposeCts.Token);
             var currentUserId = _session.CurrentUserContext.CurrentUser?.Id ?? 0;
@@ -802,7 +804,7 @@ public class IssueDetailsForm : Form
             IssuePriority.High or IssuePriority.Highest => JiraTheme.Danger,
             _ => JiraTheme.Border
         }, issue.Priority == IssuePriority.Medium ? JiraTheme.TextPrimary : Color.White);
-        _updatedLabel.Text = $"Cập nhật {issue.UpdatedAtUtc:g}";
+        _updatedLabel.Text = $"Cập nhật {UtcDateTimeHelper.FormatLocal(issue.UpdatedAtUtc, "g")}";
         _typeHost.Controls.Clear();
         var badge = JiraBadge.ForType(issue.Type);
         badge.Location = new Point(8, 0);
@@ -818,7 +820,7 @@ public class IssueDetailsForm : Form
 
         _status.SelectedValue = issue.WorkflowStatusId;
         _priority.SelectedItem = issue.Priority;
-        if (issue.SprintId.HasValue) _sprint.SelectedValue = issue.SprintId.Value; else _sprint.SelectedIndex = -1;
+        _sprint.SelectedValue = issue.SprintId ?? 0;
         _storyPoints.Value = Math.Max(_storyPoints.Minimum, Math.Min(_storyPoints.Maximum, issue.StoryPoints ?? 0));
 
         _selectedLabelIds = issue.IssueLabels.Select(x => x.LabelId).ToHashSet();
@@ -1510,7 +1512,7 @@ public class IssueDetailsForm : Form
                 TimeRemainingHours = _time.RemainingHours,
                 StoryPoints = (int)_storyPoints.Value,
                 DueDate = _details.Issue.DueDate,
-                SprintId = _sprint.SelectedValue is int sprintId ? sprintId : null,
+                SprintId = _sprint.SelectedValue is int sprintId && sprintId > 0 ? sprintId : null,
                 ParentIssueId = _details.Issue.ParentIssueId,
                 AssigneeIds = _selectedAssigneeIds.ToArray()
             };

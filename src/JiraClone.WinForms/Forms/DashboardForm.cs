@@ -629,7 +629,7 @@ public sealed class DashboardForm : UserControl
 
     private static string FormatTimeAgo(DateTime utcTimestamp)
     {
-        var delta = DateTime.UtcNow - utcTimestamp.ToUniversalTime();
+        var delta = UtcDateTimeHelper.GetElapsedSinceUtc(utcTimestamp);
         if (delta.TotalSeconds < 60)
         {
             return "vừa xong";
@@ -653,7 +653,7 @@ public sealed class DashboardForm : UserControl
             return $"{days} ngày trước";
         }
 
-        return utcTimestamp.ToLocalTime().ToString("dd MMM yyyy");
+        return UtcDateTimeHelper.FormatLocal(utcTimestamp, "dd MMM yyyy");
     }
 
     private static string BuildInitials(string text)

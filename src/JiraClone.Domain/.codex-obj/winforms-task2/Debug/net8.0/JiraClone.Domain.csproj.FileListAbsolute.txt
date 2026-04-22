@@ -1,0 +1,6 @@
+D:\Ki2Nam4\.Net\jira_clone\src\JiraClone.Domain\.codex-obj\winforms-task2\Debug\net8.0\JiraClone.Domain.csproj.AssemblyReference.cache
+D:\Ki2Nam4\.Net\jira_clone\src\JiraClone.Domain\.codex-obj\winforms-task2\Debug\net8.0\JiraClone.Domain.GeneratedMSBuildEditorConfig.editorconfig
+D:\Ki2Nam4\.Net\jira_clone\src\JiraClone.Domain\.codex-obj\winforms-task2\Debug\net8.0\JiraClone.Domain.AssemblyInfoInputs.cache
+D:\Ki2Nam4\.Net\jira_clone\src\JiraClone.Domain\.codex-obj\winforms-task2\Debug\net8.0\JiraClone.Domain.AssemblyInfo.cs
+D:\Ki2Nam4\.Net\jira_clone\src\JiraClone.Domain\.codex-obj\winforms-task2\Debug\net8.0\JiraClone.Domain.csproj.CoreCompileInputs.cache
+D:\Ki2Nam4\.Net\jira_clone\src\JiraClone.Domain\.codex-obj\winforms-task2\Debug\net8.0\JiraClone.Domain.sourcelink.json

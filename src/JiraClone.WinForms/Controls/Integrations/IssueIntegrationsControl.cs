@@ -2,6 +2,7 @@
 using JiraClone.Application.Integrations;
 using JiraClone.WinForms.Composition;
 using JiraClone.WinForms.Forms.Integrations;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Services;
 using JiraClone.WinForms.Theme;
 
@@ -146,7 +147,7 @@ public sealed class IssueIntegrationsControl : UserControl
             _commitsPanel,
             commits.Take(8).Select(commit => CreateLinkItem(
                 $"{commit.Sha}  {commit.Message}",
-                $"{commit.Author} | {commit.TimestampUtc.ToLocalTime():dd MMM yyyy HH:mm}",
+                $"{commit.Author} | {UtcDateTimeHelper.FormatLocal(commit.TimestampUtc, "dd MMM yyyy HH:mm")}",
                 commit.Url))
                 .ToList(),
             "No linked commits yet.");
@@ -158,7 +159,7 @@ public sealed class IssueIntegrationsControl : UserControl
             _pullRequestsPanel,
             pullRequests.Take(8).Select(pullRequest => CreateLinkItem(
                 $"#{pullRequest.Number}  {pullRequest.Title}",
-                $"{pullRequest.State} | {pullRequest.Author} | {pullRequest.UpdatedAtUtc.ToLocalTime():dd MMM yyyy HH:mm}",
+                $"{pullRequest.State} | {pullRequest.Author} | {UtcDateTimeHelper.FormatLocal(pullRequest.UpdatedAtUtc, "dd MMM yyyy HH:mm")}",
                 pullRequest.Url))
                 .ToList(),
             "No linked pull requests yet.");
@@ -170,7 +171,7 @@ public sealed class IssueIntegrationsControl : UserControl
             _confluencePagesPanel,
             pages.Take(8).Select(page => CreateLinkItem(
                 page.Title,
-                $"Linked {page.LinkedAtUtc.ToLocalTime():dd MMM yyyy HH:mm}",
+                $"Linked {UtcDateTimeHelper.FormatLocal(page.LinkedAtUtc, "dd MMM yyyy HH:mm")}",
                 page.Url))
                 .ToList(),
             "No Confluence pages linked yet.");

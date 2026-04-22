@@ -65,6 +65,37 @@ public class IssueServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_WhenSprintIsClosed_ThrowsValidationException()
+    {
+        var sprintRepository = new Mock<ISprintRepository>();
+        sprintRepository.Setup(x => x.GetByIdAsync(5, default)).ReturnsAsync(new Sprint
+        {
+            Id = 5,
+            ProjectId = 1,
+            State = SprintState.Closed
+        });
+        var service = CreateService(sprintRepository: sprintRepository);
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync(CreateModel(sprintId: 5)));
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenReporterIsOutsideProject_ThrowsValidationException()
+    {
+        var projectRepository = new Mock<IProjectRepository>();
+        projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project
+        {
+            Id = 1,
+            Key = "PROJ",
+            Name = "Project",
+            Members = [new ProjectMember { ProjectId = 1, UserId = 9, ProjectRole = ProjectRole.Developer }]
+        });
+        var service = CreateService(projectRepository: projectRepository);
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.CreateAsync(CreateModel(reporterId: 3)));
+    }
+
+    [Fact]
     public async Task UpdateAsync_ValidInput_CallsSaveChanges()
     {
         var status = CreateStatus(BacklogStatusId, "Backlog", StatusCategory.ToDo);
@@ -112,6 +143,32 @@ public class IssueServiceTests
         activityLogRepository.Verify(
             x => x.AddAsync(It.Is<ActivityLog>(log => log.FieldName == "Due date" && log.NewValue == "Due date set to 2026-03-24"), default),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenKeepingExistingClosedSprint_AllowsSave()
+    {
+        var status = CreateStatus(BacklogStatusId, "Backlog", StatusCategory.ToDo);
+        var issue = CreateIssue(7, status);
+        issue.SprintId = 5;
+
+        var issueRepository = new Mock<IIssueRepository>();
+        issueRepository.Setup(x => x.GetByIdAsync(7, default)).ReturnsAsync(issue);
+
+        var sprintRepository = new Mock<ISprintRepository>();
+        sprintRepository.Setup(x => x.GetByIdAsync(5, default)).ReturnsAsync(new Sprint
+        {
+            Id = 5,
+            ProjectId = 1,
+            State = SprintState.Closed
+        });
+
+        var service = CreateService(issueRepository: issueRepository, sprintRepository: sprintRepository);
+
+        var updated = await service.UpdateAsync(CreateModel(id: 7, workflowStatusId: BacklogStatusId, sprintId: 5));
+
+        Assert.NotNull(updated);
+        Assert.Equal(5, issue.SprintId);
     }
 
     [Fact]
@@ -282,6 +339,7 @@ public class IssueServiceTests
 
     private static IssueService CreateService(
         Mock<IIssueRepository>? issueRepository = null,
+        Mock<ISprintRepository>? sprintRepository = null,
         Mock<IUserRepository>? userRepository = null,
         Mock<IProjectRepository>? projectRepository = null,
         Mock<ICommentRepository>? commentRepository = null,
@@ -295,8 +353,27 @@ public class IssueServiceTests
         Mock<IWebhookDispatcher>? webhookDispatcher = null,
         Mock<IUnitOfWork>? unitOfWork = null)
     {
-        projectRepository ??= new Mock<IProjectRepository>();
-        projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project { Id = 1, Key = "PROJ", Name = "Project" });
+        if (projectRepository is null)
+        {
+            projectRepository = new Mock<IProjectRepository>();
+            projectRepository.Setup(x => x.GetByIdAsync(1, default)).ReturnsAsync(new Project
+            {
+                Id = 1,
+                Key = "PROJ",
+                Name = "Project",
+                Members =
+                [
+                    new ProjectMember { ProjectId = 1, UserId = 3, ProjectRole = ProjectRole.Developer },
+                    new ProjectMember { ProjectId = 1, UserId = 9, ProjectRole = ProjectRole.Developer }
+                ]
+            });
+        }
+
+        if (sprintRepository is null)
+        {
+            sprintRepository = new Mock<ISprintRepository>();
+            sprintRepository.Setup(x => x.GetByIdAsync(It.IsAny<int>(), default)).ReturnsAsync((Sprint?)null);
+        }
 
         workflowRepository ??= new Mock<IWorkflowRepository>();
         var defaultWorkflow = CreateWorkflowDefinition();
@@ -323,6 +400,7 @@ public class IssueServiceTests
 
         return new IssueService(
             issueRepository.Object,
+            sprintRepository.Object,
             (userRepository ?? new Mock<IUserRepository>()).Object,
             projectRepository.Object,
             (commentRepository ?? new Mock<ICommentRepository>()).Object,
@@ -344,7 +422,9 @@ public class IssueServiceTests
         IssueType type = IssueType.Task,
         int? parentIssueId = null,
         string? descriptionText = null,
-        DateOnly? dueDate = null)
+        DateOnly? dueDate = null,
+        int reporterId = 3,
+        int? sprintId = null)
     {
         return new IssueEditModel
         {
@@ -355,9 +435,10 @@ public class IssueServiceTests
             Type = type,
             WorkflowStatusId = workflowStatusId,
             Priority = IssuePriority.Medium,
-            ReporterId = 3,
+            ReporterId = reporterId,
             CreatedById = 9,
             DueDate = dueDate,
+            SprintId = sprintId,
             ParentIssueId = parentIssueId,
             AssigneeIds = Array.Empty<int>()
         };

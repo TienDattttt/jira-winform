@@ -13,6 +13,7 @@ namespace JiraClone.Application.Issues;
 public class IssueService
 {
     private readonly IIssueRepository _issues;
+    private readonly ISprintRepository _sprints;
     private readonly IUserRepository _users;
     private readonly IProjectRepository _projects;
     private readonly ICommentRepository _comments;
@@ -29,6 +30,7 @@ public class IssueService
 
     public IssueService(
         IIssueRepository issues,
+        ISprintRepository sprints,
         IUserRepository users,
         IProjectRepository projects,
         ICommentRepository comments,
@@ -44,6 +46,7 @@ public class IssueService
         ILogger<IssueService>? logger = null)
     {
         _issues = issues;
+        _sprints = sprints;
         _users = users;
         _projects = projects;
         _comments = comments;
@@ -70,6 +73,10 @@ public class IssueService
             throw new ValidationException($"Dự án với ID {model.ProjectId} không tồn tại.");
         }
 
+        var allowedMemberIds = BuildAllowedProjectMemberIds(project, existingIssue: null);
+        ValidateReporterId(model.ReporterId, allowedMemberIds);
+        ValidateAssigneeIds(model.AssigneeIds, allowedMemberIds);
+        var sprintId = await ValidateSprintAssignmentAsync(project, model.SprintId, existingIssue: null, cancellationToken);
         var workflowStatus = await ResolveWorkflowStatusAsync(model.ProjectId, model.WorkflowStatusId, cancellationToken);
         var parentIssue = await ValidateParentRelationshipAsync(model.ProjectId, model.Type, model.ParentIssueId, issueId: null, cancellationToken);
         var descriptionText = MarkdownHtmlRenderer.Normalize(model.DescriptionText);
@@ -89,7 +96,7 @@ public class IssueService
             TimeRemainingHours = model.TimeRemainingHours,
             StoryPoints = model.StoryPoints,
             DueDate = model.DueDate,
-            SprintId = model.SprintId,
+            SprintId = sprintId,
             ParentIssueId = parentIssue?.Id,
             ParentIssue = parentIssue,
             WorkflowStatus = workflowStatus
@@ -132,6 +139,12 @@ public class IssueService
 
         await EnsurePermissionAsync(model.CreatedById, issue.ProjectId, Permission.EditIssue, cancellationToken);
 
+        var project = await _projects.GetByIdAsync(issue.ProjectId, cancellationToken)
+            ?? throw new ValidationException($"Dá»± Ã¡n vá»›i ID {issue.ProjectId} khÃ´ng tá»“n táº¡i.");
+        var allowedMemberIds = BuildAllowedProjectMemberIds(project, issue);
+        ValidateReporterId(model.ReporterId, allowedMemberIds);
+        ValidateAssigneeIds(model.AssigneeIds, allowedMemberIds);
+        var sprintId = await ValidateSprintAssignmentAsync(project, model.SprintId, issue, cancellationToken);
         var parentIssue = await ValidateParentRelationshipAsync(issue.ProjectId, model.Type, model.ParentIssueId, issue.Id, cancellationToken);
         var originalStatusId = issue.WorkflowStatusId;
         var previousTitle = issue.Title;
@@ -150,7 +163,7 @@ public class IssueService
         issue.TimeRemainingHours = model.TimeRemainingHours;
         issue.StoryPoints = model.StoryPoints;
         issue.DueDate = model.DueDate;
-        issue.SprintId = model.SprintId;
+        issue.SprintId = sprintId;
         issue.ParentIssueId = parentIssue?.Id;
         issue.ParentIssue = parentIssue;
         issue.Assignees.Clear();
@@ -439,6 +452,67 @@ public class IssueService
         }
 
         throw new ValidationException($"{childType} không thể phụ thuộc vào một Issue khác.");
+    }
+
+    private static HashSet<int> BuildAllowedProjectMemberIds(Project project, Issue? existingIssue)
+    {
+        var allowedIds = project.Members
+            .Select(member => member.UserId)
+            .ToHashSet();
+
+        if (existingIssue is null)
+        {
+            return allowedIds;
+        }
+
+        allowedIds.Add(existingIssue.ReporterId);
+        foreach (var assigneeId in existingIssue.Assignees.Select(assignee => assignee.UserId))
+        {
+            allowedIds.Add(assigneeId);
+        }
+
+        return allowedIds;
+    }
+
+    private static void ValidateReporterId(int reporterId, IReadOnlySet<int> allowedMemberIds)
+    {
+        if (!allowedMemberIds.Contains(reporterId))
+        {
+            throw new ValidationException("Reporter phai la thanh vien hop le cua du an.");
+        }
+    }
+
+    private static void ValidateAssigneeIds(IEnumerable<int> assigneeIds, IReadOnlySet<int> allowedMemberIds)
+    {
+        var invalidAssigneeIds = assigneeIds
+            .Distinct()
+            .Where(assigneeId => !allowedMemberIds.Contains(assigneeId))
+            .ToList();
+        if (invalidAssigneeIds.Count > 0)
+        {
+            throw new ValidationException("Nguoi duoc giao phai la thanh vien hop le cua du an.");
+        }
+    }
+
+    private async Task<int?> ValidateSprintAssignmentAsync(Project project, int? sprintId, Issue? existingIssue, CancellationToken cancellationToken)
+    {
+        if (!sprintId.HasValue)
+        {
+            return null;
+        }
+
+        var sprint = await _sprints.GetByIdAsync(sprintId.Value, cancellationToken);
+        if (sprint is null || sprint.ProjectId != project.Id)
+        {
+            throw new ValidationException("Sprint da chon khong thuoc du an nay.");
+        }
+
+        if (sprint.State == SprintState.Closed && existingIssue?.SprintId != sprint.Id)
+        {
+            throw new ValidationException("Khong the gan issue vao sprint da dong.");
+        }
+
+        return sprint.Id;
     }
 
     private async Task<ICollection<IssueAssignee>> BuildAssigneesAsync(IEnumerable<int> assigneeIds, Issue issue, CancellationToken cancellationToken)

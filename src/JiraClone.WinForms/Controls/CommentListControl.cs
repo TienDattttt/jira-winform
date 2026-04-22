@@ -1,4 +1,5 @@
 using JiraClone.Domain.Entities;
+using JiraClone.WinForms.Helpers;
 using JiraClone.WinForms.Theme;
 
 namespace JiraClone.WinForms.Controls;
@@ -85,8 +86,8 @@ public class CommentListControl : UserControl
         foreach (var comment in _comments)
         {
             var updatedText = comment.UpdatedAtUtc > comment.CreatedAtUtc
-                ? $"Edited {comment.UpdatedAtUtc:g}"
-                : $"{comment.CreatedAtUtc:g}";
+                ? $"Edited {UtcDateTimeHelper.FormatLocal(comment.UpdatedAtUtc, "g")}"
+                : UtcDateTimeHelper.FormatLocal(comment.CreatedAtUtc, "g");
 
             var item = new ListViewItem(comment.User?.DisplayName ?? comment.UserId.ToString());
             item.SubItems.Add(comment.Body);
