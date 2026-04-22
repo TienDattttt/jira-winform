@@ -111,8 +111,9 @@ public static class VietnameseUi
         ["Scheme name"] = "Tên sơ đồ",
         ["Project Role"] = "Vai trò dự án",
         ["Board Mode"] = "Chế độ bảng",
-        ["Search your projects"] = "Tìm kiếm dự án của bạn",
+        [" "] = "Tìm kiếm dự án của bạn",
         ["Search projects"] = "Tìm kiếm dự án",
+        ["Search your projects"] = "Tìm kiếm dự án của bạn",
         ["Search issues"] = "Tìm kiếm issue",
         ["Search issue"] = "Tìm kiếm issue",
         ["Search users"] = "Tìm kiếm người dùng",
@@ -242,6 +243,7 @@ public static class VietnameseUi
     private static readonly Regex OverviewRegex = new(@"^Overview for (.+)\. Search filters activity, assigned work, and team rows\.$", RegexOptions.Compiled);
     private static readonly Regex TimelineRegex = new(@"^Timeline for (.+)\. Use the sidebar to jump between epics and drag bars to update dates\.$", RegexOptions.Compiled);
     private static readonly Regex NavigatorRegex = new(@"^Browse issues in (.+) with advanced JQL search\.$", RegexOptions.Compiled);
+    private static readonly Regex SearchInRegex = new(@"^Search in (.+)$", RegexOptions.Compiled);
     private static readonly Regex ZoomRegex = new(@"^Zoom:\s+(.+)$", RegexOptions.Compiled);
     private static readonly Regex LinkedRegex = new(@"^Linked (.+)$", RegexOptions.Compiled);
     private static readonly Regex EditedRegex = new(@"^Edited (.+)$", RegexOptions.Compiled);
@@ -305,6 +307,11 @@ public static class VietnameseUi
         if (NavigatorRegex.Match(text) is { Success: true } navigator)
         {
             return $"Duyệt issue trong {navigator.Groups[1].Value} với tìm kiếm JQL nâng cao.";
+        }
+
+        if (SearchInRegex.Match(text) is { Success: true } searchIn)
+        {
+            return $"Tìm trong {searchIn.Groups[1].Value}";
         }
 
         if (ZoomRegex.Match(text) is { Success: true } zoom)

@@ -15,7 +15,9 @@ public class AttachmentPicker : UserControl
     private readonly TextBox _pathTextBox = JiraControlFactory.CreateTextBox();
     private readonly Button _browseButton = JiraControlFactory.CreateSecondaryButton("Browse");
     private readonly Button _uploadButton = JiraControlFactory.CreatePrimaryButton("Upload");
+    private readonly Label _readOnlyHint = JiraControlFactory.CreateLabel(string.Empty, true);
     private bool _isUploading;
+    private bool _isReadOnly;
 
     public AttachmentPicker()
     {
@@ -31,6 +33,12 @@ public class AttachmentPicker : UserControl
         _browseButton.Size = new Size(92, 36);
         _uploadButton.AutoSize = false;
         _uploadButton.Size = new Size(92, 36);
+
+        _readOnlyHint.Dock = DockStyle.Top;
+        _readOnlyHint.AutoSize = false;
+        _readOnlyHint.Height = 20;
+        _readOnlyHint.ForeColor = JiraTheme.TextSecondary;
+        _readOnlyHint.Visible = false;
 
         var title = JiraControlFactory.CreateLabel("Drop files here or browse to attach", true);
         title.Dock = DockStyle.Top;
@@ -61,6 +69,7 @@ public class AttachmentPicker : UserControl
         };
         inner.Controls.Add(_pathTextBox);
         inner.Controls.Add(buttonBar);
+        inner.Controls.Add(_readOnlyHint);
         inner.Controls.Add(title);
 
         _browseButton.Click += (_, _) => BrowseFile();
@@ -72,9 +81,22 @@ public class AttachmentPicker : UserControl
 
     public Func<string, Task>? UploadRequested { get; set; }
 
+    public void SetReadOnlyState(bool isReadOnly, string? message = null)
+    {
+        _isReadOnly = isReadOnly;
+        if (_isReadOnly)
+        {
+            _pathTextBox.Clear();
+        }
+
+        _readOnlyHint.Text = string.IsNullOrWhiteSpace(message) ? string.Empty : message;
+        _readOnlyHint.Visible = _isReadOnly && !string.IsNullOrWhiteSpace(_readOnlyHint.Text);
+        UpdateActionState();
+    }
+
     private void BrowseFile()
     {
-        if (_isUploading)
+        if (_isUploading || _isReadOnly)
         {
             return;
         }
@@ -95,7 +117,7 @@ public class AttachmentPicker : UserControl
 
     private async Task UploadAsync()
     {
-        if (UploadRequested is null || _isUploading)
+        if (UploadRequested is null || _isUploading || _isReadOnly)
         {
             return;
         }
@@ -143,7 +165,8 @@ public class AttachmentPicker : UserControl
     private void UpdateActionState()
     {
         var hasPath = !string.IsNullOrWhiteSpace(_pathTextBox.Text);
-        _browseButton.Enabled = !_isUploading;
-        _uploadButton.Enabled = !_isUploading && hasPath;
+        var canInteract = !_isUploading && !_isReadOnly;
+        _browseButton.Enabled = canInteract;
+        _uploadButton.Enabled = canInteract && hasPath;
     }
 }

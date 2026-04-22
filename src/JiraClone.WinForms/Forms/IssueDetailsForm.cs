@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JiraClone.Application.Models;
@@ -40,7 +40,7 @@ public class IssueDetailsForm : Form
     private readonly MarkdownViewerControl _descriptionViewer = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly Button _descriptionEdit = CreateModeButton("Sửa");
     private readonly Button _descriptionPreview = CreateModeButton("Xem trước");
-    private readonly AttachmentPicker _attachmentPicker = new() { Dock = DockStyle.Top, Height = 42 };
+    private readonly AttachmentPicker _attachmentPicker = new() { Dock = DockStyle.Top, Height = 96 };
     private readonly AttachmentListControl _attachments = new() { Dock = DockStyle.Fill };
     private readonly Button _commentsTab = MakeTab("Bình luận", true);
     private readonly Button _historyTab = MakeTab("Lịch sử", false);
@@ -94,6 +94,7 @@ public class IssueDetailsForm : Form
     private bool _descriptionModeInitialized;
     private bool _dueDateEditing;
     private bool _isWatching;
+    private bool _isViewer;
     private readonly bool _openChildIssuesByDefault;
     private readonly CancellationTokenSource _disposeCts = new();
     private CancellationTokenSource? _loadCts;
@@ -757,6 +758,10 @@ public class IssueDetailsForm : Form
             _watchers = await _session.Watchers.GetWatchersAsync(_issueId, _disposeCts.Token);
             var currentUserId = _session.CurrentUserContext.CurrentUser?.Id ?? 0;
             _isWatching = currentUserId > 0 && await _session.Watchers.IsWatchingAsync(_issueId, currentUserId, cancellationToken);
+            var project = await _session.Projects.GetByIdAsync(_projectId, cancellationToken);
+            _isViewer = project?.Members.FirstOrDefault(m => m.UserId == currentUserId)?.ProjectRole == ProjectRole.Viewer;
+            _attachmentPicker.SetReadOnlyState(_isViewer, _isViewer ? "Chỉ Developer, Project Manager hoặc Admin mới có thể tải tệp lên." : null);
+            _attachments.AllowDelete = !_isViewer;
             await BindStatusOptionsAsync(_details.Issue);
             cancellationToken.ThrowIfCancellationRequested();
             BindIssue(_details);
@@ -1472,7 +1477,7 @@ public class IssueDetailsForm : Form
         _comments.Visible = comments;
         _history.Visible = history;
         _childIssuesView.Visible = childIssues;
-        _commentComposer.Visible = comments;
+        _commentComposer.Visible = comments && !_isViewer;
         _commentsTab.ForeColor = comments ? JiraTheme.TextPrimary : JiraTheme.TextSecondary;
         _historyTab.ForeColor = history ? JiraTheme.TextPrimary : JiraTheme.TextSecondary;
         _childIssuesTab.ForeColor = childIssues ? JiraTheme.TextPrimary : JiraTheme.TextSecondary;

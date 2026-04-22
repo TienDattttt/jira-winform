@@ -38,6 +38,7 @@ public class AttachmentListControl : UserControl
 
     public Func<Attachment, Task>? DownloadRequested { get; set; }
     public Func<Attachment, Task>? DeleteRequested { get; set; }
+    public bool AllowDelete { get; set; } = true;
 
     public void Bind(IReadOnlyList<Attachment> attachments)
     {
@@ -47,7 +48,7 @@ public class AttachmentListControl : UserControl
 
         foreach (var attachment in _attachments)
         {
-            _itemsPanel.Controls.Add(new AttachmentCard(attachment, DownloadRequested, DeleteRequested));
+            _itemsPanel.Controls.Add(new AttachmentCard(attachment, DownloadRequested, DeleteRequested, AllowDelete));
         }
 
         _itemsPanel.ResumeLayout();
@@ -74,7 +75,7 @@ public class AttachmentListControl : UserControl
         private readonly Button _downloadButton;
         private readonly Button _deleteButton;
 
-        public AttachmentCard(Attachment attachment, Func<Attachment, Task>? download, Func<Attachment, Task>? delete)
+        public AttachmentCard(Attachment attachment, Func<Attachment, Task>? download, Func<Attachment, Task>? delete, bool allowDelete)
         {
             Width = 520;
             Height = 72;
@@ -112,6 +113,7 @@ public class AttachmentListControl : UserControl
             _deleteButton = JiraControlFactory.CreateSecondaryButton("Delete");
             _deleteButton.AutoSize = false;
             _deleteButton.Size = new Size(80, 32);
+            _deleteButton.Visible = allowDelete && delete is not null;
             _deleteButton.Click += async (_, _) =>
             {
                 if (delete is not null)
@@ -131,8 +133,16 @@ public class AttachmentListControl : UserControl
 
         public void ApplyResponsiveLayout()
         {
-            _deleteButton.Location = new Point(Math.Max(Width - 96, 340), 20);
-            _downloadButton.Location = new Point(Math.Max(_deleteButton.Left - 100, 240), 20);
+            if (_deleteButton.Visible)
+            {
+                _deleteButton.Location = new Point(Math.Max(Width - 96, 340), 20);
+                _downloadButton.Location = new Point(Math.Max(_deleteButton.Left - 100, 240), 20);
+            }
+            else
+            {
+                _downloadButton.Location = new Point(Math.Max(Width - 108, 240), 20);
+            }
+
             _name.Width = Math.Max(140, _downloadButton.Left - 56);
         }
     }

@@ -13,6 +13,7 @@ namespace JiraClone.WinForms.Forms;
 public class ReportsForm : UserControl
 {
     private const string DefaultSubtitle = "Theo dõi burndown, velocity, luồng tích lũy và tín hiệu kết thúc sprint ngay trên desktop.";
+    private const int ChartMetaHeight = 66;
 
     private readonly AppSession _session;
     private readonly Label _titleLabel = JiraControlFactory.CreateLabel("Báo cáo");
@@ -47,9 +48,9 @@ public class ReportsForm : UserControl
     private readonly Label _cfdEmptyState = CreateEmptyStateLabel("Hoàn thành sprint hoặc thay đổi trạng thái issue để bắt đầu vẽ luồng tích lũy.");
     private readonly Label _sprintReportEmptyState = CreateEmptyStateLabel("Đóng một sprint để mở khóa báo cáo sprint của nó.");
 
-    private readonly DoubleBufferedPanel _burndownExportSurface = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(20) };
-    private readonly DoubleBufferedPanel _velocityExportSurface = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(20) };
-    private readonly DoubleBufferedPanel _cfdExportSurface = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(20) };
+    private readonly DoubleBufferedPanel _burndownExportSurface = CreateChartExportSurface();
+    private readonly DoubleBufferedPanel _velocityExportSurface = CreateChartExportSurface();
+    private readonly DoubleBufferedPanel _cfdExportSurface = CreateChartExportSurface();
     private readonly DoubleBufferedPanel _sprintReportExportSurface = new() { Dock = DockStyle.Fill, BackColor = JiraTheme.BgSurface, Padding = new Padding(20) };
 
     private readonly ReportMetricCard _committedMetricCard = new("SP cam kết", JiraTheme.PrimaryActive);
@@ -992,11 +993,11 @@ public class ReportsForm : UserControl
         var meta = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 74,
+            Height = ChartMetaHeight,
             BackColor = JiraTheme.BgSurface,
         };
         titleLabel.Location = new Point(0, 0);
-        metaLabel.Location = new Point(0, 38);
+        metaLabel.Location = new Point(0, 34);
         meta.Controls.Add(titleLabel);
         meta.Controls.Add(metaLabel);
         return meta;
@@ -1008,12 +1009,19 @@ public class ReportsForm : UserControl
         {
             Dock = DockStyle.Fill,
             BackColor = JiraTheme.BgSurface,
-            Padding = new Padding(0, 12, 0, 0),
+            Padding = new Padding(0, 8, 0, 0),
         };
         chartHost.Controls.Add(emptyState);
         chartHost.Controls.Add(chart);
         return chartHost;
     }
+
+    private static DoubleBufferedPanel CreateChartExportSurface() => new()
+    {
+        Dock = DockStyle.Fill,
+        BackColor = JiraTheme.BgSurface,
+        Padding = new Padding(20)
+    };
 
     private static TableLayoutPanel BuildSprintReportBody()
     {
