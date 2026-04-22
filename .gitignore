@@ -10,6 +10,8 @@
 # local tooling
 **/.agent/
 **/.codex/
+**/.codex-build/
+**/.codex-int/
 **/.vs/
 **/.vscode/
 **/.tmp/
