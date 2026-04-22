@@ -13,6 +13,9 @@ namespace JiraClone.WinForms.Forms;
 public class ReportsForm : UserControl
 {
     private const string DefaultSubtitle = "Theo dõi burndown, velocity, luồng tích lũy và tín hiệu kết thúc sprint ngay trên desktop.";
+    private const string ExcelExportButtonText = "📊 Xuất Excel";
+    private const string PngExportFilter = "Ảnh PNG|*.png";
+    private const string ExcelExportFilter = "Tệp Excel|*.xlsx";
     private const int ChartSurfaceMinHeight = 300;
     private const int ChartSurfaceMaxHeight = 400;
     private const int ChartSurfaceReservedSpace = 72;
@@ -25,6 +28,7 @@ public class ReportsForm : UserControl
     private readonly ComboBox _sprintSelector = CreateSprintSelector();
     private readonly Button _refreshButton = JiraControlFactory.CreateSecondaryButton("Làm mới");
     private readonly Button _exportButton = JiraControlFactory.CreatePrimaryButton("Xuất PNG");
+    private readonly Button _exportExcelButton = JiraControlFactory.CreatePrimaryButton(ExcelExportButtonText);
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill, Font = JiraTheme.FontBody };
     private readonly TabPage _burndownTab = CreatePage("Biểu đồ burndown");
     private readonly TabPage _velocityTab = CreatePage("Biểu đồ velocity");
@@ -101,9 +105,11 @@ public class ReportsForm : UserControl
 
         ConfigureActionButton(_refreshButton, 108);
         ConfigureActionButton(_exportButton, 118);
+        ConfigureActionButton(_exportExcelButton, 146);
 
         _refreshButton.Click += OnRefreshButtonClick;
         _exportButton.Click += OnExportButtonClick;
+        _exportExcelButton.Click += OnExportExcelButtonClick;
         _sprintSelector.SelectedIndexChanged += OnSprintSelectorSelectedIndexChanged;
         _sprintReportSelector.SelectedIndexChanged += OnSprintReportSelectorSelectedIndexChanged;
         _tabs.SelectedIndexChanged += OnTabsSelectedIndexChanged;
@@ -241,6 +247,7 @@ public class ReportsForm : UserControl
             Load -= OnReportsLoad;
             _refreshButton.Click -= OnRefreshButtonClick;
             _exportButton.Click -= OnExportButtonClick;
+            _exportExcelButton.Click -= OnExportExcelButtonClick;
             _sprintSelector.SelectedIndexChanged -= OnSprintSelectorSelectedIndexChanged;
             _sprintReportSelector.SelectedIndexChanged -= OnSprintReportSelectorSelectedIndexChanged;
             _tabs.SelectedIndexChanged -= OnTabsSelectedIndexChanged;
@@ -309,6 +316,7 @@ public class ReportsForm : UserControl
             Margin = new Padding(0),
             Padding = new Padding(0),
         };
+        right.Controls.Add(_exportExcelButton);
         right.Controls.Add(_exportButton);
         right.Controls.Add(_refreshButton);
 
@@ -858,6 +866,7 @@ public class ReportsForm : UserControl
 
         var exportControl = GetExportControl();
         _exportButton.Enabled = !_isLoading && exportControl.Width > 0 && exportControl.Height > 0;
+        _exportExcelButton.Enabled = !_isLoading && _project is not null;
     }
 
     private void SetBusyState(bool isBusy)
@@ -866,6 +875,7 @@ public class ReportsForm : UserControl
         _tabs.Enabled = !isBusy;
         _refreshButton.Enabled = !isBusy;
         _exportButton.Enabled = !isBusy;
+        _exportExcelButton.Enabled = !isBusy && _project is not null;
         _sprintSelector.Enabled = !isBusy && _tabs.SelectedTab == _burndownTab && _sprintSelector.Items.Count > 0;
         _sprintReportSelector.Enabled = !isBusy && _sprintReportSelector.Items.Count > 0;
     }
@@ -884,6 +894,11 @@ public class ReportsForm : UserControl
     private void OnExportButtonClick(object? sender, EventArgs e)
     {
         ExportCurrentReport();
+    }
+
+    private async void OnExportExcelButtonClick(object? sender, EventArgs e)
+    {
+        await ExportExcelReportAsync();
     }
 
     private async void OnSprintSelectorSelectedIndexChanged(object? sender, EventArgs e)
@@ -929,7 +944,7 @@ public class ReportsForm : UserControl
 
             using var dialog = new SaveFileDialog
             {
-                Filter = "Ảnh PNG|*.png",
+                Filter = PngExportFilter,
                 FileName = BuildExportFileName(),
                 RestoreDirectory = true,
                 AddExtension = true,
@@ -992,6 +1007,46 @@ public class ReportsForm : UserControl
         }
 
         return SanitizeFileName(baseName) + ".png";
+    }
+
+    private string BuildExcelExportFileName()
+    {
+        var sprintName = GetPreferredExcelSprintName();
+        var baseName = string.IsNullOrWhiteSpace(sprintName)
+            ? $"bao-cao-{_project?.Name ?? "project"}"
+            : $"bao-cao-{_project?.Name ?? "project"}-{sprintName}";
+
+        return SanitizeFileName(baseName) + ".xlsx";
+    }
+
+    private int? GetPreferredExcelSprintId()
+    {
+        if (_tabs.SelectedTab == _sprintReportTab)
+        {
+            return SelectedSprintReportId;
+        }
+
+        if (_tabs.SelectedTab == _burndownTab)
+        {
+            return SelectedSprintId;
+        }
+
+        return null;
+    }
+
+    private string? GetPreferredExcelSprintName()
+    {
+        if (_tabs.SelectedTab == _sprintReportTab)
+        {
+            return _sprintReportData?.SprintName ?? (_sprintReportSelector.SelectedItem as Sprint)?.Name;
+        }
+
+        if (_tabs.SelectedTab == _burndownTab)
+        {
+            return _burndownData?.SprintName ?? (_sprintSelector.SelectedItem as Sprint)?.Name;
+        }
+
+        return null;
     }
 
     private static string SanitizeFileName(string value)
@@ -1069,6 +1124,58 @@ public class ReportsForm : UserControl
         if (surface.Height != targetHeight)
         {
             surface.Height = targetHeight;
+        }
+    }
+
+    private async Task ExportExcelReportAsync()
+    {
+        if (_project is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var dialog = new SaveFileDialog
+            {
+                Filter = ExcelExportFilter,
+                FileName = BuildExcelExportFileName(),
+                RestoreDirectory = true,
+                AddExtension = true,
+                DefaultExt = "xlsx"
+            };
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            SetBusyState(true);
+            await _session.RunSerializedAsync(
+                () => _session.ExcelExport.ExportProjectReportAsync(
+                    _project.Id,
+                    dialog.FileName,
+                    GetPreferredExcelSprintId(),
+                    _disposeCts.Token),
+                _disposeCts.Token);
+
+            MessageBox.Show(
+                this,
+                $"Đã xuất {Path.GetFileName(dialog.FileName)}.",
+                "Xuất Excel",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            ErrorDialogService.Show(exception);
+        }
+        finally
+        {
+            SetBusyState(false);
+            UpdateToolbarState();
         }
     }
 

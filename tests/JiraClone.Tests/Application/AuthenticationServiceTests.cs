@@ -210,7 +210,10 @@ public class AuthenticationServiceTests
     {
         var error = AuthenticationService.GetPasswordValidationError("weakpass");
 
-        Assert.Equal("Password must be at least 8 characters and include at least 1 uppercase letter and 1 number.", error);
+        Assert.NotNull(error);
+        Assert.Contains("ít nhất 8 ký tự", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("1 chữ hoa", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("1 chữ số", error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

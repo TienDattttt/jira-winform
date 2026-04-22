@@ -15,6 +15,7 @@ using JiraClone.Application.Notifications;
 using JiraClone.Application.Models;
 using JiraClone.Application.Permissions;
 using JiraClone.Application.Projects;
+using JiraClone.Application.Reports;
 using JiraClone.Application.Roadmap;
 using JiraClone.Application.Roles;
 using JiraClone.Application.Sprints;
@@ -92,6 +93,7 @@ public sealed class AppSession : IDisposable
         Workflows = new WorkflowOperations(this);
         Comments = new CommentOperations(this);
         Sprints = new SprintOperations(this);
+        ExcelExport = new ExcelExportOperations(this);
         ActivityLog = new ActivityLogOperations(this);
         Attachments = new AttachmentOperations(this);
     }
@@ -122,6 +124,7 @@ public sealed class AppSession : IDisposable
     public WorkflowOperations Workflows { get; }
     public CommentOperations Comments { get; }
     public SprintOperations Sprints { get; }
+    public ExcelExportOperations ExcelExport { get; }
     public ActivityLogOperations ActivityLog { get; }
     public AttachmentOperations Attachments { get; }
     public Project? ActiveProject => _activeProject;
@@ -213,6 +216,9 @@ public sealed class AppSession : IDisposable
 
     internal ISprintService CreateSprintService(IServiceProvider services) =>
         services.GetRequiredService<ISprintService>();
+
+    internal IExcelExportService CreateExcelExportService(IServiceProvider services) =>
+        services.GetRequiredService<IExcelExportService>();
 
     internal ActivityLogService CreateActivityLogService(IServiceProvider services) =>
         services.GetRequiredService<ActivityLogService>();
@@ -1301,6 +1307,20 @@ public sealed class AppSession : IDisposable
         {
             await using var scope = _session.CreateScope();
             return await _session.CreateSprintService(scope.ServiceProvider).GetSprintReportAsync(sprintId, cancellationToken);
+        }
+    }
+
+    public sealed class ExcelExportOperations
+    {
+        private readonly AppSession _session;
+
+        internal ExcelExportOperations(AppSession session) => _session = session;
+
+        public async Task ExportProjectReportAsync(int projectId, string destinationPath, int? preferredSprintId = null, CancellationToken cancellationToken = default)
+        {
+            await using var scope = _session.CreateScope();
+            var request = new ExcelReportExportRequest(projectId, destinationPath, preferredSprintId);
+            await _session.CreateExcelExportService(scope.ServiceProvider).ExportProjectReportAsync(request, cancellationToken);
         }
     }
 

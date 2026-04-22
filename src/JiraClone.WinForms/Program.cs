@@ -17,6 +17,7 @@ using JiraClone.Application.Labels;
 using JiraClone.Application.Notifications;
 using JiraClone.Application.Permissions;
 using JiraClone.Application.Projects;
+using JiraClone.Application.Reports;
 using JiraClone.Application.Roadmap;
 using JiraClone.Application.Roles;
 using JiraClone.Application.Sprints;
@@ -215,6 +216,7 @@ internal static class Program
             services.AddScoped<IIssueQueryService, IssueQueryService>();
             services.AddScoped<DashboardQueryService>();
             services.AddScoped<IRoadmapService, RoadmapService>();
+            services.AddTransient<IExcelExportService, ExcelExportService>();
 
             RegisterIntegrationPlugins(services);
             services.AddSingleton<GitHubIntegrationSyncWorker>();
