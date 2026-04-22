@@ -1,0 +1,47 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML>
+<HEAD>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="GENERATOR" content="Codex">
+</HEAD>
+<BODY>
+  <UL>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Sign in">
+      <param name="Local" value="topics/nguoi-dung.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Issue">
+      <param name="Local" value="topics/nguoi-dung.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Board">
+      <param name="Local" value="topics/nguoi-dung.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Reports">
+      <param name="Local" value="topics/nguoi-dung.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Workflow">
+      <param name="Local" value="topics/quan-tri-vien.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Permission">
+      <param name="Local" value="topics/quan-tri-vien.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Webhook">
+      <param name="Local" value="topics/quan-tri-vien.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Database issues">
+      <param name="Local" value="topics/troubleshooting.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Help issues">
+      <param name="Local" value="topics/troubleshooting.html">
+    </OBJECT>
+  </UL>
+</BODY>
+</HTML>

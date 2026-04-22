@@ -32,6 +32,7 @@ public class MainForm : Form
     private readonly SidebarNavItem _reportsItem = new(NavKind.Reports, "Báo cáo");
     private readonly SidebarNavItem _usersItem = new(NavKind.Users, "Người dùng");
     private readonly SidebarNavItem _settingsItem = new(NavKind.Settings, "Cài đặt");
+    private readonly SidebarNavItem _helpItem = new(NavKind.Help, "Trợ giúp");
     private readonly ProjectSwitcherControl _projectSwitcher;
     private readonly InitialsAvatar _sidebarAvatar;
     private readonly InitialsAvatar _navbarAvatar;
@@ -145,6 +146,9 @@ public class MainForm : Form
         _settingsItem.AccessibleName = "MainForm_Nav_Settings";
         _settingsItem.Name = "MainForm_Nav_Settings";
         _settingsItem.AccessibleRole = AccessibleRole.PushButton;
+        _helpItem.AccessibleName = "MainForm_Nav_Help";
+        _helpItem.Name = "MainForm_Nav_Help";
+        _helpItem.AccessibleRole = AccessibleRole.PushButton;
 
         BuildLayout();
         WireNavigation();
@@ -182,6 +186,7 @@ public class MainForm : Form
             _reportsItem.Click -= OnReportsItemClick;
             _usersItem.Click -= OnUsersItemClick;
             _settingsItem.Click -= OnSettingsItemClick;
+            _helpItem.Click -= OnHelpItemClick;
             if (_activeContent is ProjectListForm projectListForm)
             {
                 projectListForm.ProjectOpened -= HandleProjectListOpened;
@@ -286,6 +291,7 @@ public class MainForm : Form
             navItems.Add(_usersItem);
         }
         navItems.Add(_settingsItem);
+        navItems.Add(_helpItem);
         navStack.Controls.AddRange(navItems.ToArray());
 
         var userSeparator = new Panel
@@ -664,6 +670,7 @@ public class MainForm : Form
         _reportsItem.Click += OnReportsItemClick;
         _usersItem.Click += OnUsersItemClick;
         _settingsItem.Click += OnSettingsItemClick;
+        _helpItem.Click += OnHelpItemClick;
     }
 
     private ProjectListForm CreateProjectListControl()
@@ -941,6 +948,19 @@ public class MainForm : Form
         NavigateTo(_settingsItem, () => new ProjectSettingsForm(_session));
     }
 
+    private void OnHelpItemClick(object? sender, EventArgs e)
+    {
+        try
+        {
+            ApplicationHelpService.ShowMainHelp(this);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Unable to open CHM help file.");
+            ErrorDialogService.Show("Không mở được file trợ giúp. Hãy kiểm tra thư mục Help trong bản cài đặt.");
+        }
+    }
+
     private void HandleProjectListOpened(object? sender, EventArgs e)
     {
         NavigateTo(_boardItem, () => new BoardForm(_session, activeSprintOnly: true));
@@ -1169,7 +1189,8 @@ public class MainForm : Form
         Issues,
         Reports,
         Users,
-        Settings
+        Settings,
+        Help
     }
 
     private sealed class SidebarNavItem : DoubleBufferedPanel
@@ -1298,6 +1319,12 @@ public class MainForm : Form
                     graphics.DrawLine(pen, bounds.X + 9, bounds.Bottom - 1, bounds.X + 9, bounds.Bottom - 5);
                     graphics.DrawLine(pen, bounds.X + 1, middleY, bounds.X + 5, middleY);
                     graphics.DrawLine(pen, bounds.Right - 1, middleY, bounds.Right - 5, middleY);
+                    break;
+                case NavKind.Help:
+                    graphics.DrawEllipse(pen, bounds.X + 3, bounds.Y + 4, 12, 12);
+                    graphics.DrawArc(pen, bounds.X + 6, bounds.Y + 6, 6, 6, 180, 180);
+                    graphics.DrawLine(pen, bounds.X + 9, bounds.Y + 12, bounds.X + 9, bounds.Y + 15);
+                    graphics.FillEllipse(fill, bounds.X + 8, bounds.Y + 17, 2, 2);
                     break;
             }
         }

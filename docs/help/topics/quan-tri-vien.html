@@ -1,0 +1,105 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <TITLE>Quản trị viên</TITLE>
+  <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
+</HEAD>
+<BODY>
+  <h1>Quản trị viên</h1>
+  <p class="meta">Áp dụng cho Project Manager, Admin dự án và System Admin.</p>
+
+  <h2 id="quan-tri-du-an">Quản trị dự án</h2>
+  <p>Các cấu hình ở mức dự án chỉ áp dụng cho project hiện hành.</p>
+
+  <table>
+    <tr>
+      <th>Nhóm chức năng</th>
+      <th>Mục đích</th>
+    </tr>
+    <tr>
+      <td>Members / Roles</td>
+      <td>Thêm thành viên, đổi vai trò project, loại bỏ thành viên không còn tham gia.</td>
+    </tr>
+    <tr>
+      <td>Board</td>
+      <td>Quản lý cột board, ánh xạ status, WIP limit và cách hiển thị công việc.</td>
+    </tr>
+    <tr>
+      <td>Workflow</td>
+      <td>Quản lý status và transition cho issue trong dự án.</td>
+    </tr>
+    <tr>
+      <td>Permissions</td>
+      <td>Kiểm soát quyền xem, tạo, sửa, xóa issue và các thao tác trọng yếu.</td>
+    </tr>
+    <tr>
+      <td>Labels / Components / Versions</td>
+      <td>Chuẩn hóa metadata dùng cho phân loại, release và báo cáo.</td>
+    </tr>
+  </table>
+
+  <div class="note">
+    Thay đổi workflow hoặc permission có thể ảnh hưởng trực tiếp tới board, issue details và báo cáo.
+    Chỉ áp dụng sau khi đã xác định rõ tác động nghiệp vụ.
+  </div>
+
+  <h3>Quản lý sprint</h3>
+  <ol class="section-list">
+    <li>Tạo sprint để gom nhóm issue cần thực hiện trong một chu kỳ làm việc.</li>
+    <li>Start sprint khi phạm vi đã chốt.</li>
+    <li>Close sprint khi kết thúc; issue chưa hoàn thành có thể trả về backlog hoặc chuyển sang sprint khác.</li>
+  </ol>
+
+  <h2 id="quan-tri-he-thong">Quản trị hệ thống</h2>
+  <p>Chức năng này dành cho tài khoản có role hệ thống <strong>Admin</strong>.</p>
+
+  <ul class="section-list">
+    <li>Quản lý người dùng: tạo tài khoản, chỉnh thông tin, reset mật khẩu, khóa hoặc mở khóa.</li>
+    <li>Gán role hệ thống cho người dùng theo nhu cầu vận hành.</li>
+    <li>Theo dõi khả năng truy cập menu và project theo membership thực tế.</li>
+  </ul>
+
+  <div class="warning">
+    Quyền Admin hệ thống không thay thế membership của project.
+    Muốn thao tác trong một project, người dùng vẫn cần là thành viên của project đó.
+  </div>
+
+  <h2 id="tich-hop">Tích hợp và vận hành</h2>
+  <table>
+    <tr>
+      <th>Thành phần</th>
+      <th>Mục đích</th>
+      <th>Lưu ý vận hành</th>
+    </tr>
+    <tr>
+      <td>GitHub / Confluence</td>
+      <td>Kết nối issue với tài nguyên ngoài hệ thống.</td>
+      <td>Kiểm tra thông tin xác thực và quyền truy cập trước khi bật cho người dùng.</td>
+    </tr>
+    <tr>
+      <td>Webhook</td>
+      <td>Gửi sự kiện ra hệ thống khác khi issue hoặc project thay đổi.</td>
+      <td>Luôn test endpoint và theo dõi delivery history sau khi cấu hình.</td>
+    </tr>
+    <tr>
+      <td>API token</td>
+      <td>Cho phép truy cập API theo phạm vi được cấp.</td>
+      <td>Token chỉ hiển thị giá trị lúc tạo; cần thu hồi khi không còn sử dụng.</td>
+    </tr>
+    <tr>
+      <td>Email notification</td>
+      <td>Gửi email khi có sự kiện liên quan tới issue hoặc assignment.</td>
+      <td>Phụ thuộc vào SMTP được cấu hình đúng.</td>
+    </tr>
+  </table>
+
+  <h3>Khuyến nghị vận hành</h3>
+  <ul class="section-list">
+    <li>Không chỉnh permission hoặc workflow trực tiếp trên production mà không có đánh giá tác động.</li>
+    <li>Kiểm tra delivery history sau mỗi lần thay webhook hoặc secret.</li>
+    <li>Chuẩn hóa labels, components và versions để báo cáo không bị phân mảnh dữ liệu.</li>
+    <li>Định kỳ rà soát role hệ thống và membership dự án để tránh cấp quyền dư thừa.</li>
+  </ul>
+</BODY>
+</HTML>

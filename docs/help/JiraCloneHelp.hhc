@@ -1,0 +1,27 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML>
+<HEAD>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="GENERATOR" content="Codex">
+</HEAD>
+<BODY>
+  <UL>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Home">
+      <param name="Local" value="topics/index.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Users">
+      <param name="Local" value="topics/nguoi-dung.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Administrators">
+      <param name="Local" value="topics/quan-tri-vien.html">
+    </OBJECT>
+    <LI> <OBJECT type="text/sitemap">
+      <param name="Name" value="Troubleshooting">
+      <param name="Local" value="topics/troubleshooting.html">
+    </OBJECT>
+  </UL>
+</BODY>
+</HTML>

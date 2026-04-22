@@ -1,0 +1,20 @@
+[OPTIONS]
+Compatibility=1.1 or later
+Compiled file=JiraClone.chm
+Contents file=JiraCloneHelp.hhc
+Default Window=main
+Default topic=topics/index.html
+Display compile progress=No
+Full-text search=No
+Language=0x042A Vietnamese
+Title=Jira Clone Desktop - Trợ giúp
+
+[WINDOWS]
+main="Jira Clone Desktop - Trợ giúp","JiraCloneHelp.hhc","","topics/index.html","topics/index.html",,,,,0x23520,,0x6030000,,,,,,,,0
+
+[FILES]
+assets/help.css
+topics/index.html
+topics/nguoi-dung.html
+topics/quan-tri-vien.html
+topics/troubleshooting.html
