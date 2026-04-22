@@ -306,21 +306,13 @@ public class ReportsForm : UserControl
         left.Controls.Add(_sprintSelectorLabel);
         left.Controls.Add(_sprintSelector);
 
-        var right = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Right,
-            AutoSize = true,
-            WrapContents = false,
-            FlowDirection = FlowDirection.RightToLeft,
-            BackColor = JiraTheme.BgPage,
-            Margin = new Padding(0),
-            Padding = new Padding(0),
-        };
-        right.Controls.Add(_exportExcelButton);
-        right.Controls.Add(_exportButton);
-        right.Controls.Add(_refreshButton);
+        _refreshButton.Margin = new Padding(0, 0, 8, 0);
+        _exportButton.Margin = new Padding(0, 0, 8, 0);
+        _exportExcelButton.Margin = Padding.Empty;
+        left.Controls.Add(_refreshButton);
+        left.Controls.Add(_exportButton);
+        left.Controls.Add(_exportExcelButton);
 
-        toolbar.Controls.Add(right);
         toolbar.Controls.Add(left);
         return toolbar;
     }
@@ -414,12 +406,12 @@ public class ReportsForm : UserControl
         var statsStrip = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 96,
+            Height = 120,
             BackColor = JiraTheme.BgSurface,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             AutoScroll = true,
-            Padding = new Padding(0, 8, 0, 8),
+            Padding = new Padding(0, 8, 0, 12),
             Margin = new Padding(0),
         };
         statsStrip.Controls.Add(_committedMetricCard);
@@ -1321,10 +1313,10 @@ public class ReportsForm : UserControl
         public ReportMetricCard(string label, Color accent)
         {
             _accent = accent;
-            Width = 190;
-            Height = 72;
+            Width = 210;
+            Height = 92;
             Margin = new Padding(0, 0, 12, 0);
-            Padding = new Padding(12, 10, 12, 10);
+            Padding = new Padding(16, 12, 16, 12);
             BackColor = JiraTheme.BgSurface;
             DoubleBuffered = true;
 
@@ -1332,10 +1324,11 @@ public class ReportsForm : UserControl
             _valueLabel = JiraControlFactory.CreateLabel("0");
             _captionLabel = JiraControlFactory.CreateLabel(string.Empty, true);
             _valueLabel.Font = JiraTheme.FontH2;
+            _captionLabel.MaximumSize = new Size(Width - Padding.Horizontal, 0);
 
-            _label.Location = new Point(12, 10);
-            _valueLabel.Location = new Point(12, 28);
-            _captionLabel.Location = new Point(12, 52);
+            _label.Location = new Point(16, 12);
+            _valueLabel.Location = new Point(16, 34);
+            _captionLabel.Location = new Point(16, 64);
 
             Controls.Add(_label);
             Controls.Add(_valueLabel);
