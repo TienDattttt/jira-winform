@@ -524,7 +524,7 @@ public class BoardForm : UserControl
                (string.IsNullOrWhiteSpace(type) || string.Equals(issue.Type.ToString(), type, StringComparison.OrdinalIgnoreCase)) &&
                (string.IsNullOrWhiteSpace(search) ||
                 issue.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                issue.IssueKey.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                // issue.IssueKey.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                 (!string.IsNullOrWhiteSpace(issue.EpicTitle) && issue.EpicTitle.Contains(search, StringComparison.OrdinalIgnoreCase)));
     }
 

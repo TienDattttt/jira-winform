@@ -5,22 +5,43 @@ Contents file=JiraCloneHelp.hhc
 Default Window=main
 Default topic=topics/index.html
 Display compile progress=No
-Full-text search=No
+Full-text search=Yes
+Index file=JiraCloneHelp.hhk
 Language=0x042A Vietnamese
 Title=Jira Clone Desktop Help
 
 [WINDOWS]
-main="Jira Clone Desktop Help","JiraCloneHelp.hhc","","topics/index.html","topics/index.html",,,,,0x23520,,0x6030000,,,,,,,,0
+main="Jira Clone Desktop Help","JiraCloneHelp.hhc","JiraCloneHelp.hhk","topics/index.html","topics/index.html",,,,,0x23520,,0x6030000,,,,,,,,0
 
 [FILES]
 assets/help.css
 topics/index.html
 topics/introduction.html
+topics/release-notes.html
+topics/glossary.html
 topics/installation-setup.html
+topics/system-requirements.html
+topics/configure-connection.html
 topics/getting-started.html
 topics/user-interface.html
+topics/keyboard-shortcuts.html
 topics/projects-and-issues.html
+topics/create-issue.html
+topics/update-issue.html
+topics/collaboration-on-issue.html
+topics/search-issues.html
 topics/board-and-sprint.html
+topics/scrum-board.html
+topics/kanban-board.html
+topics/manage-sprint.html
 topics/roadmap-and-reports.html
+topics/view-roadmap.html
+topics/view-reports.html
+topics/export-reports.html
 topics/administration.html
+topics/members-and-permissions.html
+topics/workflow-and-board-settings.html
+topics/webhooks-and-integrations.html
+topics/api-tokens.html
+topics/system-user-management.html
 topics/troubleshooting.html

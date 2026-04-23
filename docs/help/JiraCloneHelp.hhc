@@ -14,34 +14,136 @@
       <param name="Name" value="Introduction">
       <param name="Local" value="topics/introduction.html">
     </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="What's New in This Build">
+        <param name="Local" value="topics/release-notes.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Glossary">
+        <param name="Local" value="topics/glossary.html">
+      </OBJECT>
+    </UL>
     <LI> <OBJECT type="text/sitemap">
       <param name="Name" value="Installation and Setup">
       <param name="Local" value="topics/installation-setup.html">
     </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="System Requirements">
+        <param name="Local" value="topics/system-requirements.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Install the Desktop App">
+        <param name="Local" value="topics/installation-setup.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Configure Connection and Storage">
+        <param name="Local" value="topics/configure-connection.html">
+      </OBJECT>
+    </UL>
     <LI> <OBJECT type="text/sitemap">
       <param name="Name" value="Getting Started">
       <param name="Local" value="topics/getting-started.html">
     </OBJECT>
-    <LI> <OBJECT type="text/sitemap">
-      <param name="Name" value="User Interface">
-      <param name="Local" value="topics/user-interface.html">
-    </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Sign In and Select a Project">
+        <param name="Local" value="topics/getting-started.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Main Interface">
+        <param name="Local" value="topics/user-interface.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Keyboard Shortcuts">
+        <param name="Local" value="topics/keyboard-shortcuts.html">
+      </OBJECT>
+    </UL>
     <LI> <OBJECT type="text/sitemap">
       <param name="Name" value="Projects and Issues">
       <param name="Local" value="topics/projects-and-issues.html">
     </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Create a New Issue">
+        <param name="Local" value="topics/create-issue.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Update an Issue">
+        <param name="Local" value="topics/update-issue.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Comments, Watchers, and Attachments">
+        <param name="Local" value="topics/collaboration-on-issue.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Search and Saved Filters">
+        <param name="Local" value="topics/search-issues.html">
+      </OBJECT>
+    </UL>
     <LI> <OBJECT type="text/sitemap">
-      <param name="Name" value="Board and Sprint">
+      <param name="Name" value="Boards and Sprints">
       <param name="Local" value="topics/board-and-sprint.html">
     </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Work with the Scrum Board">
+        <param name="Local" value="topics/scrum-board.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Work with the Kanban Board">
+        <param name="Local" value="topics/kanban-board.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Manage Sprints">
+        <param name="Local" value="topics/manage-sprint.html">
+      </OBJECT>
+    </UL>
     <LI> <OBJECT type="text/sitemap">
       <param name="Name" value="Roadmap and Reports">
       <param name="Local" value="topics/roadmap-and-reports.html">
     </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="View the Roadmap">
+        <param name="Local" value="topics/view-roadmap.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="View Charts and Sprint Reports">
+        <param name="Local" value="topics/view-reports.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Export PNG and Excel">
+        <param name="Local" value="topics/export-reports.html">
+      </OBJECT>
+    </UL>
     <LI> <OBJECT type="text/sitemap">
       <param name="Name" value="Administration">
       <param name="Local" value="topics/administration.html">
     </OBJECT>
+    <UL>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Members and Permissions">
+        <param name="Local" value="topics/members-and-permissions.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Workflow and Board Settings">
+        <param name="Local" value="topics/workflow-and-board-settings.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="Webhooks and Integrations">
+        <param name="Local" value="topics/webhooks-and-integrations.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="API Tokens">
+        <param name="Local" value="topics/api-tokens.html">
+      </OBJECT>
+      <LI> <OBJECT type="text/sitemap">
+        <param name="Name" value="System User Management">
+        <param name="Local" value="topics/system-user-management.html">
+      </OBJECT>
+    </UL>
     <LI> <OBJECT type="text/sitemap">
       <param name="Name" value="Troubleshooting">
       <param name="Local" value="topics/troubleshooting.html">

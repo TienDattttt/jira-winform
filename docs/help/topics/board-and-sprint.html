@@ -2,36 +2,39 @@
 <HTML>
 <HEAD>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <TITLE>Board and Sprint</TITLE>
+  <TITLE>Bảng và sprint</TITLE>
   <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
 </HEAD>
 <BODY>
-  <h1>Board and Sprint</h1>
-  <p class="meta">Quản lý tiến độ trên board và trong chu kỳ sprint.</p>
+  <h1>Bảng và sprint</h1>
+  <p class="meta">Theo dõi tiến độ thực thi trên board, quản lý backlog và điều hành chu kỳ sprint.</p>
 
-  <h2>Board</h2>
-  <ul class="section-list">
-    <li>Board là góc nhìn của toàn bộ công việc trong project hoặc sprint hiện tại.</li>
-    <li>Người có quyền transition issue có thể kéo issue giữa các cột theo workflow.</li>
-    <li>Board không phải danh sách việc cá nhân.</li>
-  </ul>
-
-  <h2>Backlog</h2>
-  <ul class="section-list">
-    <li>Backlog chứa các issue chưa vào sprint hoặc đang chờ sắp xếp ưu tiên.</li>
-    <li>Project Manager có thể chuẩn bị sprint mới bằng cách đưa issue từ backlog vào sprint.</li>
-  </ul>
-
-  <h2>Sprint</h2>
   <p>
-    Sprint là khung thời gian làm việc cố định trong dự án Scrum. Sprint liên kết với backlog, board,
-    burndown, velocity và sprint report.
+    Board là mặt hiển thị trạng thái công việc theo project. Với project Scrum, board thường gắn với sprint đang active.
+    Với project Kanban, board phản ánh luồng xử lý liên tục. Sprint là khung thời gian làm việc cố định và liên kết trực tiếp
+    với backlog, board, burndown, velocity và sprint report.
   </p>
-  <ol class="section-list">
-    <li>Tạo sprint.</li>
-    <li>Đưa issue vào sprint.</li>
-    <li>Start sprint khi phạm vi đã chốt.</li>
-    <li>Close sprint khi kết thúc.</li>
-  </ol>
+
+  <h2>Các điểm nghiệp vụ cần nắm</h2>
+  <ul class="section-list">
+    <li>Người có quyền <code>TransitionIssue</code> có thể kéo issue giữa các cột nếu workflow cho phép.</li>
+    <li>Người có quyền <code>ManageSprints</code> mới có thể tạo, bắt đầu, gán issue vào hoặc đóng sprint.</li>
+    <li>Board có bộ lọc theo assignee, priority, type, từ khóa và chế độ nhóm theo Epic.</li>
+    <li>WIP limit được cấu hình theo cột board và được dùng để kiểm soát tải công việc.</li>
+  </ul>
+
+  <h2>Topic thao tác chi tiết</h2>
+  <ul class="toc-links">
+    <li><a href="scrum-board.html">Làm việc với Scrum board</a></li>
+    <li><a href="kanban-board.html">Làm việc với Kanban board</a></li>
+    <li><a href="manage-sprint.html">Quản lý sprint</a></li>
+  </ul>
+
+  <h2>Xem thêm</h2>
+  <ul class="toc-links see-also">
+    <li><a href="workflow-and-board-settings.html">Workflow và cấu hình board</a></li>
+    <li><a href="view-reports.html">Xem biểu đồ và báo cáo sprint</a></li>
+    <li><a href="glossary.html">Thuật ngữ</a></li>
+  </ul>
 </BODY>
 </HTML>

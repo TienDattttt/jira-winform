@@ -2,47 +2,57 @@
 <HTML>
 <HEAD>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <TITLE>Projects and Issues</TITLE>
+  <TITLE>Dự án và issue</TITLE>
   <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
 </HEAD>
 <BODY>
-  <h1>Projects and Issues</h1>
-  <p class="meta">Các tác vụ cốt lõi trong phạm vi project và issue.</p>
+  <h1>Dự án và issue</h1>
+  <p class="meta">Nhóm tính năng cốt lõi dùng để tạo, cập nhật, tìm kiếm và phối hợp công việc trong từng project.</p>
 
-  <h2>Working with projects</h2>
-  <ul class="section-list">
-    <li>Chỉ những project mà người dùng là thành viên mới hiển thị trong bộ chọn project.</li>
-    <li>Mọi màn hình nghiệp vụ đều lấy dữ liệu theo project đang active.</li>
-  </ul>
+  <p>
+    Ứng dụng lấy mọi dữ liệu theo project đang active. Người dùng chỉ thấy project mình là thành viên và chỉ thao tác
+    được trong giới hạn quyền của project role hiện tại. Các topic con trong nhóm này tập trung vào các thao tác thực tế
+    trên issue thay vì mô tả chung.
+  </p>
 
-  <h2>Working with issues</h2>
+  <h2>Những gì bạn có thể làm trong nhóm này</h2>
   <table>
     <tr>
-      <th>Task</th>
-      <th>Notes</th>
+      <th>Tác vụ</th>
+      <th>Topic liên quan</th>
     </tr>
     <tr>
-      <td>Create issue</td>
-      <td>Áp dụng cho người dùng có quyền tạo issue trong project.</td>
+      <td>Tạo issue mới với loại, priority, assignee, sprint và story point phù hợp</td>
+      <td><a href="create-issue.html">Tạo issue mới</a></td>
     </tr>
     <tr>
-      <td>Edit issue</td>
-      <td>Cập nhật summary, description, priority, assignee, sprint, labels, components và versions theo quyền hiện có.</td>
+      <td>Cập nhật trạng thái, mô tả, người phụ trách và các trường nghiệp vụ của issue</td>
+      <td><a href="update-issue.html">Cập nhật issue</a></td>
     </tr>
     <tr>
-      <td>Comment and mention</td>
-      <td>Dùng để trao đổi nghiệp vụ và tạo notification cho người liên quan.</td>
+      <td>Thêm comment, mention, theo dõi issue và quản lý tệp đính kèm</td>
+      <td><a href="collaboration-on-issue.html">Bình luận, watcher và tệp đính kèm</a></td>
     </tr>
     <tr>
-      <td>Attachments and watchers</td>
-      <td>Dùng để đính kèm tài liệu và theo dõi thay đổi của issue.</td>
+      <td>Tìm issue bằng bộ lọc nhanh hoặc JQL và lưu bộ lọc dùng lại</td>
+      <td><a href="search-issues.html">Tìm kiếm và lưu bộ lọc</a></td>
     </tr>
   </table>
 
-  <h2>Issue Navigator</h2>
-  <p>
-    Màn hình Issue dùng để xem và lọc danh sách issue trong project hiện tại. Đây là nơi phù hợp để rà soát backlog,
-    tìm issue theo trạng thái hoặc tìm các issue cần ưu tiên xử lý.
-  </p>
+  <h2>Lưu ý nghiệp vụ</h2>
+  <ul class="section-list">
+    <li>Reporter là người ghi nhận yêu cầu; trong form tạo issue mặc định là người đang đăng nhập.</li>
+    <li>Assignee và reporter đều phải là thành viên của project đang active.</li>
+    <li>Issue có thể gắn vào sprint đang Planned hoặc Active; issue mới không được gán vào sprint đã Closed.</li>
+    <li>Board là góc nhìn theo project, không phải danh sách việc cá nhân. Nếu có quyền transition thì bạn có thể đổi trạng thái issue hiển thị trên board.</li>
+  </ul>
+
+  <h2>Xem thêm</h2>
+  <ul class="toc-links see-also">
+    <li><a href="create-issue.html">Tạo issue mới</a></li>
+    <li><a href="update-issue.html">Cập nhật issue</a></li>
+    <li><a href="search-issues.html">Tìm kiếm và lưu bộ lọc</a></li>
+    <li><a href="board-and-sprint.html">Bảng và sprint</a></li>
+  </ul>
 </BODY>
 </HTML>

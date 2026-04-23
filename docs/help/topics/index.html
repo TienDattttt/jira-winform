@@ -2,58 +2,65 @@
 <HTML>
 <HEAD>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <TITLE>Jira Clone Desktop Help</TITLE>
+  <TITLE>Tài liệu trợ giúp Jira Clone Desktop</TITLE>
   <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
 </HEAD>
 <BODY>
-  <h1>Jira Clone Desktop Help</h1>
-  <p class="meta">Tài liệu trợ giúp cho bản ứng dụng desktop dùng trong môi trường vận hành nội bộ.</p>
+  <h1>Tài liệu trợ giúp Jira Clone Desktop</h1>
+  <p class="meta">Tài liệu vận hành dành cho người dùng cuối, quản trị viên dự án và bộ phận hỗ trợ.</p>
 
   <p class="lead">
-    Cấu trúc tài liệu này đi theo dạng help file thực tế cho phần mềm desktop:
-    giới thiệu, cài đặt, bắt đầu nhanh, giao diện, tác vụ chính, quản trị và troubleshooting.
-    Nội dung chỉ mô tả các chức năng hiện có trong hệ thống.
+    Tài liệu này mô tả đúng các chức năng hiện có của ứng dụng WinForms: đăng nhập, làm việc với project, issue,
+    board, sprint, roadmap, báo cáo, webhook, tích hợp và API token. Cấu trúc tài liệu đi theo kiểu help file
+    production với topic tổng quan và topic thao tác cụ thể.
   </p>
 
   <div class="note">
-    Đây là tài liệu phục vụ sử dụng và vận hành. Tài liệu này không thay thế checklist test, tài liệu mã nguồn hoặc tài liệu API.
+    Đây là tài liệu phục vụ sử dụng và hỗ trợ vận hành. Tài liệu này không thay thế checklist test, tài liệu mã nguồn
+    hoặc tài liệu API dành cho lập trình viên.
   </div>
 
-  <h2>Main sections</h2>
-  <ul class="toc-links">
-    <li><a href="introduction.html">Introduction</a>: tổng quan sản phẩm, vai trò sử dụng và yêu cầu môi trường.</li>
-    <li><a href="installation-setup.html">Installation and Setup</a>: cài đặt client, cấu hình kết nối và kiểm tra sau cài đặt.</li>
-    <li><a href="getting-started.html">Getting Started</a>: đăng nhập, chọn project và luồng bắt đầu làm việc.</li>
-    <li><a href="user-interface.html">User Interface</a>: bố cục màn hình chính, điều hướng, search, notification và help.</li>
-    <li><a href="projects-and-issues.html">Projects and Issues</a>: project, issue, comment, attachment và watcher.</li>
-    <li><a href="board-and-sprint.html">Board and Sprint</a>: board, backlog, sprint và nguyên tắc thao tác theo workflow.</li>
-    <li><a href="roadmap-and-reports.html">Roadmap and Reports</a>: roadmap, báo cáo và xuất PNG/Excel.</li>
-    <li><a href="administration.html">Administration</a>: quản trị dự án, quản trị hệ thống, tích hợp và token.</li>
-    <li><a href="troubleshooting.html">Troubleshooting</a>: lỗi đăng nhập, database, attachment, export, webhook và help file.</li>
-  </ul>
-
-  <h2>Document scope</h2>
+  <h2>Đường dẫn nhanh theo vai trò</h2>
   <table>
     <tr>
-      <th>Audience</th>
-      <th>Primary goal</th>
-      <th>Main sections</th>
+      <th>Vai trò</th>
+      <th>Mục tiêu chính</th>
+      <th>Topic nên đọc trước</th>
     </tr>
     <tr>
       <td>Viewer / Developer</td>
-      <td>Sử dụng phần mềm trong công việc hàng ngày</td>
-      <td>Getting Started, User Interface, Projects and Issues, Board and Sprint, Roadmap and Reports</td>
+      <td>Theo dõi và cập nhật công việc hằng ngày trong project</td>
+      <td>Getting Started, Main Interface, Create a New Issue, Update an Issue, Work with the Scrum Board hoặc Work with the Kanban Board</td>
     </tr>
     <tr>
       <td>Project Manager / Project Admin</td>
-      <td>Điều hành sprint và quản trị cấu hình dự án</td>
-      <td>Board and Sprint, Roadmap and Reports, Administration</td>
+      <td>Lập kế hoạch sprint, cấu hình project và theo dõi tiến độ bàn giao</td>
+      <td>Manage Sprints, Workflow and Board Settings, View Charts and Sprint Reports, Members and Permissions</td>
     </tr>
     <tr>
       <td>System Admin / Support</td>
-      <td>Quản trị hệ thống và xử lý sự cố</td>
-      <td>Installation and Setup, Administration, Troubleshooting</td>
+      <td>Quản lý người dùng, kết nối và các sự cố vận hành</td>
+      <td>Install the Desktop App, Configure Connection and Storage, System User Management, Troubleshooting</td>
     </tr>
   </table>
+
+  <h2>Cấu trúc tài liệu</h2>
+  <ul class="toc-links">
+    <li><a href="introduction.html">Introduction</a>: tổng quan sản phẩm, mô hình vận hành và đối tượng sử dụng.</li>
+    <li><a href="installation-setup.html">Installation and Setup</a>: cài desktop client, cấu hình kết nối SQL Server và thư mục lưu attachment.</li>
+    <li><a href="getting-started.html">Getting Started</a>: đăng nhập, chọn project và làm quen với shell.</li>
+    <li><a href="projects-and-issues.html">Projects and Issues</a>: tạo, cập nhật, tìm kiếm và phối hợp xử lý issue.</li>
+    <li><a href="board-and-sprint.html">Boards and Sprints</a>: thao tác trên Scrum hoặc Kanban board và quản lý vòng đời sprint.</li>
+    <li><a href="roadmap-and-reports.html">Roadmap and Reports</a>: xem roadmap, biểu đồ, sprint report và các tùy chọn export.</li>
+    <li><a href="administration.html">Administration</a>: quản lý thành viên, quyền, workflow, webhook, tích hợp và API token.</li>
+    <li><a href="troubleshooting.html">Troubleshooting</a>: lỗi thường gặp về đăng nhập, database, attachment, webhook, export và file trợ giúp.</li>
+  </ul>
+
+  <h2>Cách dùng tài liệu này</h2>
+  <ul class="section-list">
+    <li>Các topic thao tác mô tả điều kiện trước khi thực hiện, các bước thực hiện và kết quả mong đợi.</li>
+    <li>Mỗi nhóm tính năng chính có một topic cha và nhiều topic con cho các tác vụ thường gặp.</li>
+    <li>Dùng tab Index để nhảy nhanh tới các từ khóa như Sprint, Epic, Workflow, Webhook hoặc API token.</li>
+  </ul>
 </BODY>
 </HTML>

@@ -2,65 +2,61 @@
 <HTML>
 <HEAD>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <TITLE>Introduction</TITLE>
+  <TITLE>Giới thiệu</TITLE>
   <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
 </HEAD>
 <BODY>
-  <h1>Introduction</h1>
-  <p class="meta">Tổng quan sản phẩm và phạm vi tài liệu.</p>
+  <h1>Giới thiệu</h1>
+  <p class="meta">Tổng quan sản phẩm, mô hình vận hành và phạm vi của tài liệu trợ giúp này.</p>
 
-  <h2>Product overview</h2>
-  <p>
-    Jira Clone Desktop là ứng dụng WinForms dùng để quản lý project, issue, board, sprint, roadmap,
-    báo cáo và các tác vụ vận hành đi kèm như notification, webhook, tích hợp và API token.
-  </p>
+  <div class="note">
+    Jira Clone Desktop là ứng dụng WinForms dùng để quản lý project, issue, board, sprint, roadmap, báo cáo, webhook,
+    tích hợp GitHub hoặc Confluence và API token. Tài liệu này chỉ mô tả các chức năng thực sự có trong bản build hiện tại.
+  </div>
 
-  <h2>Supported roles</h2>
+  <h2>Mô hình vận hành</h2>
   <table>
     <tr>
-      <th>Role</th>
-      <th>Typical usage</th>
+      <th>Thành phần</th>
+      <th>Mô tả</th>
     </tr>
     <tr>
-      <td>Viewer</td>
-      <td>Theo dõi tiến độ, xem issue, board, roadmap và báo cáo.</td>
+      <td>Desktop client</td>
+      <td>Ứng dụng WinForms chạy trên Windows, được nhiều người dùng sử dụng trên cùng một nguồn dữ liệu dùng chung.</td>
     </tr>
     <tr>
-      <td>Developer</td>
-      <td>Tạo và cập nhật issue, comment, attachment, watcher và trạng thái công việc.</td>
+      <td>Cơ sở dữ liệu</td>
+      <td>SQL Server được cấu hình thông qua connection string của ứng dụng.</td>
     </tr>
     <tr>
-      <td>Project Manager / Project Admin</td>
-      <td>Quản lý sprint, board, workflow, permission, thành viên và cấu hình project.</td>
+      <td>Lưu trữ attachment</td>
+      <td>Tệp được ghi vào đường dẫn cấu hình qua <code>App:StoragePath</code>. Trong môi trường nhiều người dùng, đây nên là vị trí dùng chung.</td>
     </tr>
     <tr>
-      <td>System Admin</td>
-      <td>Quản lý tài khoản hệ thống, cấu hình vận hành và xử lý sự cố.</td>
+      <td>Phân quyền</td>
+      <td>Quyền truy cập được kiểm soát bởi system role và project role.</td>
     </tr>
   </table>
 
-  <h2>System requirements</h2>
-  <table>
-    <tr>
-      <th>Component</th>
-      <th>Requirement</th>
-    </tr>
-    <tr>
-      <td>Operating system</td>
-      <td>Windows 10 hoặc Windows 11</td>
-    </tr>
-    <tr>
-      <td>Database access</td>
-      <td>Kết nối tới SQL Server của môi trường vận hành</td>
-    </tr>
-    <tr>
-      <td>Network access</td>
-      <td>Truy cập được tới attachment storage, webhook endpoint, SMTP hoặc OAuth nếu môi trường có dùng</td>
-    </tr>
-    <tr>
-      <td>User credentials</td>
-      <td>Tài khoản hợp lệ và membership phù hợp với project cần làm việc</td>
-    </tr>
-  </table>
+  <h2>Ai nên đọc tài liệu này</h2>
+  <ul class="section-list">
+    <li>Viewer và Developer nên tập trung vào các topic về issue, board, sprint và báo cáo.</li>
+    <li>Project Manager và Project Admin nên tập trung vào sprint, workflow, thành viên, quyền, webhook và tích hợp.</li>
+    <li>System Admin và bộ phận hỗ trợ nên tập trung vào setup, quản lý kết nối, quản trị người dùng và xử lý sự cố.</li>
+  </ul>
+
+  <h2>Phạm vi</h2>
+  <ul class="section-list">
+    <li>Tài liệu này không thay thế tài liệu code, quy trình test hoặc tài liệu API.</li>
+    <li>Tài liệu không mô tả các thao tác không có trong ứng dụng WinForms này, kể cả khi chúng phổ biến trong Jira thương mại.</li>
+    <li>Mọi bước hướng dẫn đều bám theo menu và hành vi hiện tại của ứng dụng.</li>
+  </ul>
+
+  <h2>Xem thêm</h2>
+  <ul class="toc-links see-also">
+    <li><a href="release-notes.html">What's New in This Build</a></li>
+    <li><a href="glossary.html">Glossary</a></li>
+    <li><a href="installation-setup.html">Installation and Setup</a></li>
+  </ul>
 </BODY>
 </HTML>

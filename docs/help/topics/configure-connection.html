@@ -1,0 +1,48 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <TITLE>Cấu hình kết nối và lưu trữ</TITLE>
+  <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
+</HEAD>
+<BODY>
+  <h1>Cấu hình kết nối và lưu trữ</h1>
+  <p class="meta">Thiết lập các biến môi trường cần thiết cho truy cập database, lưu trữ attachment và các dịch vụ tùy chọn.</p>
+
+  <h2>Biến cấu hình chính</h2>
+  <table>
+    <tr>
+      <th>Biến</th>
+      <th>Mục đích</th>
+    </tr>
+    <tr>
+      <td><code>JIRACLONE_ConnectionStrings__Default</code></td>
+      <td>Connection string tới SQL Server.</td>
+    </tr>
+    <tr>
+      <td><code>JIRACLONE_App__StoragePath</code></td>
+      <td>Đường dẫn lưu attachment. Trong môi trường nhiều người dùng nên trỏ tới vị trí dùng chung.</td>
+    </tr>
+    <tr>
+      <td><code>JIRACLONE_Email__UserName</code> and <code>JIRACLONE_Email__Password</code></td>
+      <td>Thông tin xác thực SMTP cho các tính năng email của ứng dụng.</td>
+    </tr>
+    <tr>
+      <td><code>JIRACLONE_ENVIRONMENT</code></td>
+      <td>Tên môi trường để nạp thêm file <code>appsettings.{Environment}.json</code> nếu có.</td>
+    </tr>
+  </table>
+
+  <h2>Thực hiện</h2>
+  <ol class="section-list">
+    <li>Cấu hình connection string của SQL Server qua biến môi trường thay vì nhúng bí mật vào file config phân phối cho người dùng.</li>
+    <li>Trỏ <code>App:StoragePath</code> tới shared path nếu người dùng trên nhiều máy cần truy cập cùng một attachment.</li>
+    <li>Chỉ cấu hình email hoặc OAuth nếu các tính năng đó được bật trong môi trường triển khai.</li>
+    <li>Khởi động lại ứng dụng sau khi đổi biến môi trường.</li>
+  </ol>
+
+  <div class="warning">
+    Không phân phối connection string production có chứa credential thật trong installer công khai hoặc file config dùng chung.
+  </div>
+</BODY>
+</HTML>

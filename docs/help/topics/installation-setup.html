@@ -2,55 +2,33 @@
 <HTML>
 <HEAD>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <TITLE>Installation and Setup</TITLE>
+  <TITLE>Cài đặt và cấu hình</TITLE>
   <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
 </HEAD>
 <BODY>
-  <h1>Installation and Setup</h1>
-  <p class="meta">Cài đặt client desktop và cấu hình môi trường chạy.</p>
+  <h1>Cài đặt và cấu hình</h1>
+  <p class="meta">Cách cài desktop client, cấu hình kết nối dữ liệu và kiểm tra môi trường vận hành.</p>
 
-  <h2>Installation package</h2>
+  <p>
+    Trong triển khai production, desktop client và cơ sở dữ liệu là hai thành phần tách biệt. Mỗi người dùng cài
+    WinForms client trên máy của mình, trong khi tất cả client cùng kết nối tới một SQL Server dùng chung. Nếu triển khai
+    có attachment hoặc tích hợp, cần chuẩn bị thêm shared storage và truy cập mạng tương ứng.
+  </p>
+
+  <h2>Thứ tự triển khai khuyến nghị</h2>
   <ol class="section-list">
-    <li>Nhận bộ cài đặt hoặc thư mục publish từ nhóm phát hành.</li>
-    <li>Cài ứng dụng theo quy trình triển khai nội bộ của doanh nghiệp.</li>
-    <li>Sau khi cài, xác nhận thư mục cài đặt có đủ file thực thi, cấu hình và thư mục <code>Help</code>.</li>
+    <li>Chuẩn bị cơ sở dữ liệu SQL Server và xác nhận connection string hoạt động.</li>
+    <li>Chuẩn bị vị trí lưu attachment dùng chung nếu nhiều người dùng cần truy cập cùng một tệp.</li>
+    <li>Cài hoặc publish desktop client tới các máy trạm của người dùng.</li>
+    <li>Cấu hình các biến môi trường <code>JIRACLONE_</code> cần thiết trước lần chạy đầu tiên.</li>
+    <li>Mở ứng dụng, đăng nhập và xác nhận truy cập được project, issue, attachment và báo cáo.</li>
   </ol>
 
-  <h2>Required configuration</h2>
-  <table>
-    <tr>
-      <th>Configuration</th>
-      <th>Purpose</th>
-    </tr>
-    <tr>
-      <td><code>JIRACLONE_ConnectionStrings__Default</code></td>
-      <td>Chuỗi kết nối tới SQL Server.</td>
-    </tr>
-    <tr>
-      <td><code>App:StoragePath</code></td>
-      <td>Đường dẫn lưu attachment.</td>
-    </tr>
-    <tr>
-      <td><code>Email:*</code></td>
-      <td>Cấu hình SMTP cho email notification.</td>
-    </tr>
-    <tr>
-      <td><code>OAuth:*</code></td>
-      <td>Cấu hình đăng nhập SSO nếu môi trường bật OAuth.</td>
-    </tr>
-  </table>
-
-  <h2>Post-install checks</h2>
-  <ul class="section-list">
-    <li>Ứng dụng mở được màn hình đăng nhập.</li>
-    <li>Kết nối database thành công.</li>
-    <li>File <code>Help\JiraClone.chm</code> tồn tại trong bản cài đặt.</li>
-    <li>Attachment storage truy cập được nếu môi trường có dùng file đính kèm.</li>
+  <h2>Topic liên quan</h2>
+  <ul class="toc-links">
+    <li><a href="system-requirements.html">System Requirements</a></li>
+    <li><a href="configure-connection.html">Configure Connection and Storage</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
   </ul>
-
-  <div class="warning">
-    Secret hoặc chuỗi kết nối production không nên được phát hành rộng rãi trong file cấu hình gốc.
-    Chúng cần được cấp qua cơ chế cấu hình nội bộ của môi trường triển khai.
-  </div>
 </BODY>
 </HTML>

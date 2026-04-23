@@ -2,62 +2,53 @@
 <HTML>
 <HEAD>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <TITLE>Troubleshooting</TITLE>
+  <TITLE>Xử lý sự cố</TITLE>
   <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
 </HEAD>
 <BODY>
-  <h1>Troubleshooting</h1>
-  <p class="meta">Hướng dẫn xử lý các sự cố thường gặp trong môi trường vận hành.</p>
+  <h1>Xử lý sự cố</h1>
+  <p class="meta">Các lỗi thường gặp khi vận hành client desktop và hướng kiểm tra ban đầu.</p>
 
-  <h2 id="dang-nhap-va-du-lieu">Không đăng nhập được hoặc không thấy dữ liệu</h2>
+  <h2>Không đăng nhập được hoặc không thấy project</h2>
   <ul class="section-list">
-    <li>Kiểm tra lại tài khoản, mật khẩu và trạng thái khóa của tài khoản.</li>
-    <li>Xác nhận ứng dụng đang kết nối đúng môi trường dữ liệu.</li>
-    <li>Nếu không thấy project mong đợi, kiểm tra membership của người dùng trong project đó.</li>
-    <li>Nếu màn hình chỉ hiển thị trạng thái rỗng, kiểm tra project active và bộ lọc search hiện tại.</li>
+    <li>Kiểm tra tài khoản còn active và mật khẩu đã được đặt đúng.</li>
+    <li>Kiểm tra user có membership trong project cần thao tác.</li>
+    <li>Nếu dùng OAuth, xác nhận các endpoint và thông số issuer hoặc JWKS đã được cấu hình đúng.</li>
   </ul>
 
-  <h2 id="database">Ứng dụng không khởi động do lỗi database</h2>
+  <h2>Lỗi kết nối cơ sở dữ liệu</h2>
   <ul class="section-list">
-    <li>Kiểm tra chuỗi kết nối đã cấp cho ứng dụng.</li>
-    <li>Xác nhận SQL Server đang chạy và máy trạm truy cập được tới máy chủ dữ liệu.</li>
-    <li>Xác nhận tài khoản kết nối có quyền phù hợp với môi trường.</li>
-    <li>Đọc log khởi động trước khi thao tác tiếp.</li>
+    <li>Xác nhận biến <code>JIRACLONE_ConnectionStrings__Default</code> đã được cấp và không bị sai tên instance, database hoặc credential.</li>
+    <li>Kiểm tra SQL Server có thể truy cập từ máy client qua mạng nội bộ.</li>
+    <li>Kiểm tra log ứng dụng tại thư mục <code>logs</code> để xem lỗi khởi tạo DbContext hoặc migration.</li>
   </ul>
 
-  <h2 id="attachment">Không upload được attachment</h2>
+  <h2>Lỗi attachment hoặc export</h2>
   <ul class="section-list">
-    <li>Kiểm tra quyền của người dùng trên issue.</li>
-    <li>Kiểm tra dung lượng file và giới hạn cấu hình.</li>
-    <li>Kiểm tra storage path hoặc network share cho attachment.</li>
+    <li>Nếu upload thất bại, kiểm tra <code>App:StoragePath</code>, dung lượng file và quyền ghi vào thư mục đích.</li>
+    <li>Nếu export PNG hoặc Excel thất bại, kiểm tra quyền ghi của thư mục được chọn và xác nhận file không đang bị ứng dụng khác giữ.</li>
+    <li>Nếu người dùng khác không thấy attachment, kiểm tra xem storage path có đang trỏ vào thư mục local thay vì thư mục dùng chung hay không.</li>
   </ul>
 
-  <h2 id="xuat-bao-cao">Không xuất được Excel hoặc PNG</h2>
+  <h2>Lỗi webhook hoặc tích hợp</h2>
   <ul class="section-list">
-    <li>Xác nhận màn hình báo cáo đã tải xong dữ liệu.</li>
-    <li>Kiểm tra thư mục đích có quyền ghi.</li>
-    <li>Nếu xuất Excel thất bại, kiểm tra file đích không đang bị khóa bởi Excel hoặc LibreOffice.</li>
-    <li>Kiểm tra lại project và sprint đang chọn nếu dữ liệu xuất ra không đúng.</li>
+    <li>Mở lịch sử gửi webhook để xem HTTP status code, thời gian gửi gần nhất và endpoint đang lỗi.</li>
+    <li>Kiểm tra URL endpoint, secret và khả năng truy cập mạng từ máy đang chạy ứng dụng.</li>
+    <li>Với GitHub hoặc Confluence, xác nhận repository, owner, space key hoặc base URL đã lưu đúng.</li>
   </ul>
 
-  <h2 id="notification">Không nhận được notification, email hoặc webhook</h2>
+  <h2>Lỗi mở file trợ giúp CHM</h2>
   <ul class="section-list">
-    <li>Kiểm tra assignee, watcher hoặc điều kiện phát notification.</li>
-    <li>Với email, kiểm tra SMTP và thông tin xác thực.</li>
-    <li>Với webhook, kiểm tra endpoint, secret, response code và delivery history.</li>
+    <li>Nếu file CHM bị Windows chặn sau khi tải từ Internet, mở <code>Properties</code> của file và bỏ trạng thái <code>Unblock</code>.</li>
+    <li>Đảm bảo file <code>Help\JiraClone.chm</code> đã được copy cùng với thư mục chạy của ứng dụng.</li>
+    <li>Nếu pane Contents hiển thị sai ký tự, đóng hoàn toàn cửa sổ HTML Help rồi mở lại sau khi thay file mới.</li>
   </ul>
 
-  <h2 id="tro-giup">Không mở được file trợ giúp</h2>
-  <ul class="section-list">
-    <li>Kiểm tra file <code>JiraClone.chm</code> có tồn tại trong thư mục <code>Help</code> của bản cài đặt.</li>
-    <li>Đóng hoàn toàn cửa sổ HTML Help cũ trước khi mở lại file trợ giúp mới.</li>
-    <li>Nếu file vừa được chép từ nguồn ngoài, bỏ chặn file trong Properties nếu Windows đánh dấu là tải từ Internet.</li>
-    <li>Nếu vẫn lỗi, cài đặt lại ứng dụng để khôi phục artifact trợ giúp đi kèm.</li>
+  <h2>Xem thêm</h2>
+  <ul class="toc-links see-also">
+    <li><a href="configure-connection.html">Cấu hình kết nối và lưu trữ</a></li>
+    <li><a href="webhooks-and-integrations.html">Webhook và tích hợp</a></li>
+    <li><a href="api-tokens.html">API token</a></li>
   </ul>
-
-  <div class="warning">
-    Khi sự cố liên quan tới database, permission, webhook hoặc SMTP, người dùng cuối không nên tự thay đổi cấu hình.
-    Hãy chuyển thông tin lỗi cho quản trị viên hoặc đội vận hành.
-  </div>
 </BODY>
 </HTML>

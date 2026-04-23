@@ -2,48 +2,39 @@
 <HTML>
 <HEAD>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <TITLE>User Interface</TITLE>
+  <TITLE>Giao diện chính</TITLE>
   <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
 </HEAD>
 <BODY>
-  <h1>User Interface</h1>
-  <p class="meta">Bố cục màn hình chính và các thành phần điều hướng.</p>
+  <h1>Giao diện chính</h1>
+  <p class="meta">Tổng quan về bố cục shell, mô hình điều hướng, ô tìm kiếm, thông báo và mục trợ giúp.</p>
 
-  <h2>Main window layout</h2>
+  <h2>Các khu vực chính</h2>
   <table>
     <tr>
-      <th>Area</th>
-      <th>Purpose</th>
+      <th>Khu vực</th>
+      <th>Mục đích</th>
     </tr>
     <tr>
       <td>Sidebar</td>
-      <td>Điều hướng giữa các module chính của ứng dụng.</td>
+      <td>Chứa project switcher, menu điều hướng, khu vực tài khoản hiện tại và thao tác đăng xuất.</td>
     </tr>
     <tr>
-      <td>Project switcher</td>
-      <td>Chọn project đang active.</td>
+      <td>Thanh trên</td>
+      <td>Hiển thị breadcrumb, ô tìm kiếm của shell, thông báo và các hành động theo ngữ cảnh.</td>
     </tr>
     <tr>
-      <td>Top bar</td>
-      <td>Hiển thị breadcrumb, search, notification và các action theo ngữ cảnh.</td>
-    </tr>
-    <tr>
-      <td>Content area</td>
-      <td>Hiển thị màn hình nghiệp vụ hiện tại.</td>
+      <td>Vùng nội dung</td>
+      <td>Hiển thị Dashboard, Board, Issue, Sprint, Roadmap, Reports hoặc Settings tùy theo menu đang chọn.</td>
     </tr>
   </table>
 
-  <h2>Navigation rules</h2>
+  <h2>Nguyên tắc điều hướng</h2>
   <ul class="section-list">
-    <li>Nội dung màn hình phụ thuộc vào project đang active.</li>
-    <li>Một số menu chỉ xuất hiện với người dùng có quyền tương ứng.</li>
-    <li>Search trên thanh trên cùng áp dụng theo ngữ cảnh của màn hình đang mở.</li>
-  </ul>
-
-  <h2>Notifications and Help</h2>
-  <ul class="section-list">
-    <li>Notification hiển thị các sự kiện gần đây liên quan tới issue, assignment, comment hoặc sprint.</li>
-    <li>Menu Help mở file trợ giúp CHM đi kèm bản cài đặt.</li>
+    <li>Breadcrumb luôn phản ánh project đang active và màn hình hiện tại.</li>
+    <li>Ô tìm kiếm của shell chuyển từ khóa xuống các form con có hỗ trợ search hoặc filter.</li>
+    <li>Menu <code>Users</code> chỉ hiện với system administrator.</li>
+    <li>Menu <code>Help</code> mở file CHM đi kèm thông qua HTML Help.</li>
   </ul>
 </BODY>
 </HTML>

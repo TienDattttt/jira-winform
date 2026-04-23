@@ -79,6 +79,10 @@ a:hover {
   padding-left: 18px;
 }
 
+.section-list li {
+  margin-bottom: 6px;
+}
+
 .toc-links {
   margin: 0;
   padding-left: 18px;
@@ -86,6 +90,10 @@ a:hover {
 
 .toc-links li {
   margin-bottom: 6px;
+}
+
+.see-also {
+  margin-top: 20px;
 }
 
 table {

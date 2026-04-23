@@ -2,53 +2,56 @@
 <HTML>
 <HEAD>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <TITLE>Administration</TITLE>
+  <TITLE>Quản trị</TITLE>
   <LINK rel="stylesheet" type="text/css" href="../assets/help.css">
 </HEAD>
 <BODY>
-  <h1>Administration</h1>
-  <p class="meta">Các chức năng quản trị ở mức project và mức hệ thống.</p>
+  <h1>Quản trị</h1>
+  <p class="meta">Nhóm thao tác quản trị ở cấp project và cấp hệ thống.</p>
 
-  <h2>Project administration</h2>
+  <p>
+    Các màn hình quản trị của ứng dụng được tách theo hai lớp. Một lớp dành cho project admin hoặc project manager
+    để quản lý project, board, workflow, webhook và thành viên. Lớp còn lại dành cho system admin để quản lý user hệ thống.
+  </p>
+
+  <h2>Các nhóm cấu hình chính</h2>
   <table>
     <tr>
-      <th>Area</th>
-      <th>Usage</th>
+      <th>Nhóm</th>
+      <th>Topic chi tiết</th>
     </tr>
     <tr>
-      <td>Members and roles</td>
-      <td>Thêm thành viên, đổi project role, xóa thành viên khỏi project.</td>
+      <td>Thành viên, vai trò và permission</td>
+      <td><a href="members-and-permissions.html">Thành viên và phân quyền</a></td>
     </tr>
     <tr>
-      <td>Board and workflow</td>
-      <td>Quản lý cột board, workflow transition và WIP limit.</td>
+      <td>Workflow, board column và WIP limit</td>
+      <td><a href="workflow-and-board-settings.html">Workflow và cấu hình board</a></td>
     </tr>
     <tr>
-      <td>Permissions</td>
-      <td>Kiểm soát quyền xem, tạo, sửa, xóa và transition issue.</td>
+      <td>Webhook, GitHub, Confluence</td>
+      <td><a href="webhooks-and-integrations.html">Webhook và tích hợp</a></td>
     </tr>
     <tr>
-      <td>Labels, components, versions</td>
-      <td>Quản lý metadata phục vụ phân loại và phát hành.</td>
+      <td>API token cá nhân</td>
+      <td><a href="api-tokens.html">API token</a></td>
+    </tr>
+    <tr>
+      <td>Quản lý tài khoản hệ thống</td>
+      <td><a href="system-user-management.html">Quản lý người dùng hệ thống</a></td>
     </tr>
   </table>
 
-  <h2>System administration</h2>
-  <ul class="section-list">
-    <li>Quản lý tài khoản người dùng hệ thống.</li>
-    <li>Reset mật khẩu, khóa hoặc mở khóa tài khoản.</li>
-    <li>Gán system role theo nhu cầu vận hành.</li>
-  </ul>
-
-  <h2>Integrations and tokens</h2>
-  <ul class="section-list">
-    <li>Cấu hình GitHub, Confluence và webhook ở mức project.</li>
-    <li>Theo dõi webhook delivery history.</li>
-    <li>Tạo và thu hồi API token theo phạm vi sử dụng.</li>
-  </ul>
-
   <div class="warning">
-    Quản trị hệ thống không thay thế membership trong project. Người dùng vẫn phải là member của project để thao tác dữ liệu dự án đó.
+    Quyền quản trị hệ thống không tự động thay thế membership của project. Một tài khoản vẫn phải là thành viên project
+    thì mới thao tác được dữ liệu của project đó.
   </div>
+
+  <h2>Xem thêm</h2>
+  <ul class="toc-links see-also">
+    <li><a href="members-and-permissions.html">Thành viên và phân quyền</a></li>
+    <li><a href="workflow-and-board-settings.html">Workflow và cấu hình board</a></li>
+    <li><a href="webhooks-and-integrations.html">Webhook và tích hợp</a></li>
+  </ul>
 </BODY>
 </HTML>
